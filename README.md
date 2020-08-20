@@ -3,6 +3,6 @@ A minimal framework for parallelizing tasks in python
 
 
 ## TODO
-* Return results from work
-* Logging using rich
-* Queen bee for tracking
+* Job tracking - Done and yet to be processed
+* Exception Handling
+* Switch to Celery and RabbitMQ
