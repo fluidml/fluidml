@@ -6,4 +6,4 @@ setup(name="Hive",
       author="Rajkumar Ramamurthy",
       author_email="raj1514@gmail.com",
       packages=find_packages(),
-      install_requires=["rich"])
+      install_requires=["rich", "torch"])

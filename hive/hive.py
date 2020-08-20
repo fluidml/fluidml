@@ -1,18 +1,18 @@
-from hive.bee import BusyBee
+from hive.bee import BusyBee, QueenBee
 from hive.task import Task
-from multiprocessing import Queue
+from multiprocessing import Queue, Manager
 from typing import List
 
 
 class Swarm:
-    def __init__(self, n_bees: int):
+    def __init__(self, n_bees: int, refresh_every: int = 1):
         self.n_bees = n_bees
         self.task_queue = Queue()
-        self.busy_bees = [BusyBee(i, self.task_queue) for i in range(self.n_bees)]
-
-        # here, add a queen bee that tracks all other bees and tasks
-        # if the queue is empty, queen bee leaves the swarm as well
-        # but the queen bee logs all the messages
+        self.done_queue = Queue()
+        self.manager = Manager()
+        self.results_dict = self.manager.dict()
+        self.busy_bees = [QueenBee(self.task_queue, self.done_queue, refresh_every)]  # queen bee for  tracking
+        self.busy_bees.extend([BusyBee(i, self.task_queue, self.done_queue, self.results_dict) for i in range(self.n_bees)])
 
     def work(self, tasks: List[Task]):
 
@@ -28,8 +28,13 @@ class Swarm:
         for bee in self.busy_bees:
             bee.start()
 
-        # join
+        # wait for them to finish
         for bee in self.busy_bees:
             bee.join()
 
-        print("Swarm processing complete...")
+        return self.results_dict
+
+    def close(self):
+        self.results_dict = self.manager.dict()
+        for bee in self.busy_bees:
+            bee.terminate()
