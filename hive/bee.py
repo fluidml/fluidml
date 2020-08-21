@@ -36,9 +36,10 @@ class QueenBee(Process):
     def work(self, task_queue: Queue, done_queue: Queue):
         while task_queue.qsize() > 0:
             # sleep for a while
-            time.sleep(1e-1)
+            time.sleep(self.refresh_every)
 
-            with Progress( "[progress.description]{task.description}", BarColumn(), "[progress.percentage]{task.percentage:>3.0f}%",) as progress:
+            with Progress("[progress.description]{task.description}", BarColumn(),
+                          "[progress.percentage]{task.percentage:>3.0f}%",) as progress:
 
                 task = progress.add_task("[red]Task Progress...", total=task_queue.qsize() + done_queue.qsize())
                 progress.update(task, advance=done_queue.qsize())
