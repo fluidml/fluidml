@@ -6,7 +6,7 @@ from typing import List
 
 class Swarm:
     def __init__(self, n_bees: int, start_method="spawn", refresh_every: int = 1):
-        set_start_method(start_method)
+        set_start_method(start_method, force=True)
         self.n_bees = n_bees
         self.task_queue = Queue()
         self.done_queue = Queue()
