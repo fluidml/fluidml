@@ -1,11 +1,12 @@
 from hive.bee import BusyBee, QueenBee
 from hive.task import Task
-from multiprocessing import Queue, Manager
+from multiprocessing import Queue, Manager, set_start_method
 from typing import List
 
 
 class Swarm:
-    def __init__(self, n_bees: int, refresh_every: int = 1):
+    def __init__(self, n_bees: int, start_method="spawn", refresh_every: int = 1):
+        set_start_method(start_method)
         self.n_bees = n_bees
         self.task_queue = Queue()
         self.done_queue = Queue()
