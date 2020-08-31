@@ -1,4 +1,5 @@
-from multiprocessing import Process, Queue, Lock
+from multiprocessing import Process, Lock, Queue
+from queue import Empty
 import time
 from typing import Dict, Any, List
 
@@ -14,92 +15,87 @@ class BusyBee(Process):
     def __init__(self,
                  bee_id: int,
                  task_queue: Queue,
-                 done_list: List,
-                 id_to_task: Dict[int, Task],
-                 graph: nx.DiGraph,
-                 lock: Lock,
+                 done_queue: List[int],
+                 tasks: Dict[str, Task],
                  results: Dict[str, Any]):
         super().__init__(target=self.work,
-                         args=())
+                         args=(task_queue, done_queue, tasks, results))
         self.bee_id = bee_id
-        self.task_queue = task_queue
-        self.done_list = done_list
-        self.id_to_task = id_to_task
-        self.graph = graph
-        self.results = results
-        self.lock = lock
 
-    def _is_task_ready(self,
-                       task_id):
-        dep_task_ids = list(self.graph.predecessors(task_id))
+    @staticmethod
+    def _is_task_ready(task: Task, done_queue: List[int]):
+        dep_task_ids = task.pre_task_ids
 
         for id_ in dep_task_ids:
-            if id_ not in self.done_list:
+            if id_ not in done_queue:
                 return False
         return True
 
-    def work(self):
+    def work(self, task_queue: Queue, done_queue: Queue, tasks: Dict[str, Task], results: Dict[str, Any]):
         while True:
             # terminate bee (worker) if all tasks have been processed
-            # TODO: Does not work consistently
-            if len(self.done_list) >= self.graph.number_of_nodes():  # end of the queue
+            # TODO: Seems to work, test more
+            if len(done_queue) >= len(tasks):  # end of the queue
                 Console.get_instance().log(f'Bee {self.bee_id} leaving the swarm.')
                 break
 
-            # with self.lock:
             # get the next task in the queue
-            task_id = self.task_queue.get()
-            task = self.id_to_task[task_id]
+            try:
+                task_id = task_queue.get(block=False, timeout=5)
+            except Empty:
+                if len(done_queue) == len(tasks):
+                    Console.get_instance().log(f'Bee {self.bee_id}: leaving the swarm.')
+                    break
+                else:
+                    Console.get_instance().log(f'Bee {self.bee_id}: is retrying.')
+                    continue
+            task = tasks[task_id]
 
             # run task only if all dependencies are satisfied
-            if not self._is_task_ready(task.id_):
+            if not BusyBee._is_task_ready(task, done_queue):
+                Console.get_instance().log(f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {task.id_}')
                 continue
 
             # run task only if it has not been executed already
-            if task_id in self.done_list:
+            if task_id in done_queue:
+                Console.get_instance().log(f'{task_id} already finished')
                 continue
 
             # run the task
             Console.get_instance().log(f'Bee {self.bee_id} started running task {task.id_}.')
-            self.results[task.id_] = task.run()
+            results[task.id_] = task.run()
             Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.id_}.')
 
-            # with self.lock:
             # put task in done_queue
-            self.done_list.append(task.id_)
+            done_queue.append(task.id_)
 
-            # get successor tasks from graph and put them in task queue for processing
-            successor_task_ids = list(self.graph.successors(task.id_))
-
-            for id_ in successor_task_ids:
-                self.task_queue.put(id_)
+            # get successor tasks and put them in task queue for processing
+            for id_ in task.post_task_ids:
+                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {id_}.')
+                task_queue.put(id_)
 
 
 class QueenBee(Process):
     def __init__(self,
                  task_queue: Queue,
-                 done_list: List,
-                 graph: nx.DiGraph,
+                 done_queue: List[int],
+                 tasks: Dict[str, Task],
                  refresh_every: int):
-        super().__init__(target=self.work, args=())
-
-        self.task_queue = task_queue
-        self.done_list = done_list
-        self.graph = graph
+        super().__init__(target=self.work, args=(task_queue, done_queue, tasks))
         self.refresh_every = refresh_every
 
-    def work(self):
-        while len(self.done_list) < self.graph.number_of_nodes():
+    def work(self, task_queue: Queue, done_queue: Queue, tasks: Dict[str, Task]):
+        while len(done_queue) < len(tasks):
             # sleep for a while
             time.sleep(self.refresh_every)
 
             with Progress('[progress.description]{task.description}', BarColumn(),
                           '[progress.percentage]{task.percentage:>3.0f}%',) as progress:
 
-                task = progress.add_task('[red]Task Progress...', total=self.graph.number_of_nodes())
-                progress.update(task, advance=len(self.done_list))
+                task = progress.add_task('[red]Task Progress...', total=len(tasks))
+                progress.update(task, advance=len(done_queue))
 
             # and show the stats
-            Console.get_instance().log(f'Jobs in the task queue: {self.task_queue.qsize()}')
-            Console.get_instance().log(f'Jobs in the done queue: {len(self.done_list)}')
+            Console.get_instance().log(f'Jobs in the task queue: {task_queue.qsize()}')
+            Console.get_instance().log(f'Jobs in the done queue: {len(done_queue)}')
         return
