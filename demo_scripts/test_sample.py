@@ -125,7 +125,7 @@ def main():
         id_to_task[id_] = task
 
     # run swarm
-    with Swarm(graph=graph, id_to_task=id_to_task, n_bees=2, refresh_every=5) as swarm:
+    with Swarm(graph=graph, id_to_task=id_to_task, n_bees=3, refresh_every=5) as swarm:
         results = swarm.work()
 
 
