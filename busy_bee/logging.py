@@ -13,6 +13,6 @@ class Console:
     def __init__(self):
         """ Virtually private constructor. """
         if Console.__instance is not None:
-            raise Exception("Use Console.get_instance()!")
+            raise Exception('Use Console.get_instance()!')
         else:
             Console.__instance = console.Console()
