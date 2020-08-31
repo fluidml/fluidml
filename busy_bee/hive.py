@@ -11,7 +11,6 @@ from busy_bee.bee import BusyBee, QueenBee
 class Swarm:
     def __init__(self,
                  n_bees: int,
-                 tasks: List[Task],
                  start_method: str = 'spawn',
                  refresh_every: int = 1):
 
@@ -22,7 +21,7 @@ class Swarm:
         self.manager = Manager()
         self.done_queue = self.manager.list()
         self.results = self.manager.dict()
-        self.tasks: Dict[int, Task] = {task.id_: task for task in tasks}
+        self.tasks: Dict[int, Task] = self.manager.dict()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(task_queue=self.task_queue,
@@ -45,20 +44,21 @@ class Swarm:
                  exc_tb: Optional[TracebackType]):
         self.close()
 
-    def _get_entry_point_tasks(self):
+    @staticmethod
+    def _get_entry_point_tasks(tasks):
         entry_task_ids = []
-        for task_id, task in self.tasks.items():
+        for task in tasks:
             if len(task.pre_task_ids) == 0:
                 entry_task_ids.append(task.id_)
         return entry_task_ids
 
-    def work(self):
+    def work(self, tasks: List[Task]):
         # get entry point task ids
-        entry_point_task_ids = self._get_entry_point_tasks()
+        entry_point_task_ids = self._get_entry_point_tasks(tasks)
 
-        # TODO: add tasks dynamically
         # also update the current tasks
-        #self.tasks = {task.id_: task for task in tasks}
+        for task in tasks:
+            self.tasks[task.id_] = task
 
         # add entry point tasks to the job queue
         for task_id in entry_point_task_ids:
