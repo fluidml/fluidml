@@ -23,14 +23,8 @@ def main():
         MyTask(5, pre_task_ids=[], post_task_ids=[]),
     ]
 
-    with Swarm(n_bees=3, tasks=tasks, refresh_every=5) as swarm:
-        results = swarm.work()
-    print(results)
-
     with Swarm(n_bees=3, refresh_every=5) as swarm:
         results = swarm.work(tasks)
-        results = swarm.work(some_tasks)
-
     print(results)
 
 
