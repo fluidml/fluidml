@@ -1,5 +1,5 @@
-# hive
-A minimal framework for parallelizing tasks in python
+# Busy Bee
+A minimal framework for parallelizing tasks in python.
 
 
 ## TODO
