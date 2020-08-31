@@ -1,4 +1,4 @@
-from multiprocessing.queues import Queue as MultiprocessingQueue
+from multiprocessing.queues import Queue
 import multiprocessing
 
 # The following implementation of custom MyQueue to avoid NotImplementedError
@@ -33,7 +33,7 @@ class SharedCounter:
         return self.count.value
 
 
-class Queue(MultiprocessingQueue):
+class BeeQueue(Queue):
     """ A portable implementation of multiprocessing.Queue.
     Because of multithreading / multiprocessing semantics, Queue.qsize() may
     raise the NotImplementedError exception on Unix platforms like Mac OS X

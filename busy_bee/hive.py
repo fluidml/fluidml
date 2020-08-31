@@ -1,12 +1,12 @@
-from multiprocessing import Manager, set_start_method
+from multiprocessing import Manager, set_start_method, Queue, Lock
 from types import TracebackType
 from typing import Optional, Type, Dict
 
 
 import networkx as nx
 
-from busy_bee import Task
-from busy_bee.queue import Queue
+from busy_bee.task import Task
+# from busy_bee.bee_queue import BeeQueue
 from busy_bee.bee import BusyBee, QueenBee
 
 
@@ -24,13 +24,15 @@ class Swarm:
         self.graph = graph
         self.id_to_task = id_to_task
         self.task_queue = Queue()
-        self.done_queue = Queue()
+        # self.done_queue = Queue()
         self.manager = Manager()
         self.results = self.manager.dict()
+        self.done_list = self.manager.list()
+        self.lock = Lock()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(task_queue=self.task_queue,
-                                   done_queue=self.done_queue,
+                                   done_list=self.done_list,
                                    graph=self.graph,
                                    refresh_every=refresh_every)]
         # worker bees
@@ -38,7 +40,8 @@ class Swarm:
                                        graph=self.graph,
                                        id_to_task=self.id_to_task,
                                        task_queue=self.task_queue,
-                                       done_queue=self.done_queue,
+                                       done_list=self.done_list,
+                                       lock=self.lock,
                                        results=self.results) for i in range(self.n_bees)])
 
     def __enter__(self):
@@ -77,5 +80,6 @@ class Swarm:
 
     def close(self):
         self.results = self.manager.dict()
+        self.done_list = self.manager.list()
         for bee in self.busy_bees:
             bee.terminate()
