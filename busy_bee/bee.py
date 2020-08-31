@@ -44,13 +44,13 @@ class BusyBee(Process):
             # TODO: Does not work consistently
             if len(self.done_list) >= self.graph.number_of_nodes():  # end of the queue
                 Console.get_instance().log(f'Bee {self.bee_id} leaving the swarm.')
-                return
+                break
 
+            # with self.lock:
             # get the next task in the queue
             task_id = self.task_queue.get()
             task = self.id_to_task[task_id]
 
-            # with self.lock:
             # run task only if all dependencies are satisfied
             if not self._is_task_ready(task.id_):
                 continue
@@ -64,15 +64,15 @@ class BusyBee(Process):
             self.results[task.id_] = task.run()
             Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.id_}.')
 
-            with self.lock:
-                # put task in done_queue
-                self.done_list.append(task.id_)
+            # with self.lock:
+            # put task in done_queue
+            self.done_list.append(task.id_)
 
-                # get successor tasks from graph and put them in task queue for processing
-                successor_task_ids = list(self.graph.successors(task.id_))
+            # get successor tasks from graph and put them in task queue for processing
+            successor_task_ids = list(self.graph.successors(task.id_))
 
-                for id_ in successor_task_ids:
-                    self.task_queue.put(id_)
+            for id_ in successor_task_ids:
+                self.task_queue.put(id_)
 
 
 class QueenBee(Process):
