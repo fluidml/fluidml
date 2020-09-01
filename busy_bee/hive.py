@@ -4,7 +4,6 @@ from typing import Optional, Type, List, Dict
 from busy_bee.logging import Console
 
 from busy_bee.task import Task
-# from busy_bee.bee_queue import BeeQueue
 from busy_bee.bee import BusyBee, QueenBee
 
 
@@ -78,5 +77,6 @@ class Swarm:
     def close(self):
         self.results = self.manager.dict()
         self.tasks = self.manager.dict()
+        self.done_queue = self.manager.dict()
         for bee in self.busy_bees:
             bee.terminate()

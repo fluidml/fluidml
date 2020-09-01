@@ -1,14 +1,15 @@
-from typing import Callable, Dict, List
+from typing import Callable, Dict, List, Optional
 
 import networkx as nx
 import yaml
 
 from busy_bee import Swarm, Task
-from busy_bee.utils import create_run_configs
+from demo_scripts.utils import create_run_configs
 
 
 def parse(in_dir: str):
     pass
+    # a - 3
 
 
 def preprocess(pipeline: List[str]):
@@ -37,7 +38,7 @@ TASK_TO_CALLABLE = {'parse': parse,
 """
 # task pipeline
 a -> b -> c -> e
-       -> d
+       \- d -/
 
 # task pipeline including grid search args
 a1 -> b1 -> c1/d1 -> e1
@@ -51,8 +52,10 @@ class MyTask(Task):
     def __init__(self,
                  id_: int,
                  task: Callable,
-                 kwargs: Dict):
-        super().__init__(id_)
+                 kwargs: Dict,
+                 pre_task_ids: Optional[List[int]] = None,
+                 post_task_ids: Optional[List[int]] = None):
+        super().__init__(id_=id_, pre_task_ids=pre_task_ids, post_task_ids=post_task_ids)
         self.id_ = id_
         self.task = task
         self.kwargs = kwargs
@@ -119,14 +122,18 @@ def main():
     # convert task_dict to an abstract Task class -> Interface for swarm
     id_to_task = {}
     for id_, task_dict in id_to_task_dict.items():
+        pre_task_ids = list(graph.predecessors(id_))
+        post_task_ids = list(graph.successors(id_))
         task = MyTask(id_=id_,
                       task=task_dict['task'],
-                      kwargs=task_dict['kwargs'])
+                      kwargs=task_dict['kwargs'],
+                      pre_task_ids=pre_task_ids,
+                      post_task_ids=post_task_ids)
         id_to_task[id_] = task
 
     # run swarm
-    with Swarm(graph=graph, id_to_task=id_to_task, n_bees=3, refresh_every=5) as swarm:
-        results = swarm.work()
+    with Swarm(n_bees=3, refresh_every=5) as swarm:
+        results = swarm.work(list(id_to_task.values()))
 
 
 if __name__ == '__main__':
