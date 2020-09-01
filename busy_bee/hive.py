@@ -16,20 +16,21 @@ class Swarm:
         set_start_method(start_method, force=True)
 
         self.n_bees = n_bees
-        self.task_queue = Queue()
         self.manager = Manager()
+        self.scheduled_queue = Queue()
+        self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
         self.results = self.manager.dict()
         self.tasks: Dict[int, Task] = self.manager.dict()
 
         # queen bee for tracking
-        self.busy_bees = [QueenBee(task_queue=self.task_queue,
-                                   done_queue=self.done_queue,
+        self.busy_bees = [QueenBee(done_queue=self.done_queue,
                                    tasks=self.tasks,
                                    refresh_every=refresh_every)]
         # worker bees
         self.busy_bees.extend([BusyBee(bee_id=i,
-                                       task_queue=self.task_queue,
+                                       scheduled_queue=self.scheduled_queue,
+                                       running_queue=self.running_queue,
                                        done_queue=self.done_queue,
                                        tasks=self.tasks,
                                        results=self.results) for i in range(self.n_bees)])
@@ -62,7 +63,7 @@ class Swarm:
         # add entry point tasks to the job queue
         for task_id in entry_point_task_ids:
             Console.get_instance().log(f'Swarm scheduling {task_id}')
-            self.task_queue.put(task_id)
+            self.scheduled_queue.put(task_id)
 
         # start the workers
         for bee in self.busy_bees:

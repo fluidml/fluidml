@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 
 class Task(ABC):
@@ -24,7 +24,10 @@ class Task(ABC):
         self.post_task_ids = post_task_ids
 
     @abstractmethod
-    def run(self):
+    def run(self, results: Dict[str, Any]):
         """ Each concrete task must implement run() method
+
+            results: {Dict[str, Any]} : results from the predecessor tasks
+
         """
         raise NotImplementedError

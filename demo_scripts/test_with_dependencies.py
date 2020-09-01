@@ -1,12 +1,13 @@
 from busy_bee import Swarm, Task
-from typing import List
+from typing import List, Dict
 
 
 class MyTask(Task):
     def __init__(self, id_: int, pre_task_ids: List[int], post_task_ids: List[int]):
         super().__init__(id_, pre_task_ids, post_task_ids)
 
-    def run(self):
+    def run(self, results: Dict):
+        print(f"Results from parents of task {self.id_}: {results}")
         return self.id_
 
 
