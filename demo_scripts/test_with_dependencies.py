@@ -3,8 +3,8 @@ from typing import Dict, Any
 
 
 class MyTask(Task):
-    def __init__(self, id_: int, name: str):
-        super().__init__(id_, name)
+    def __init__(self, id_: int):
+        super().__init__(id_, "MyTask")
 
     def run(self, results: Dict[str, Any]) -> Dict[str, Any]:
         print(f"Results from parents of task {self.id_}: {results}")
@@ -18,11 +18,11 @@ def main():
     # 5
 
     # create tasks
-    task_1 = MyTask(1, "MyTask")
-    task_2 = MyTask(2, "MyTask")
-    task_3 = MyTask(3, "MyTask")
-    task_4 = MyTask(4, "MyTask")
-    task_5 = MyTask(5, "MyTask")
+    task_1 = MyTask(1)
+    task_2 = MyTask(2)
+    task_3 = MyTask(3)
+    task_4 = MyTask(4)
+    task_5 = MyTask(5)
 
     # add dependencies
     task_2.requires([task_1])
