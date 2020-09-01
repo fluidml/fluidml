@@ -27,17 +27,14 @@ class BusyBee(Process):
         self.results = results
 
     def _is_task_ready(self, task: Task):
-        dep_task_ids = task.pre_task_ids
-
-        for id_ in dep_task_ids:
+        for id_ in task.predecessors:
             if id_ not in self.done_queue:
                 return False
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        predecessors = task.pre_task_ids
         results = {}
-        for predecessor in predecessors:
+        for predecessor in task.predecessors:
             results = {**results, **self.results[predecessor]}
         return results
 
@@ -68,7 +65,7 @@ class BusyBee(Process):
                     Console.get_instance().log(f'Bee {self.bee_id}: leaving the swarm.')
                     break
                 else:
-                    Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
+                    #Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
                     # break
                     continue
 
@@ -90,7 +87,7 @@ class BusyBee(Process):
             self._run_task(task)
 
             # get successor tasks and put them in task queue for processing
-            for id_ in task.post_task_ids:
+            for id_ in task.successors:
                 Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {id_}.')
                 self.scheduled_queue.put(id_)
 
