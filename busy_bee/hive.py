@@ -27,7 +27,7 @@ class Swarm:
         self.busy_bees = [QueenBee(done_queue=self.done_queue,
                                    tasks=self.tasks,
                                    refresh_every=refresh_every)]
-        # worker bees
+        # worker bees for task exection
         self.busy_bees.extend([BusyBee(bee_id=i,
                                        scheduled_queue=self.scheduled_queue,
                                        running_queue=self.running_queue,
@@ -48,7 +48,7 @@ class Swarm:
     def _get_entry_point_tasks(tasks):
         entry_task_ids = []
         for task in tasks:
-            if len(task.pre_task_ids) == 0:
+            if len(task.predecessors) == 0:
                 entry_task_ids.append(task.id_)
         return entry_task_ids
 
