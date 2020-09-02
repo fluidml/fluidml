@@ -8,8 +8,8 @@ class Task(ABC):
     def __init__(self, id_: int, name: str):
         self.id_ = id_
         self.name = name
-        self._predecessors = []
-        self._successors = []
+        self.predecessors = []
+        self.successors = []
 
     def requires(self, tasks: List['Task']):
         """
@@ -18,7 +18,7 @@ class Task(ABC):
         Args:
             tasks (List[): tasks
         """
-        self._predecessors.extend(tasks)
+        self.predecessors.extend(tasks)
 
         # attach this task as a successor to all predecessor tasks
         for task in tasks:
@@ -31,15 +31,7 @@ class Task(ABC):
         Args:
             task (Task): [description]
         """
-        self._successors.append(task)
-
-    @property
-    def successors(self) -> List[int]:
-        return [task.id_ for task in self._successors]
-
-    @property
-    def predecessors(self) -> List[int]:
-        return [task.id_ for task in self._predecessors]
+        self.successors.append(task)
 
     @abstractmethod
     def run(self, results: Dict[str, Any]) -> Optional[Dict[str, Any]]:

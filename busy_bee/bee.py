@@ -51,8 +51,8 @@ class BusyBee(BaseBee):
         self.results = results
 
     def _is_task_ready(self, task: Task):
-        for id_ in task.predecessors:
-            if id_ not in self.done_queue:
+        for predecessor in task.predecessors:
+            if predecessor.id_ not in self.done_queue:
                 return False
         return True
 
@@ -60,7 +60,7 @@ class BusyBee(BaseBee):
         results = {}
         for predecessor in task.predecessors:
             try:
-                results = {**results, **self.results[predecessor]}
+                results = {**results, **{predecessor.name: self.results[predecessor.id_]}}
             except TypeError:
                 print('Each task has to return a dict.')
                 raise
@@ -110,20 +110,19 @@ class BusyBee(BaseBee):
             self._run_task(task)
 
             # get successor tasks and put them in task queue for processing
-            for id_ in task.successors:
-
+            for successor in task.successors:
                 # run task only if all dependencies are satisfied
-                if not self._is_task_ready(task=self.tasks[id_]):
+                if not self._is_task_ready(task=self.tasks[successor.id_]):
                     Console.get_instance().log(
-                        f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {id_}')
+                        f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {successor.id_}')
                     continue
 
-                if id_ in self.done_queue or id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {id_} is currently running or already finished.')
+                if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
+                    Console.get_instance().log(f'Task {successor.id_} is currently running or already finished.')
                     continue
 
-                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {id_}.')
-                self.scheduled_queue.put(id_)
+                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.id_}.')
+                self.scheduled_queue.put(successor.id_)
 
 
 class QueenBee(BaseBee):

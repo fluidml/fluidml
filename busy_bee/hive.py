@@ -79,6 +79,7 @@ class Swarm:
         for bee in self.busy_bees:
             bee.join()
 
+        # if an exception was raised by a child process, re-raise it again in the parent.
         if self.exception:
             raise self.exception['message']
 
