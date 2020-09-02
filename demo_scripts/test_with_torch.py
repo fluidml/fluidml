@@ -1,6 +1,7 @@
 from busy_bee import Swarm, Task
 import torch
 import random
+from typing import Dict, Any
 
 
 class SimpleModule(torch.nn.Module):
@@ -14,7 +15,7 @@ class SimpleModule(torch.nn.Module):
 
 class TrainModuleTask(Task):
     def __init__(self, id_: int, n_inputs: int, n_outputs: int, epochs: int, batch_size: int, lr: float, device: str):
-        super().__init__(id_)
+        super().__init__(id_, "train_task")
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
         self.epochs = epochs
@@ -23,7 +24,7 @@ class TrainModuleTask(Task):
         self.device = device
         self.model = SimpleModule(n_inputs, n_outputs).to(self.device)
 
-    def run(self):
+    def run(self, results: Dict[str, Any]) -> Dict[str, Any]:
         optimizer = torch.optim.SGD(lr=self.lr,
                                     params=self.model.parameters())
         loss_criterion = torch.nn.MSELoss()
@@ -37,7 +38,8 @@ class TrainModuleTask(Task):
             loss.backward()
             optimizer.step()
             epoch_losses.append(loss.detach().cpu().numpy())
-        return epoch_losses
+        results = {"epoch_losses": epoch_losses}
+        return results
 
 
 def main():
@@ -46,11 +48,11 @@ def main():
                                                                       range(torch.cuda.device_count())]
     devices = random.choices(available_device, k=n_tasks)
 
-    tasks = {i: TrainModuleTask(i + 1, 10, 10, int(1e+4), 5, 1.0, devices[i]) for i in range(n_tasks)}
+    tasks = [TrainModuleTask(i + 1, 10, 10, int(1e+4), 5, 1.0, devices[i]) for i in range(n_tasks)]
 
-    with Swarm(graph=graph, n_bees=3, refresh_every=5) as swarm:
-        results = swarm.work()
-    print(results)
+    with Swarm(n_bees=3, refresh_every=5) as swarm:
+        results = swarm.work(tasks)
+    print(results[1])
 
 
 if __name__ == "__main__":
