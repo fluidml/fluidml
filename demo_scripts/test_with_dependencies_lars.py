@@ -60,7 +60,8 @@ class MyTask(Task):
         self.kwargs = kwargs
 
     def run(self, results: Dict[str, Any]):
-        self.task(**self.kwargs)
+        result = self.task(**self.kwargs)
+        return result
 
 
 def get_entry_point_tasks(graph):
@@ -135,7 +136,7 @@ def main():
         tasks.append(task)
 
     # run swarm
-    with Swarm(n_bees=3, refresh_every=5) as swarm:
+    with Swarm(n_bees=3, refresh_every=5, exit_on_error=True) as swarm:
         results = swarm.work(tasks=tasks)
 
 

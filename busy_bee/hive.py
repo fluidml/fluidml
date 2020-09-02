@@ -1,4 +1,4 @@
-from multiprocessing import Manager, set_start_method, Queue, Event
+from multiprocessing import Manager, set_start_method, Queue
 from types import TracebackType
 from typing import Optional, Type, List, Dict
 from busy_bee.logging import Console
@@ -11,7 +11,8 @@ class Swarm:
     def __init__(self,
                  n_bees: int,
                  start_method: str = 'spawn',
-                 refresh_every: int = 1):
+                 refresh_every: int = 1,
+                 exit_on_error: bool = True):
 
         set_start_method(start_method, force=True)
 
@@ -21,25 +22,23 @@ class Swarm:
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
         self.results = self.manager.dict()
-
-        self.quit = Event()
-        self.exception = self.manager.list()
+        self.exception = self.manager.dict()
         self.tasks: Dict[int, Task] = self.manager.dict()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(done_queue=self.done_queue,
-                                   quit=self.quit,
                                    tasks=self.tasks,
                                    exception=self.exception,
+                                   exit_on_error=exit_on_error,
                                    refresh_every=refresh_every)]
         # worker bees for task exection
         self.busy_bees.extend([BusyBee(bee_id=i,
                                        scheduled_queue=self.scheduled_queue,
                                        running_queue=self.running_queue,
                                        done_queue=self.done_queue,
-                                       quit=self.quit,
                                        tasks=self.tasks,
                                        exception=self.exception,
+                                       exit_on_error=exit_on_error,
                                        results=self.results) for i in range(self.n_bees)])
 
     def __enter__(self):
@@ -76,15 +75,12 @@ class Swarm:
         for bee in self.busy_bees:
             bee.start()
 
-        # https://stackoverflow.com/questions/36962462/terminate-a-python-multiprocessing-program-once-a-one-of-its-workers-meets-a-cer
-        # while not self.exception and len(self.done_queue) < len(self.tasks):
-
         # wait for them to finish
         for bee in self.busy_bees:
             bee.join()
 
-        if self.quit.is_set():
-            raise self.exception[0]
+        if self.exception:
+            raise self.exception['message']
 
         return self.results
 

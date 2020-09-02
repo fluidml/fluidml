@@ -1,4 +1,5 @@
-from multiprocessing import Process, Queue, Event
+from abc import abstractmethod
+from multiprocessing import Process, Queue
 from queue import Empty
 import time
 from typing import Dict, Any, List
@@ -9,26 +10,45 @@ from busy_bee.task import Task
 from busy_bee.logging import Console
 
 
-class BusyBee(Process):
+class BaseBee(Process):
+    def __init__(self,
+                 exception: Dict[str, Exception],
+                 exit_on_error: bool):
+        super().__init__(target=self.work,
+                         args=())
+        self.exception = exception
+        self.exit_on_error = exit_on_error
+
+    @abstractmethod
+    def _work(self):
+        raise NotImplementedError
+
+    def work(self):
+        try:
+            self._work()
+        except Exception as e:
+            if self.exit_on_error:
+                self.exception['message'] = e
+            raise
+
+
+class BusyBee(BaseBee):
     def __init__(self,
                  bee_id: int,
                  scheduled_queue: Queue,
                  running_queue: List[int],
                  done_queue: List[int],
                  tasks: Dict[str, Task],
-                 quit: Event,
-                 exception: List,
+                 exception: Dict[str, Exception],
+                 exit_on_error: bool,
                  results: Dict[str, Any]):
-        super().__init__(target=self.save_work,
-                         args=())
+        super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.bee_id = bee_id
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
         self.tasks = tasks
         self.results = results
-        self.quit = quit
-        self.exception = exception
 
     def _is_task_ready(self, task: Task):
         for id_ in task.predecessors:
@@ -62,8 +82,8 @@ class BusyBee(Process):
         # put task in done_queue
         self.done_queue.append(task.id_)
 
-    def work(self):
-        while not self.quit.is_set():
+    def _work(self):
+        while not self.exception:
             # TODO: Seems to work, test more
             # get the next task in the queue
             try:
@@ -105,31 +125,21 @@ class BusyBee(Process):
                 Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {id_}.')
                 self.scheduled_queue.put(id_)
 
-    def save_work(self):
-        try:
-            self.work()
-        except Exception as e:
-            self.quit.set()
-            self.exception.append(e)
-            raise e
 
-
-class QueenBee(Process):
+class QueenBee(BaseBee):
     def __init__(self,
                  done_queue: List[int],
-                 quit: Event,
-                 exception: List,
+                 exception: Dict[str, Exception],
+                 exit_on_error: bool,
                  tasks: Dict[str, Task],
                  refresh_every: int):
-        super().__init__(target=self.save_work, args=())
+        super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.refresh_every = refresh_every
         self.done_queue = done_queue
         self.tasks = tasks
-        self.quit = quit
-        self.exception = exception
 
-    def work(self):
-        while len(self.done_queue) < len(self.tasks) and not self.quit.is_set():
+    def _work(self):
+        while len(self.done_queue) < len(self.tasks) and not self.exception:
             # sleep for a while
             time.sleep(self.refresh_every)
 
@@ -138,12 +148,3 @@ class QueenBee(Process):
 
                 task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
                 progress.update(task, advance=len(self.done_queue))
-
-    def save_work(self):
-        try:
-            self.work()
-        except Exception as e:
-            self.quit.set()
-            self.exception.append(e)
-            raise
-
