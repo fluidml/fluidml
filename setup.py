@@ -9,4 +9,4 @@ setup(name="busy_bee",
       install_requires=["networkx",
                         "pyyaml",
                         "rich",
-                        "torch])
+                        "torch"])
