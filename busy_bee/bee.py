@@ -1,4 +1,4 @@
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Event
 from queue import Empty
 import time
 from typing import Dict, Any, List
@@ -16,8 +16,10 @@ class BusyBee(Process):
                  running_queue: List[int],
                  done_queue: List[int],
                  tasks: Dict[str, Task],
+                 quit: Event,
+                 exception: List,
                  results: Dict[str, Any]):
-        super().__init__(target=self.work,
+        super().__init__(target=self.save_work,
                          args=())
         self.bee_id = bee_id
         self.scheduled_queue = scheduled_queue
@@ -25,6 +27,8 @@ class BusyBee(Process):
         self.done_queue = done_queue
         self.tasks = tasks
         self.results = results
+        self.quit = quit
+        self.exception = exception
 
     def _is_task_ready(self, task: Task):
         for id_ in task.predecessors:
@@ -35,7 +39,12 @@ class BusyBee(Process):
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
         results = {}
         for predecessor in task.predecessors:
-            results = {**results, **self.results[predecessor]}
+            try:
+                results = {**results, **self.results[predecessor]}
+            except TypeError:
+                print('Each task has to return a dict.')
+                raise
+
         return results
 
     def _run_task(self, task: Task):
@@ -54,7 +63,7 @@ class BusyBee(Process):
         self.done_queue.append(task.id_)
 
     def work(self):
-        while True:
+        while not self.quit.is_set():
             # TODO: Seems to work, test more
             # get the next task in the queue
             try:
@@ -65,17 +74,11 @@ class BusyBee(Process):
                     Console.get_instance().log(f'Bee {self.bee_id}: leaving the swarm.')
                     break
                 else:
-                    #Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
-                    # break
+                    # Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
                     continue
 
-            # current task
+            # get current task from task_id
             task = self.tasks[task_id]
-
-            # run task only if all dependencies are satisfied
-            if not self._is_task_ready(task=task):
-                Console.get_instance().log(f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {task.id_}')
-                continue
 
             # TODO: Do we need a lock here?
             # run task only if it has not been executed already
@@ -88,22 +91,45 @@ class BusyBee(Process):
 
             # get successor tasks and put them in task queue for processing
             for id_ in task.successors:
+
+                # run task only if all dependencies are satisfied
+                if not self._is_task_ready(task=self.tasks[id_]):
+                    Console.get_instance().log(
+                        f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {id_}')
+                    continue
+
+                if id_ in self.done_queue or id_ in self.running_queue:
+                    Console.get_instance().log(f'Task {id_} is currently running or already finished.')
+                    continue
+
                 Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {id_}.')
                 self.scheduled_queue.put(id_)
+
+    def save_work(self):
+        try:
+            self.work()
+        except Exception as e:
+            self.quit.set()
+            self.exception.append(e)
+            raise e
 
 
 class QueenBee(Process):
     def __init__(self,
                  done_queue: List[int],
+                 quit: Event,
+                 exception: List,
                  tasks: Dict[str, Task],
                  refresh_every: int):
-        super().__init__(target=self.work, args=())
+        super().__init__(target=self.save_work, args=())
         self.refresh_every = refresh_every
         self.done_queue = done_queue
         self.tasks = tasks
+        self.quit = quit
+        self.exception = exception
 
     def work(self):
-        while len(self.done_queue) < len(self.tasks):
+        while len(self.done_queue) < len(self.tasks) and not self.quit.is_set():
             # sleep for a while
             time.sleep(self.refresh_every)
 
@@ -112,3 +138,12 @@ class QueenBee(Process):
 
                 task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
                 progress.update(task, advance=len(self.done_queue))
+
+    def save_work(self):
+        try:
+            self.work()
+        except Exception as e:
+            self.quit.set()
+            self.exception.append(e)
+            raise
+

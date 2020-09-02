@@ -1,4 +1,4 @@
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Any
 
 import networkx as nx
 import yaml
@@ -8,24 +8,24 @@ from demo_scripts.utils import create_run_configs
 
 
 def parse(in_dir: str):
-    pass
+    return None
     # a - 3
 
 
 def preprocess(pipeline: List[str]):
-    pass
+    return {}
 
 
 def featurize_tokens(type_: str, batch_size: int):
-    pass
+    return {}
 
 
 def featurize_cells(type_: str, batch_size: int):
-    pass
+    return {}
 
 
 def train(model, dataloader, evaluator, optimizer, num_epochs):
-    pass
+    return {}
 
 
 TASK_TO_CALLABLE = {'parse': parse,
@@ -51,16 +51,15 @@ a1 -> b1 -> c1/d1 -> e1
 class MyTask(Task):
     def __init__(self,
                  id_: int,
+                 name: str,
                  task: Callable,
-                 kwargs: Dict,
-                 pre_task_ids: Optional[List[int]] = None,
-                 post_task_ids: Optional[List[int]] = None):
-        super().__init__(id_=id_, pre_task_ids=pre_task_ids, post_task_ids=post_task_ids)
+                 kwargs: Dict):
+        super().__init__(id_=id_, name=name)
         self.id_ = id_
         self.task = task
         self.kwargs = kwargs
 
-    def run(self):
+    def run(self, results: Dict[str, Any]):
         self.task(**self.kwargs)
 
 
@@ -122,18 +121,22 @@ def main():
     # convert task_dict to an abstract Task class -> Interface for swarm
     id_to_task = {}
     for id_, task_dict in id_to_task_dict.items():
-        pre_task_ids = list(graph.predecessors(id_))
-        post_task_ids = list(graph.successors(id_))
         task = MyTask(id_=id_,
+                      name=task_dict['name'],
                       task=task_dict['task'],
-                      kwargs=task_dict['kwargs'],
-                      pre_task_ids=pre_task_ids,
-                      post_task_ids=post_task_ids)
+                      kwargs=task_dict['kwargs'])
         id_to_task[id_] = task
+
+    # Register dependencies
+    tasks = []
+    for id_, task in id_to_task.items():
+        pre_task_ids = list(graph.predecessors(id_))
+        task.requires([id_to_task[id_] for id_ in pre_task_ids])
+        tasks.append(task)
 
     # run swarm
     with Swarm(n_bees=3, refresh_every=5) as swarm:
-        results = swarm.work(list(id_to_task.values()))
+        results = swarm.work(tasks=tasks)
 
 
 if __name__ == '__main__':

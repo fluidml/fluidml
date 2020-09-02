@@ -1,4 +1,4 @@
-from multiprocessing import Manager, set_start_method, Queue
+from multiprocessing import Manager, set_start_method, Queue, Event
 from types import TracebackType
 from typing import Optional, Type, List, Dict
 from busy_bee.logging import Console
@@ -21,18 +21,25 @@ class Swarm:
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
         self.results = self.manager.dict()
+
+        self.quit = Event()
+        self.exception = self.manager.list()
         self.tasks: Dict[int, Task] = self.manager.dict()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(done_queue=self.done_queue,
+                                   quit=self.quit,
                                    tasks=self.tasks,
+                                   exception=self.exception,
                                    refresh_every=refresh_every)]
         # worker bees for task exection
         self.busy_bees.extend([BusyBee(bee_id=i,
                                        scheduled_queue=self.scheduled_queue,
                                        running_queue=self.running_queue,
                                        done_queue=self.done_queue,
+                                       quit=self.quit,
                                        tasks=self.tasks,
+                                       exception=self.exception,
                                        results=self.results) for i in range(self.n_bees)])
 
     def __enter__(self):
@@ -69,9 +76,15 @@ class Swarm:
         for bee in self.busy_bees:
             bee.start()
 
+        # https://stackoverflow.com/questions/36962462/terminate-a-python-multiprocessing-program-once-a-one-of-its-workers-meets-a-cer
+        # while not self.exception and len(self.done_queue) < len(self.tasks):
+
         # wait for them to finish
         for bee in self.busy_bees:
             bee.join()
+
+        if self.quit.is_set():
+            raise self.exception[0]
 
         return self.results
 
@@ -80,4 +93,4 @@ class Swarm:
         self.tasks = self.manager.dict()
         self.done_queue = self.manager.dict()
         for bee in self.busy_bees:
-            bee.terminate()
+            bee.close()
