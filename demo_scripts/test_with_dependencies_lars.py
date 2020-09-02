@@ -8,7 +8,7 @@ from demo_scripts.utils import create_run_configs
 
 
 def parse(in_dir: str):
-    return None
+    return {}
     # a - 3
 
 
