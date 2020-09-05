@@ -3,13 +3,16 @@ from types import TracebackType
 from typing import Optional, Type, List, Dict
 from busy_bee.logging import Console
 
-from busy_bee.task import Task
+from busy_bee.task import Task, Resource
 from busy_bee.bee import BusyBee, QueenBee
+
+import random
 
 
 class Swarm:
     def __init__(self,
                  n_bees: int,
+                 resources: List[Resource] = None,
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
                  exit_on_error: bool = True):
@@ -17,6 +20,7 @@ class Swarm:
         set_start_method(start_method, force=True)
 
         self.n_bees = n_bees
+        self.resources = Swarm._allocate_resources(n_bees, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
@@ -33,6 +37,7 @@ class Swarm:
                                    refresh_every=refresh_every)]
         # worker bees for task exection
         self.busy_bees.extend([BusyBee(bee_id=i,
+                                       resource=self.resources[i],
                                        scheduled_queue=self.scheduled_queue,
                                        running_queue=self.running_queue,
                                        done_queue=self.done_queue,
@@ -40,6 +45,15 @@ class Swarm:
                                        exception=self.exception,
                                        exit_on_error=exit_on_error,
                                        results=self.results) for i in range(self.n_bees)])
+
+    @staticmethod
+    def _allocate_resources(n_bees: int, resources: List[Resource]):
+        if resources is None or len(resources) == 0:
+            resources = [None] * n_bees
+        elif len(resources) != n_bees:
+            # we assign resources to bees uniformly (from uniform distribution)
+            resources = random.choices(resources, k=n_bees)
+        return resources
 
     def __enter__(self):
         return self
