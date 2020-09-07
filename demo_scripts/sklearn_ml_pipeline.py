@@ -1,4 +1,4 @@
-from busy_bee import Swarm, Task
+from busy_bee import Swarm, Task, Resource
 from typing import Dict, Any
 from torchnlp.datasets import trec_dataset
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -17,7 +17,7 @@ class DatasetFetchTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "dataset")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         dataset = trec_dataset(train=True)
         sentences = [sample["text"] for sample in dataset]
         labels = [sample["label"] for sample in dataset]
@@ -32,7 +32,7 @@ class PreProcessTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "pre_process")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "dataset", "sentences"), "Sentences must be present"
         pre_processed_sentences = [sentence for sentence in results["dataset"]["sentences"]]
         task_results = {
@@ -45,7 +45,7 @@ class TFIDFFeaturizeTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "tfidf_featurize")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
         tfidf = TfidfVectorizer()
         tfidf_vectors = tfidf.fit_transform(results["pre_process"]["sentences"]).toarray()
@@ -59,7 +59,7 @@ class GloveFeaturizeTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "glove_featurize")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
         sentences = [Sentence(sent) for sent in results["pre_process"]["sentences"]]
         embedder = DocumentPoolEmbeddings([WordEmbeddings("glove")])
@@ -76,7 +76,7 @@ class TrainTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "train")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "tfidf_featurize", "vectors"), "TF-IDF Vectors must be present"
         assert results_available(results, "glove_featurize", "vectors"), "Glove Vectors must be present"
         assert results_available(results, "dataset", "labels"), "Labels must be present"
@@ -93,7 +93,7 @@ class EvaluateTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "evaluate_task")
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "tfidf_featurize", "vectors"), "TF-IDF Vectors must be present"
         assert results_available(results, "glove_featurize", "vectors"), "Glove Vectors must be present"
         assert results_available(results, "dataset", "labels"), "Labels must be present"

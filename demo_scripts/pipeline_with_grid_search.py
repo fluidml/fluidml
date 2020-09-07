@@ -3,7 +3,7 @@ from typing import Callable, Dict, List, Optional, Any
 import networkx as nx
 import yaml
 
-from busy_bee import Swarm, Task
+from busy_bee import Swarm, Task, Resource
 from demo_scripts.utils import create_run_configs
 
 
@@ -59,7 +59,7 @@ class MyTask(Task):
         self.task = task
         self.kwargs = kwargs
 
-    def run(self, results: Dict[str, Any]):
+    def run(self, results: Dict[str, Any], resource: Resource):
         result = self.task(**self.kwargs)
         return result
 
