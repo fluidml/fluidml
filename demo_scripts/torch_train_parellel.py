@@ -1,8 +1,10 @@
-from busy_bee import Swarm, Task, Resource
-import torch
-import random
-from typing import Dict, Any
 from dataclasses import dataclass
+from typing import Dict, Any
+
+import torch
+
+from busy_bee import Swarm, Task, Resource
+from demo_scripts.utils.gpu import get_balanced_devices
 
 
 class SimpleModule(torch.nn.Module):
@@ -50,12 +52,16 @@ class TrainModuleTask(Task):
 
 def main():
     n_tasks = 10
-    resources = [DeviceResource("cpu")] if not torch.cuda.is_available() else [DeviceResource(f"cuda:{i}") for i in
-                    range(torch.cuda.device_count())]
+    n_bees = 3
+
+    resources = get_balanced_devices(count=n_bees, no_cuda=False)
+    resources = [DeviceResource(device) for device in resources]
+
     tasks = [TrainModuleTask(i + 1, 10, 10, int(1e+4), 5, 1.0) for i in range(n_tasks)]
 
-    with Swarm(n_bees=3, refresh_every=5, resources=resources) as swarm:
+    with Swarm(n_bees=n_bees, refresh_every=5, resources=resources) as swarm:
         results = swarm.work(tasks)
+
     print(results[1])
 
 

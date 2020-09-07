@@ -12,7 +12,7 @@ import random
 class Swarm:
     def __init__(self,
                  n_bees: int,
-                 resources: List[Resource] = None,
+                 resources: Optional[List[Resource]] = None,
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
                  exit_on_error: bool = True):
@@ -20,7 +20,7 @@ class Swarm:
         set_start_method(start_method, force=True)
 
         self.n_bees = n_bees
-        self.resources = Swarm._allocate_resources(n_bees, resources)
+        self.resources = self._allocate_resources(n_bees, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
@@ -48,7 +48,7 @@ class Swarm:
 
     @staticmethod
     def _allocate_resources(n_bees: int, resources: List[Resource]):
-        if resources is None or len(resources) == 0:
+        if not resources:
             resources = [None] * n_bees
         elif len(resources) != n_bees:
             # we assign resources to bees uniformly (from uniform distribution)
