@@ -6,7 +6,7 @@ from typing import Dict, Any, List
 
 from rich.progress import Progress, BarColumn
 
-from busy_bee.task import Task
+from busy_bee.task import Task, Resource
 from busy_bee.logging import Console
 
 
@@ -35,6 +35,7 @@ class BaseBee(Process):
 class BusyBee(BaseBee):
     def __init__(self,
                  bee_id: int,
+                 resource: Resource,
                  scheduled_queue: Queue,
                  running_queue: List[int],
                  done_queue: List[int],
@@ -44,6 +45,7 @@ class BusyBee(BaseBee):
                  results: Dict[str, Any]):
         super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.bee_id = bee_id
+        self.resource = resource
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
@@ -76,7 +78,7 @@ class BusyBee(BaseBee):
 
         # run task
         Console.get_instance().log(f'Bee {self.bee_id} started running task {task.id_}.')
-        self.results[task.id_] = task.run(results)
+        self.results[task.id_] = task.run(results, self.resource)
         Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.id_}.')
 
         # put task in done_queue
