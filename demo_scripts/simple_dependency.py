@@ -1,12 +1,13 @@
-from busy_bee import Swarm, Task
-from typing import Dict, Any
+from busy_bee.hive import Swarm
+from busy_bee.common import Task, Resource
+from typing import Dict, Any, Optional
 
 
 class MyTask(Task):
     def __init__(self, id_: int):
         super().__init__(id_, "MyTask")
 
-    def run(self, results: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, results: Dict[str, Any], resource: Resource) -> Optional[Dict[str, Any]]:
         print(f"Results from parents of task {self.id_}: {results}")
         return {"result": self.id_}
 
