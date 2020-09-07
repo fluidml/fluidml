@@ -1,5 +1,11 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
+from dataclasses import dataclass
+
+
+@dataclass(init=True)
+class Resource:
+    pass
 
 
 class Task(ABC):
@@ -34,12 +40,13 @@ class Task(ABC):
         self.successors.append(task)
 
     @abstractmethod
-    def run(self, results: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    def run(self, results: Dict[str, Any], resource: Resource) -> Optional[Dict[str, Any]]:
         """
         Implementation of core logic of task
 
         Args:
             results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
+            resource (Resource): resource to use (automatically passed by swarm)
 
         Returns:
             Optional[Dict[str, Any]]: a dict of results (automatically passed to successor tasks)
