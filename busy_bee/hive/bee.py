@@ -6,8 +6,8 @@ from typing import Dict, Any, List
 
 from rich.progress import Progress, BarColumn
 
-from busy_bee.task import Task, Resource
-from busy_bee.logging import Console
+from busy_bee.common.task import Task, Resource
+from busy_bee.common.logging import Console
 
 
 class BaseBee(Process):

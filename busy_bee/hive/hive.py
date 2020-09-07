@@ -1,10 +1,10 @@
 from multiprocessing import Manager, set_start_method, Queue
 from types import TracebackType
 from typing import Optional, Type, List, Dict
-from busy_bee.logging import Console
+from busy_bee.common.logging import Console
 
-from busy_bee.task import Task, Resource
-from busy_bee.bee import BusyBee, QueenBee
+from busy_bee.common.task import Task, Resource
+from busy_bee.hive.bee import BusyBee, QueenBee
 
 import random
 
