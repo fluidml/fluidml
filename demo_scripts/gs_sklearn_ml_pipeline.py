@@ -4,11 +4,11 @@ from ml_flow import Flow, GridSearch
 from ml_hive import Swarm, Task
 
 # create all tasks
-dataset_fetch_task = DatasetFetchTask(1)
-pre_process_task = GridSearch(task=PreProcessTask(2), gs_config=pre_process_config)  # wrap with GridSearch wrapper
+dataset_fetch_task = DatasetFetchTask(arg1, arg2)
+pre_process_task = GridSearch(task=PreProcessTask, gs_config=pre_process_config)  # wrap with GridSearch wrapper
 featurize_task_1 = TFIDFFeaturizeTask(3)
-featurize_task_2 = GridSearch(task=GloveFeaturizeTask(4), gs_config=featurize_config)  # wrap with GridSearch wrapper
-train_task = GridSearch(TrainTask(5), gs_config=train_config)   # wrap with GridSearch wrapper
+featurize_task_2 = GridSearch(task=GloveFeaturizeTask, gs_config=featurize_config)  # wrap with GridSearch wrapper
+train_task = GridSearch(task=TrainTask, gs_config=train_config)   # wrap with GridSearch wrapper
 evaluate_task = EvaluateTask(6)
 
 
@@ -36,11 +36,11 @@ tasks = [dataset_fetch_task,
 swarm = Swarm(n_bees=10, resources=resource_list)
 
 # create the flow with swarm
-with Flow(swarm=swarm) as flow:
+with Flow(swarm=swarm, tasks=tasks) as flow:
     # flow takes the tasks and split the tasks that are wrapped using GridSearch
     # and expands them into individual tasks
     # automatically configures dependencies based on provided task dependencies
 
     # after expanding, it has the list of tasks
     # which will be run internally using using the specified swarm
-    flow.run(tasks)
+    flow.run()
