@@ -15,41 +15,41 @@ class Flow:
 
     def get_list_of_tasks(self):
 
-        id_to_task_dict = defaultdict(list)
+        # we just have to convert tasks/task_names to graphs
+        # and get the task expansion order
+        tasks_to_expand = []
+
+        # expand the tasks in the topological order
+        expanded_tasks_by_name = defaultdict(list)
         task_id = 0
-        for task in self._tasks:
+        # for each task to expand
+        for task in tasks_to_expand:
+            # for each predecessor task
             for predecessor in task.predecessors:
+                # for task in expanded tasks of my predecessor
                 for task in id_to_task_dict[predecessor.name]:
-                    if isinstance(task, GridTaskSpec):
-                        task_configs = task.task_configs
-                    else:
-                        task_configs = list(task.kwargs)
+                    task_configs = task.task_configs if isinstance(task, GridTaskSpec) else [task.kwargs]
+                    # expand the current task config
+                    for kwargs in task_configs:
+                        task = task.wrapped_task(id_: task_id, name, kwargs)
+                        task.requires(predecessor)
+                        expanded_tasks_by_name[task.name].append(task)
+                        task_id += 1
 
-                    # for kwargs in task_configs:
-                    #     task = task.wrapped_task(id_: task_id, name, kwargs)
-                    #     task.requires(predecessor)
-                    #     id_to_task_dict[task.name].append(task)
-                    #     task_id += 1
-
+        # I think at this point, we would have our final list of tasks in expanded_tasks_by_name
 
 
+                # for kwargs in task.task_configs:
+                #     task = {'name': task.name,
+                #             'task': task.wrapped_task,
+                #             'kwargs': kwargs}
 
-                for kwargs in task.task_configs:
-                    task = {'name': task.name,
-                            'task': task.wrapped_task,
-                            'kwargs': kwargs}
-
-                    dep_kwargs = []
-                    for predecessor in task.predecessors:
-                        if isinstance(predecessor, GridSearch):
-                            for dep_kwarg in predecessor.task_configs:
-                                dep_kwargs.append(config[dep])
-                    task['dep_kwargs'] = dep_kwargs
-
-
-
-
-
+                #     dep_kwargs = []
+                #     for predecessor in task.predecessors:
+                #         if isinstance(predecessor, GridSearch):
+                #             for dep_kwarg in predecessor.task_configs:
+                #                 dep_kwargs.append(config[dep])
+                #     task['dep_kwargs'] = dep_kwargs
 
 
     def run(self) -> Dict[str, Dict[str, Any]]:
