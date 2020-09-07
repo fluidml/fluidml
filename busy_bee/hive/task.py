@@ -11,8 +11,8 @@ class Resource:
 class Task(ABC):
     """ Abstract class for task
     """
-    def __init__(self, id_: int, name: str):
-        self.id_ = id_
+    def __init__(self, name: str):
+        self.id_ = None
         self.name = name
         self.predecessors = []
         self.successors = []

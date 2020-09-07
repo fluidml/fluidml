@@ -20,7 +20,7 @@ class Swarm:
         set_start_method(start_method, force=True)
 
         self.n_bees = n_bees
-        self.resources = self._allocate_resources(n_bees, resources)
+        self.resources = Swarm._allocate_resources(n_bees, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()

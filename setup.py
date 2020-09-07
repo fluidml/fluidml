@@ -6,5 +6,5 @@ setup(name="busy_bee",
       author="Rajkumar Ramamurthy, Lars Hillebrand",
       author_email="raj1514@gmail.com",
       packages=find_packages(),
-      install_requires=["rich"],
+      install_requires=['networkx', 'rich'],
       extras_require={'demo': ["pyyaml", "torch", "flair", "pytorch-nlp"]})
