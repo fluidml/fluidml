@@ -3,7 +3,8 @@ from typing import Dict, Any
 
 import torch
 
-from busy_bee import Swarm, Task, Resource
+from busy_bee.hive import Swarm
+from busy_bee.common import Task, Resource
 from demo_scripts.utils.gpu import get_balanced_devices
 
 

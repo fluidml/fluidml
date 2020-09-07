@@ -1,4 +1,5 @@
-from busy_bee import Swarm, Task, Resource
+from busy_bee.common.task import Task, Resource
+from busy_bee.hive import Swarm
 from typing import Dict, Any
 from torchnlp.datasets import trec_dataset
 from sklearn.feature_extraction.text import TfidfVectorizer
