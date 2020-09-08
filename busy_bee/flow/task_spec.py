@@ -1,38 +1,52 @@
-from typing import Dict, Any, Optional, List, Tuple
-from busy_bee.common.dependency import DependencyMixin
-from collections import MutableMapping
 from copy import deepcopy
 from itertools import product
+from types import FunctionType
+from typing import Dict, Any, Optional, List, Tuple, Union
+
+from busy_bee.common.dependency import DependencyMixin
 
 
 class TaskSpec(DependencyMixin):
-    def __init__(self, task_cls: type, task_kwargs: Dict[str, Any], name: Optional[str] = None):
-        """
-        A class to hold task specification
+    """
+    A class to hold task specification
 
-        Args:
-            task_cls (type): a task class to instantiate
-            task_kwargs (Dict[str, Any]): task arguments used while instantiating
-            name (Optional[str], optional): [description]. Defaults to None
-        """
-        self._task_cls = task_cls
-        self._task_kwargs = task_kwargs
-        self._name = name if name is not None else self._task_cls.__name__
+    Args:
+        task (type): a task class to instantiate
+        task_kwargs (Dict[str, Any]): task arguments used while instantiating
+        name (Optional[str], optional): Defaults to None
+    """
+
+    def __init__(self,
+                 task: Union[type, FunctionType],
+                 task_kwargs: Dict[str, Any],
+                 name: Optional[str] = None):
+        super().__init__()
+
+        self.task = task
+        self.task_kwargs = task_kwargs
+        self.name = name if name is not None else self.task.__name__
 
 
 class GridTaskSpec(DependencyMixin):
-    def __init__(self, task_cls: type, gs_config: Dict[str, Any], name: Optional[str] = None):
-        """
-        A class to hold task specification for grid searcheable task
+    """
+    A class to hold task specification for grid searcheable task
 
-        Args:
-            task_cls (type): a task class to instantiate and expand
-            gs_config (Dict[str, Any]): a grid search config that will be expanded
-            name (Optional[str], optional): [description]. Defaults to None
-        """
-        self._task_cls = task_cls
-        self._gs_config = gs_config
-        self._name = name if name is not None else self._task_cls.__name__
+    Args:
+        task (type): a task class to instantiate and expand
+        gs_config (Dict[str, Any]): a grid search config that will be expanded
+        name (Optional[str], optional): Defaults to None
+    """
+
+    def __init__(self,
+                 task: Union[type, FunctionType],
+                 gs_config: Dict[str, Any],
+                 name: Optional[str] = None):
+        super().__init__()
+
+        self.task = task
+        # self.gs_config = gs_config
+        self.task_configs = self._split_gs_config(config_grid_search=gs_config)
+        self.name = name if name is not None else self.task.__name__
 
     def _find_list_in_dict(self, obj: Dict, param_grid: List) -> List:
         for key in obj:
@@ -54,18 +68,6 @@ class GridTaskSpec(DependencyMixin):
             else:
                 continue
         return obj_copy, counter
-
-    def _dict_to_list_of_strings(self, d: Dict, parent_key: str = '', sep: str = '.'):
-        items = []
-        for k, v in d.items():
-            new_key = parent_key + sep + k if parent_key else k
-            if isinstance(v, MutableMapping):
-                items.extend(self._dict_to_list_of_strings(v, new_key, sep=sep).items())
-            elif isinstance(v, list):
-                items.append((new_key, str(v)))
-            else:
-                items.append((new_key, v))
-        return [str(k + sep + str(v)) for k, v in items]
 
     def _split_gs_config(self, config_grid_search: Dict) -> List[Dict]:
         param_grid = []

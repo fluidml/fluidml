@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Dict, Any, Optional
+
 from busy_bee.common.dependency import DependencyMixin
 
 
@@ -12,9 +13,9 @@ class Resource:
 class Task(ABC, DependencyMixin):
     """ Abstract class for task
     """
-    def __init__(self, id: int, name: str):
+    def __init__(self, id_: int, name: str):
         DependencyMixin.__init__(self)
-        self.id_ = id
+        self.id_ = id_
         self.name = name if name is not None else self.__class__.__name__
 
     @abstractmethod
