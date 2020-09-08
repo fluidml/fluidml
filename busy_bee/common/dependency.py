@@ -14,11 +14,11 @@ class DependencyMixin(object):
 
         # attach this task as a successor to all predecessor tasks
         for predecessor in predecessors:
-            predecessor._required_by(self)
+            predecessor.required_by(self)
 
-    def _required_by(self, successor: Any):
+    def required_by(self, successor: Any):
         """
-        Adds a successor
+        Adds a successorpre
         """
         self._successors.append(successor)
 
