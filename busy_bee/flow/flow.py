@@ -2,7 +2,7 @@ from collections import defaultdict
 from itertools import product
 from typing import List, Any, Dict
 
-from networkx import Graph
+from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 
 
@@ -23,28 +23,25 @@ class Flow:
         self._swarm = swarm
 
     @staticmethod
-    def _order_task_specs(self, task_specs: List[BaseTaskSpec]) -> List[BaseTaskSpec]:
+    def _order_task_specs(task_specs: List[BaseTaskSpec]) -> List[BaseTaskSpec]:
         # task graph
-        task_graph = Graph()
+        task_graph = DiGraph()
         for spec in task_specs:
             for predecessor in spec.predecessors:
                 task_graph.add_edge(predecessor, spec)
 
         # topological ordering
-        sorted_specs = topological_sort(task_graph)
+        sorted_specs = list(topological_sort(task_graph))
         return sorted_specs
 
     @staticmethod
     def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]],
                                  task_spec: BaseTaskSpec) -> List[List[Task]]:
-        """
-        Gets predecessor task combinations for the given spec
-        """
         predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in task_spec.predecessors]
         task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
         return task_combinations
 
-    def _generate_tasks(self, task_specs: List[BaseTaskSpec]) -> List[Task]:
+    def _generate_tasks(task_specs: List[BaseTaskSpec]) -> List[Task]:
         # keep track of expanded tasks by their names
         expanded_tasks_by_name = defaultdict(list)
         task_id = 0
@@ -61,7 +58,7 @@ class Flow:
                 # for each task that is created, add ids and dependencies
                 for task in tasks:
                     task.id_ = task_id
-                    task.requires(list(task_combination))
+                    task.requires(task_combination)
                     expanded_tasks_by_name[task.name].append(task)
                     task_id += 1
 
