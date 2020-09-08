@@ -1,9 +1,11 @@
 from typing import Callable, Dict, List, Optional, Any
 
 import yaml
+import os
 
 from busy_bee.flow import Flow
-from busy_bee.flow import TaskSpec, GridTaskSpec
+from busy_bee.flow import GridTaskSpec
+from busy_bee.hive import Swarm
 
 
 def parse(in_dir: str):
@@ -49,8 +51,9 @@ a1 -> b1 -> c1/d1 -> e1
 
 def main():
     # load pipeline and config (tasks are named equally)
-    pipeline = yaml.safe_load(open('pipeline.yaml', 'r'))
-    config = yaml.safe_load(open('config.yaml', 'r'))
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    pipeline = yaml.safe_load(open(os.path.join(current_dir, 'pipeline.yaml'), 'r'))
+    config = yaml.safe_load(open(os.path.join(current_dir, 'config.yaml'), 'r'))
 
     tasks = {task: GridTaskSpec(task=TASK_TO_CALLABLE[task], gs_config=config[task]) for task in pipeline}
     for task_name, task in tasks.items():
@@ -58,8 +61,9 @@ def main():
 
     tasks = [task for task in tasks.values()]
 
-    flow = Flow(tasks=tasks)
-    flow.run()
+    with Swarm(n_bees=2) as swarm:
+        flow = Flow(swarm=swarm)
+        flow.run(tasks)
 
 
 if __name__ == '__main__':
