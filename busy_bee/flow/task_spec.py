@@ -1,14 +1,13 @@
 from copy import deepcopy
 from itertools import product
-from types import FunctionType
-from typing import Dict, Any, Optional, List, Tuple, Union
+from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
-from busy_bee.common.dependency import DependencyMixin
+from busy_bee.flow import BaseTaskSpec
+from busy_bee.common import Task
 
 
-class TaskSpec(DependencyMixin):
-    """
-    A class to hold task specification
+class TaskSpec(BaseTaskSpec):
+    """A class to hold specification of a plain task
 
     Args:
         task (type): a task class to instantiate
@@ -17,19 +16,19 @@ class TaskSpec(DependencyMixin):
     """
 
     def __init__(self,
-                 task: Union[type, FunctionType],
+                 task: Union[type, Callable],
                  task_kwargs: Dict[str, Any],
                  name: Optional[str] = None):
-        super().__init__()
-
-        self.task = task
+        super().__init__(task, name)
         self.task_kwargs = task_kwargs
-        self.name = name if name is not None else self.task.__name__
+
+    def build(self) -> List[Task]:
+        task = self._create_task_object(task_id=None, task_kwargs=self.task_kwargs)
+        return [task]
 
 
-class GridTaskSpec(DependencyMixin):
-    """
-    A class to hold task specification for grid searcheable task
+class GridTaskSpec(BaseTaskSpec):
+    """A class to hold specification of a grid searcheable task
 
     Args:
         task (type): a task class to instantiate and expand
@@ -38,15 +37,15 @@ class GridTaskSpec(DependencyMixin):
     """
 
     def __init__(self,
-                 task: Union[type, FunctionType],
+                 task: Union[type, Callable],
                  gs_config: Dict[str, Any],
                  name: Optional[str] = None):
-        super().__init__()
-
-        self.task = task
-        self.gs_config = gs_config
+        super().__init__(task, name)
         self.task_configs = self._split_gs_config(config_grid_search=gs_config)
-        self.name = name if name is not None else self.task.__name__
+
+    def build(self) -> List[Task]:
+        tasks = [self._create_task_object(task_id=None, task_kwargs=config) for config in self.task_configs]
+        return tasks
 
     def _find_list_in_dict(self, obj: Dict, param_grid: List) -> List:
         for key in obj:

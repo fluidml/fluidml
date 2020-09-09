@@ -1,12 +1,12 @@
 from multiprocessing import Manager, set_start_method, Queue
 from types import TracebackType
 from typing import Optional, Type, List, Dict
-from busy_bee.common.logging import Console
-
-from busy_bee.common.task import Task, Resource
-from busy_bee.hive.bee import BusyBee, QueenBee
 
 import random
+
+from busy_bee.common.logging import Console
+from busy_bee.common.task import Task, Resource
+from busy_bee.hive.bee import BusyBee, QueenBee
 
 
 class Swarm:
@@ -65,24 +65,24 @@ class Swarm:
         self.close()
 
     @staticmethod
-    def _get_entry_point_tasks(tasks):
-        entry_task_ids = []
+    def _get_entry_point_tasks(tasks: List[Task]) -> Dict[int, str]:
+        entry_task_ids = {}
         for task in tasks:
             if len(task.predecessors) == 0:
-                entry_task_ids.append(task.id_)
+                entry_task_ids[task.id_] = task.name
         return entry_task_ids
 
     def work(self, tasks: List[Task]):
         # get entry point task ids
-        entry_point_task_ids = self._get_entry_point_tasks(tasks)
+        entry_point_task_ids: Dict[int, str] = self._get_entry_point_tasks(tasks)
 
         # also update the current tasks
         for task in tasks:
             self.tasks[task.id_] = task
 
         # add entry point tasks to the job queue
-        for task_id in entry_point_task_ids:
-            Console.get_instance().log(f'Swarm scheduling task {task_id}.')
+        for task_id, task_name in entry_point_task_ids.items():
+            Console.get_instance().log(f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers

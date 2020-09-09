@@ -120,7 +120,8 @@ class BusyBee(BaseBee):
                     continue
 
                 if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} is currently running or already finished.')
+                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
+                                               f'is currently running or already finished.')
                     continue
 
                 Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.name}-{successor.id_}.')

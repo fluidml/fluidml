@@ -7,9 +7,8 @@ class DependencyMixin(object):
         self._successors = []
 
     def requires(self, predecessors: List[Any]):
-        """
-        Adds predecessor task specs
-        """
+        """Adds predecessor task specs"""
+
         self._predecessors.extend(predecessors)
 
         # attach this task as a successor to all predecessor tasks
@@ -17,9 +16,8 @@ class DependencyMixin(object):
             predecessor.required_by(self)
 
     def required_by(self, successor: Any):
-        """
-        Adds a successorpre
-        """
+        """Adds a successorpre"""
+
         self._successors.append(successor)
 
     @property
