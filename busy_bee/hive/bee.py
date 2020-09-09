@@ -4,6 +4,7 @@ from queue import Empty
 import time
 from typing import Dict, Any, List
 
+from networkx import DiGraph, shortest_path_length
 from rich.progress import Progress, BarColumn
 
 from busy_bee.common.task import Task, Resource
@@ -40,6 +41,7 @@ class BusyBee(BaseBee):
                  running_queue: List[int],
                  done_queue: List[int],
                  tasks: Dict[str, Task],
+                 task_graph: DiGraph,
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
                  results: Dict[str, Any]):
@@ -50,6 +52,7 @@ class BusyBee(BaseBee):
         self.running_queue = running_queue
         self.done_queue = done_queue
         self.tasks = tasks
+        self.task_graph = task_graph
         self.results = results
 
     def _is_task_ready(self, task: Task):
@@ -69,14 +72,22 @@ class BusyBee(BaseBee):
 
         return results
 
+    def _extract_kwargs_from_ancestors(self, task: Task) -> Dict[str, Dict]:
+        ancestor_task_ids = list(shortest_path_length(self.task_graph, target=task.id_).keys())[::-1]
+        config = {self.tasks[id_].name: self.tasks[id_].kwargs for id_ in ancestor_task_ids}
+        return config
+
     def _add_results_to_shared_dict(self, results: Dict, task: Task):
         # Note: manager dicts can not be mutated, they have to be reassigned.
         #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
+
+        config = self._extract_kwargs_from_ancestors(task=task)
+
         if task.name not in self.results:
             self.results[task.name] = {}
         task_results = self.results[task.name]
         task_results[task.id_] = {'results': results,
-                                  'config': task.kwargs}
+                                  'config': config}
         self.results[task.name] = task_results
 
     def _run_task(self, task: Task):
