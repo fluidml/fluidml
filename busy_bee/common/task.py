@@ -15,10 +15,12 @@ class Task(ABC, DependencyMixin):
 
     def __init__(self,
                  name: str,
-                 id_: Optional[int] = None):
+                 id_: Optional[int] = None,
+                 kwargs: Optional[Dict] = None):
         DependencyMixin.__init__(self)
         self.name = name if name is not None else self.__class__.__name__
         self.id_ = id_
+        self.kwargs = kwargs
 
     @abstractmethod
     def run(self,

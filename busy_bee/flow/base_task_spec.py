@@ -19,6 +19,7 @@ class BaseTaskSpec(DependencyMixin, ABC):
                             task_id: Optional[int] = None) -> Task:
         if isinstance(self.task, type):
             task = self.task(id_=task_id, name=self.name, **task_kwargs)
+            task.kwargs = task_kwargs
         elif isinstance(self.task, Callable):
             task = MyTask(id_=task_id, task=self.task, name=self.name, kwargs=task_kwargs)
         else:

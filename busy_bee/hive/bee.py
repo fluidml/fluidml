@@ -62,24 +62,37 @@ class BusyBee(BaseBee):
         results = {}
         for predecessor in task.predecessors:
             try:
-                results = {**results, **{predecessor.name: self.results[predecessor.id_]}}
+                results = {**results, **{predecessor.name: self.results[predecessor.name][predecessor.id_]['results']}}
             except TypeError:
                 print('Each task has to return a dict.')
                 raise
 
         return results
 
+    def _add_results_to_shared_dict(self, results: Dict, task: Task):
+        # Note: manager dicts can not be mutated, they have to be reassigned.
+        #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
+        if task.name not in self.results:
+            self.results[task.name] = {}
+        task_results = self.results[task.name]
+        task_results[task.id_] = {'results': results,
+                                  'config': task.kwargs}
+        self.results[task.name] = task_results
+
     def _run_task(self, task: Task):
         # extract results from predecessors
-        results = self._extract_results_from_predecessors(task)
+        pred_results = self._extract_results_from_predecessors(task)
 
         # add to list of running tasks
         self.running_queue.append(task.id_)
 
         # run task
         Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
-        self.results[task.id_] = task.run(results, self.resource)
+        results: Dict = task.run(pred_results, self.resource)
         Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+
+        # add results to shared results dict
+        self._add_results_to_shared_dict(results=results, task=task)
 
         # put task in done_queue
         self.done_queue.append(task.id_)
