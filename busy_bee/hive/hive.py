@@ -82,7 +82,7 @@ class Swarm:
 
         # add entry point tasks to the job queue
         for task_id in entry_point_task_ids:
-            Console.get_instance().log(f'Swarm scheduling {task_id}')
+            Console.get_instance().log(f'Swarm scheduling task {task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers

@@ -44,7 +44,7 @@ class GridTaskSpec(DependencyMixin):
         super().__init__()
 
         self.task = task
-        # self.gs_config = gs_config
+        self.gs_config = gs_config
         self.task_configs = self._split_gs_config(config_grid_search=gs_config)
         self.name = name if name is not None else self.task.__name__
 

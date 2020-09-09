@@ -77,9 +77,9 @@ class BusyBee(BaseBee):
         self.running_queue.append(task.id_)
 
         # run task
-        Console.get_instance().log(f'Bee {self.bee_id} started running task {task.id_}.')
+        Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
         self.results[task.id_] = task.run(results, self.resource)
-        Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.id_}.')
+        Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
 
         # put task in done_queue
         self.done_queue.append(task.id_)
@@ -105,7 +105,7 @@ class BusyBee(BaseBee):
             # TODO: Do we need a lock here?
             # run task only if it has not been executed already
             if task_id in self.done_queue or task_id in self.running_queue:
-                Console.get_instance().log(f'Task {task_id} is currently running or already finished.')
+                Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
                 continue
 
             # all good to run the task
@@ -120,10 +120,10 @@ class BusyBee(BaseBee):
                     continue
 
                 if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {successor.id_} is currently running or already finished.')
+                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} is currently running or already finished.')
                     continue
 
-                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.id_}.')
+                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
 
 
