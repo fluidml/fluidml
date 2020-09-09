@@ -4,6 +4,8 @@ from itertools import product
 from types import FunctionType
 from typing import List, Any, Dict, Union, Tuple
 
+import networkx as nx
+
 from busy_bee.common import Task, Resource
 from busy_bee.hive import Swarm
 from busy_bee.flow.task_spec import TaskSpec, GridTaskSpec
@@ -114,83 +116,66 @@ class Flow:
                 print('  id', pred.id_, pred.name)
 
         return tasks
-    #
-    # def get_list_of_tasks_new(self):
-    #
-    #     gs_config = {}
-    #     for task in self._tasks:
-    #         gs_config[task.name] = task.gs_config if isinstance(task, GridTaskSpec) else task.task_kwargs
-    #
-    #     single_run_configs = split_gs_config(config_grid_search=gs_config)
-    #
-    #
-    #     id_to_task_dict = {}
-    #     task_id = 0
-    #     for exp_task in self._tasks:
-    #         exp_task_configs = exp_task.task_configs if isinstance(exp_task, GridTaskSpec) else [exp_task.task_kwargs]
-    #         for kwargs in exp_task_configs:
-    #             task = {'name': exp_task.name,
-    #                     'task': exp_task.task,
-    #                     'kwargs': kwargs}
-    #             if exp_task.predecessors:
-    #                 dep_kwargs = []
-    #                 for dep_task in exp_task.predecessors:
-    #                     dep_task_configs = dep_task.task_configs if isinstance(dep_task, GridTaskSpec) else [
-    #                         dep_task.task_kwargs]
-    #
-    #
-    #
-    #
-    #     for config in single_run_configs:
-    #         for task_name, dependencies in pipeline.items():
-    #             # create task object, holding its kwargs (config parameters)
-    #             task = {'name': task_name,
-    #                     'task': TASK_TO_CALLABLE[task_name],
-    #                     'kwargs': config[task_name]}
-    #
-    #             # add kwargs of dependent tasks for later comparison
-    #             dep_kwargs = []
-    #             for dep in dependencies:
-    #                 dep_kwargs.append(config[dep])
-    #             task['dep_kwargs'] = dep_kwargs
-    #
-    #             # check if task object is already included in task dictionary, skip if yes
-    #             if task in id_to_task_dict.values():
-    #                 continue
-    #
-    #             # if no, add task to task dictionary
-    #             id_to_task_dict[task_id] = task
-    #
-    #             # increment task_id counter
-    #             task_id += 1
-    #
-    #     # create graph object, to model task dependencies
-    #     graph = nx.DiGraph()
-    #     for id_i, task_i in id_to_task_dict.items():
-    #         # for task_i, get kwargs of dependent tasks
-    #         dep_kwargs = task_i['dep_kwargs']
-    #         for id_j, task_j in id_to_task_dict.items():
-    #             # for task_j, get kwargs
-    #             kwargs = task_j['kwargs']
-    #             # create an edge between task_j and task_i if task_j depends on task_i
-    #             if kwargs in dep_kwargs:
-    #                 graph.add_edge(id_j, id_i)
-    #
-    #     # convert task_dict to an abstract Task class -> Interface for swarm
-    #     id_to_task = {}
-    #     for id_, task_dict in id_to_task_dict.items():
-    #         task = MyTask(id_=id_,
-    #                       name=task_dict['name'],
-    #                       task=task_dict['task'],
-    #                       kwargs=task_dict['kwargs'])
-    #         id_to_task[id_] = task
-    #
-    #     # Register dependencies
-    #     tasks = []
-    #     for id_, task in id_to_task.items():
-    #         pre_task_ids = list(graph.predecessors(id_))
-    #         task.requires([id_to_task[id_] for id_ in pre_task_ids])
-    #         tasks.append(task)
+
+    def get_list_of_tasks_new(self):
+
+        gs_config = {}
+        for task in self._tasks:
+            gs_config[task.name] = task.gs_config if isinstance(task, GridTaskSpec) else task.task_kwargs
+
+        single_run_configs = split_gs_config(config_grid_search=gs_config)
+
+        id_to_task_dict = {}
+        task_id = 0
+        for config in single_run_configs:
+            for exp_task in self._tasks:
+
+                task = {'name': exp_task.name,
+                        'task': exp_task.task,
+                        'kwargs': config[exp_task.name],
+                        'dep_kwargs': [config[dep_task.name] for dep_task in exp_task.predecessors]}
+
+                # check if task object is already included in task dictionary, skip if yes
+                if task in id_to_task_dict.values():
+                    continue
+
+                # if no, add task to task dictionary
+                id_to_task_dict[task_id] = task
+
+                # increment task_id counter
+                task_id += 1
+
+        # create graph object, to model task dependencies
+        graph = nx.DiGraph()
+        for id_i, task_i in id_to_task_dict.items():
+            # for task_i, get kwargs of dependent tasks
+            dep_kwargs = task_i['dep_kwargs']
+            for id_j, task_j in id_to_task_dict.items():
+                # for task_j, get kwargs
+                kwargs = task_j['kwargs']
+                # create an edge between task_j and task_i if task_j depends on task_i
+                if kwargs in dep_kwargs:
+                    graph.add_edge(id_j, id_i)
+
+        # convert task_dict to an abstract Task class -> Interface for swarm
+        id_to_task = {}
+        for id_, task_dict in id_to_task_dict.items():
+            if isinstance(task_dict['task'], type):
+                task = task_dict['task'](id_=id_, name=task_dict['name'], **task_dict['kwargs'])
+            elif isinstance(task_dict['task'], FunctionType):
+                task = MyTask(id_=id_, task=task_dict['task'], name=task_dict['name'], kwargs=task_dict['kwargs'])
+            else:
+                raise ValueError
+            id_to_task[id_] = task
+
+        # Register dependencies
+        tasks = []
+        for id_, task in id_to_task.items():
+            pre_task_ids = list(graph.predecessors(id_))
+            task.requires([id_to_task[id_] for id_ in pre_task_ids])
+            tasks.append(task)
+
+        return tasks
 
     def run(self) -> Dict[str, Dict[str, Any]]:
         """
@@ -202,7 +187,7 @@ class Flow:
             Dict[str, Dict[str, any]] - a nested dictionary of results
         """
 
-        tasks = self.get_list_of_tasks()
+        tasks = self.get_list_of_tasks_new()
 
         # run swarm
         with Swarm(n_bees=3, refresh_every=5, exit_on_error=True) as swarm:
