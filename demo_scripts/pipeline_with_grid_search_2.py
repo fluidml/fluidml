@@ -65,8 +65,10 @@ def main():
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_bees=2) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute='featurize_tokens')
-        flow.run(tasks)
+        flow = Flow(swarm=swarm, task_to_execute='train')
+        results = flow.run(tasks)
+
+    print(results)
 
 
 if __name__ == '__main__':

@@ -1,8 +1,9 @@
 from multiprocessing import Manager, set_start_method, Queue
+import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict
 
-import random
+from networkx import DiGraph
 
 from busy_bee.common.logging import Console
 from busy_bee.common.task import Task, Resource
@@ -28,6 +29,7 @@ class Swarm:
         self.results = self.manager.dict()
         self.exception = self.manager.dict()
         self.tasks: Dict[int, Task] = self.manager.dict()
+        self.task_graph = DiGraph()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(done_queue=self.done_queue,
@@ -42,6 +44,7 @@ class Swarm:
                                        running_queue=self.running_queue,
                                        done_queue=self.done_queue,
                                        tasks=self.tasks,
+                                       task_graph=self.task_graph,
                                        exception=self.exception,
                                        exit_on_error=exit_on_error,
                                        results=self.results) for i in range(self.n_bees)])
@@ -72,6 +75,14 @@ class Swarm:
                 entry_task_ids[task.id_] = task.name
         return entry_task_ids
 
+    def _simplify_results(self) -> Dict[str, List[Dict]]:
+        results = {}
+        for task_name, run_tasks in self.results.items():
+            results[task_name] = []
+            for task_output in run_tasks.values():
+                results[task_name].append(task_output)
+        return results
+
     def work(self, tasks: List[Task]):
         # get entry point task ids
         entry_point_task_ids: Dict[int, str] = self._get_entry_point_tasks(tasks)
@@ -79,6 +90,11 @@ class Swarm:
         # also update the current tasks
         for task in tasks:
             self.tasks[task.id_] = task
+
+        # update the empty initialized task graph
+        for task in tasks:
+            for pred_task in task.predecessors:
+                self.task_graph.add_edge(pred_task.id_, task.id_)
 
         # add entry point tasks to the job queue
         for task_id, task_name in entry_point_task_ids.items():
@@ -97,7 +113,8 @@ class Swarm:
         if self.exception:
             raise self.exception['message']
 
-        return self.results
+        results: Dict[str, List[Dict]] = self._simplify_results()
+        return results
 
     def close(self):
         self.results = self.manager.dict()
