@@ -11,17 +11,20 @@ class Resource:
 
 
 class Task(ABC, DependencyMixin):
-    """ Abstract class for task
-    """
-    def __init__(self, id_: int, name: str):
+    """Abstract class for task"""
+
+    def __init__(self,
+                 name: str,
+                 id_: Optional[int] = None):
         DependencyMixin.__init__(self)
-        self.id_ = id_
         self.name = name if name is not None else self.__class__.__name__
+        self.id_ = id_
 
     @abstractmethod
-    def run(self, results: Dict[str, Any], resource: Resource) -> Optional[Dict[str, Any]]:
-        """
-        Implementation of core logic of task
+    def run(self,
+            results: Dict[str, Any],
+            resource: Resource) -> Optional[Dict[str, Any]]:
+        """Implementation of core logic of task
 
         Args:
             results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
@@ -30,4 +33,5 @@ class Task(ABC, DependencyMixin):
         Returns:
             Optional[Dict[str, Any]]: a dict of results (automatically passed to successor tasks)
         """
+
         raise NotImplementedError

@@ -1,15 +1,15 @@
-from typing import Callable, Dict, List, Optional, Any
+from typing import List
 
-import networkx as nx
 import yaml
+import os
 
 from busy_bee.flow import Flow
-from busy_bee.flow import TaskSpec, GridTaskSpec
+from busy_bee.flow import GridTaskSpec
+from busy_bee.hive import Swarm
 
 
 def parse(in_dir: str):
     return {}
-    # a - 3
 
 
 def preprocess(pipeline: List[str]):
@@ -40,46 +40,33 @@ TASK_TO_CALLABLE = {'parse': parse,
 a -> b -> c -> e
        \- d -/
 
-# task pipeline including grid search args
+# task pipeline once grid search args are expanded
 a1 -> b1 -> c1/d1 -> e1
                   -> e2
          -> c2/d1 -> e3
                   -> e4
 """
 
-# def get_predecessor_tasks(list_of_tasks, task):
-#     if task.predecessors:
-#         for pred_task in task.predecessors:
-#             list_of_tasks.append(pred_task)
-#             return get_predecessor_tasks(list_of_tasks, pred_task)
-#     else:
-#         return list_of_tasks
-
-
-
 
 def main():
-    TASK_TO_EXECUTE = 'featurize_tokens'
+    current_dir = os.path.dirname(os.path.realpath(__file__))
 
     # load pipeline and config (tasks are named equally)
-    pipeline = yaml.safe_load(open('pipeline.yaml', 'r'))
-    config = yaml.safe_load(open('config.yaml', 'r'))
+    pipeline = yaml.safe_load(open(os.path.join(current_dir, 'pipeline.yaml'), 'r'))
+    config = yaml.safe_load(open(os.path.join(current_dir, 'config.yaml'), 'r'))
 
-    tasks = {task_name: GridTaskSpec(task=TASK_TO_CALLABLE[task_name], gs_config=config[task_name])
-             for task_name in pipeline}
-
-    graph = nx.DiGraph()
+    # create task-spec objects and register dependencies (defined in pipeline.yaml)
+    tasks = {task: GridTaskSpec(task=TASK_TO_CALLABLE[task], gs_config=config[task]) for task in pipeline}
     for task_name, task in tasks.items():
         task.requires([tasks[dep] for dep in pipeline[task_name]])
-        for dep_name in pipeline[task_name]:
-            graph.add_edge(dep_name, task_name)
 
-    # list_of_tasks = get_predecessor_tasks(list_of_tasks=[tasks[TASK_TO_EXECUTE]], task=tasks[TASK_TO_EXECUTE])
+    # create list of task specs
+    tasks = [task for task in tasks.values()]
 
-    list_of_tasks = [tasks[name] for name in nx.ancestors(graph, TASK_TO_EXECUTE)] + [tasks[TASK_TO_EXECUTE]]
-
-    flow = Flow(tasks=list_of_tasks)
-    flow.run()
+    # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
+    with Swarm(n_bees=2) as swarm:
+        flow = Flow(swarm=swarm, task_to_execute='featurize_tokens')
+        flow.run(tasks)
 
 
 if __name__ == '__main__':
