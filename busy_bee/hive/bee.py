@@ -85,6 +85,7 @@ class BusyBee(BaseBee):
 
         if task.name not in self.results:
             self.results[task.name] = {}
+
         task_results = self.results[task.name]
         task_results[task.id_] = {'results': results,
                                   'config': config}
