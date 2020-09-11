@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from typing import List
 
 import yaml
@@ -35,6 +36,9 @@ TASK_TO_CALLABLE = {'parse': parse,
                     'train': train}
 
 
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
 """
 # task pipeline
 a -> b -> c -> e
@@ -48,12 +52,33 @@ a1 -> b1 -> c1/d1 -> e1
 """
 
 
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('--task',
+                        default='train',
+                        type=str,
+                        help='Task to be executed (level 0 keys in config).')
+    parser.add_argument('--config',
+                        default=os.path.join(CURRENT_DIR, 'config.yaml'),
+                        type=str,
+                        help='Path to config file.',)
+    parser.add_argument('--pipeline',
+                        default=os.path.join(CURRENT_DIR, 'pipeline.yaml'),
+                        type=str,
+                        help='Path to pipeline file.',)
+    parser.add_argument('--num-bees',
+                        default=3,
+                        type=int,
+                        help='Number of spawned worker processes.')
+    return parser.parse_args()
+
+
 def main():
-    current_dir = os.path.dirname(os.path.realpath(__file__))
+    args = parse_args()
 
     # load pipeline and config (tasks are named equally)
-    pipeline = yaml.safe_load(open(os.path.join(current_dir, 'pipeline.yaml'), 'r'))
-    config = yaml.safe_load(open(os.path.join(current_dir, 'config.yaml'), 'r'))
+    pipeline = yaml.safe_load(open(args.pipeline, 'r'))
+    config = yaml.safe_load(open(args.config, 'r'))
 
     # create task-spec objects and register dependencies (defined in pipeline.yaml)
     tasks = {task: GridTaskSpec(task=TASK_TO_CALLABLE[task], gs_config=config[task]) for task in pipeline}
@@ -64,8 +89,8 @@ def main():
     tasks = [task for task in tasks.values()]
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_bees=2) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute='train')
+    with Swarm(n_bees=args.num_bees) as swarm:
+        flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
 
     print(results)
