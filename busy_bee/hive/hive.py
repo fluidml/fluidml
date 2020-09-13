@@ -1,3 +1,4 @@
+import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue
 import random
 from types import TracebackType
@@ -12,7 +13,7 @@ from busy_bee.hive.bee import BusyBee, QueenBee
 
 class Swarm:
     def __init__(self,
-                 n_bees: int,
+                 n_bees: Optional[int] = None,
                  resources: Optional[List[Resource]] = None,
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
@@ -20,8 +21,8 @@ class Swarm:
 
         set_start_method(start_method, force=True)
 
-        self.n_bees = n_bees
-        self.resources = Swarm._allocate_resources(n_bees, resources)
+        self.n_bees = n_bees if n_bees else multiprocessing.cpu_count()
+        self.resources = Swarm._allocate_resources(self.n_bees, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
@@ -50,7 +51,7 @@ class Swarm:
                                        results=self.results) for i in range(self.n_bees)])
 
     @staticmethod
-    def _allocate_resources(n_bees: int, resources: List[Resource]):
+    def _allocate_resources(n_bees: int, resources: List[Resource]) -> List[Resource]:
         if not resources:
             resources = [None] * n_bees
         elif len(resources) != n_bees:

@@ -1,31 +1,35 @@
 from argparse import ArgumentParser
-from typing import List
-
-import yaml
+from dataclasses import dataclass
+import multiprocessing
 import os
+from typing import List, Optional, Dict
 
+import torch
+import yaml
+
+from busy_bee.common import Resource
 from busy_bee.flow import Flow
 from busy_bee.flow import GridTaskSpec
 from busy_bee.hive import Swarm
 
 
-def parse(in_dir: str):
+def parse(results: Dict, recource: Resource, in_dir: str):
     return {}
 
 
-def preprocess(pipeline: List[str]):
+def preprocess(results: Dict, recource: Resource, pipeline: List[str]):
     return {}
 
 
-def featurize_tokens(type_: str, batch_size: int):
+def featurize_tokens(results: Dict, recource: Resource, type_: str, batch_size: int):
     return {}
 
 
-def featurize_cells(type_: str, batch_size: int):
+def featurize_cells(results: Dict, recource: Resource, type_: str, batch_size: int):
     return {}
 
 
-def train(model, dataloader, evaluator, optimizer, num_epochs):
+def train(results: Dict, recource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
     return {}
 
 
@@ -58,6 +62,16 @@ def parse_args():
                         default='train',
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
+    parser.add_argument('--use-cuda',
+                        default=True,
+                        help='If set, cuda (gpu) is used.',
+                        action='store_true')
+    parser.add_argument('--seed',
+                        default=42,
+                        type=int)
+    parser.add_argument('--base-dir',
+                        default=os.path.join(CURRENT_DIR, 'experiments'),
+                        type=str)
     parser.add_argument('--config',
                         default=os.path.join(CURRENT_DIR, 'config.yaml'),
                         type=str,
@@ -71,6 +85,26 @@ def parse_args():
                         type=int,
                         help='Number of spawned worker processes.')
     return parser.parse_args()
+
+
+@dataclass
+class TaskResource(Resource):
+    base_dir: str
+    device: str
+    seed: int
+
+
+def get_balanced_devices(count: Optional[int] = None,
+                         use_cuda: bool = True) -> List[str]:
+    count = count if count is not None else multiprocessing.cpu_count()
+    if use_cuda and torch.cuda.is_available():
+        devices = [f'cuda:{id_}' for id_ in range(torch.cuda.device_count())]
+    else:
+        devices = ['cpu']
+    factor = int(count / len(devices))
+    remainder = count % len(devices)
+    devices = devices * factor + devices[:remainder]
+    return devices
 
 
 def main():
@@ -88,8 +122,15 @@ def main():
     # create list of task specs
     tasks = [task for task in tasks.values()]
 
+    # ToDo: Include resource creation/allocation inside of swarm?
+    # create list of resources
+    devices = get_balanced_devices(count=args.num_bees, use_cuda=args.use_cuda)
+    resources = [TaskResource(device=devices[i],
+                              seed=args.seed,
+                              base_dir=args.base_dir) for i in range(args.num_bees)]
+
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_bees=args.num_bees) as swarm:
+    with Swarm(n_bees=args.num_bees, resources=resources) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
 

@@ -81,19 +81,20 @@ class BusyBee(BaseBee):
         # Note: manager dicts can not be mutated, they have to be reassigned.
         #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
 
-        config = self._extract_kwargs_from_ancestors(task=task)
-
         if task.name not in self.results:
             self.results[task.name] = {}
 
         task_results = self.results[task.name]
         task_results[task.id_] = {'results': results,
-                                  'config': config}
+                                  'config': task.config}
         self.results[task.name] = task_results
 
     def _run_task(self, task: Task):
         # extract results from predecessors
         pred_results = self._extract_results_from_predecessors(task)
+
+        # create task config from ancestor task kwargs
+        task.config = self._extract_kwargs_from_ancestors(task=task)
 
         # add to list of running tasks
         self.running_queue.append(task.id_)
