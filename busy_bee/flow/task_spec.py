@@ -7,8 +7,7 @@ from busy_bee.common import Task
 
 
 class TaskSpec(BaseTaskSpec):
-    """
-    A class to hold specification of a plain task
+    """A class to hold specification of a plain task
 
     Args:
         task (type): a task class to instantiate
@@ -24,13 +23,12 @@ class TaskSpec(BaseTaskSpec):
         self.task_kwargs = task_kwargs
 
     def build(self) -> List[Task]:
-        task = self._type_to_task(task_id=None, task_args=self.task_args)
+        task = self._create_task_object(task_id=None, task_kwargs=self.task_kwargs)
         return [task]
 
 
 class GridTaskSpec(BaseTaskSpec):
-    """
-    A class to hold specification of a grid searcheable task
+    """A class to hold specification of a grid searcheable task
 
     Args:
         task (type): a task class to instantiate and expand
@@ -46,7 +44,7 @@ class GridTaskSpec(BaseTaskSpec):
         self.task_configs = self._split_gs_config(config_grid_search=gs_config)
 
     def build(self) -> List[Task]:
-        tasks = [self._type_to_task(task_id=None, task_args=config) for config in self.task_configs]
+        tasks = [self._create_task_object(task_id=None, task_kwargs=config) for config in self.task_configs]
         return tasks
 
     def _find_list_in_dict(self, obj: Dict, param_grid: List) -> List:

@@ -1,13 +1,15 @@
+import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue
+import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict
-from busy_bee.common.logging import Console
 
+from networkx import DiGraph
+
+from busy_bee.common.logging import Console
 from busy_bee.common.task import Task, Resource
 from busy_bee.hive.bee import BusyBee, QueenBee
 from abc import ABC
-
-import random
 
 
 class ResultsStorage(ABC):
@@ -37,7 +39,7 @@ class LocalFileStorage(ResultsStorage):
 
 class Swarm:
     def __init__(self,
-                 n_bees: int,
+                 n_bees: Optional[int] = None,
                  resources: Optional[List[Resource]] = None,
                  results_storage: ResultsStorage = LocalFileStorage(),
                  start_method: str = 'spawn',
@@ -46,8 +48,8 @@ class Swarm:
 
         set_start_method(start_method, force=True)
 
-        self.n_bees = n_bees
-        self.resources = Swarm._allocate_resources(n_bees, resources)
+        self.n_bees = n_bees if n_bees else multiprocessing.cpu_count()
+        self.resources = Swarm._allocate_resources(self.n_bees, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
@@ -55,6 +57,7 @@ class Swarm:
         self.results = self.manager.dict()
         self.exception = self.manager.dict()
         self.tasks: Dict[int, Task] = self.manager.dict()
+        self.task_graph = DiGraph()
 
         # queen bee for tracking
         self.busy_bees = [QueenBee(done_queue=self.done_queue,
@@ -69,12 +72,13 @@ class Swarm:
                                        running_queue=self.running_queue,
                                        done_queue=self.done_queue,
                                        tasks=self.tasks,
+                                       task_graph=self.task_graph,
                                        exception=self.exception,
                                        exit_on_error=exit_on_error,
                                        results=self.results) for i in range(self.n_bees)])
 
     @staticmethod
-    def _allocate_resources(n_bees: int, resources: List[Resource]):
+    def _allocate_resources(n_bees: int, resources: List[Resource]) -> List[Resource]:
         if not resources:
             resources = [None] * n_bees
         elif len(resources) != n_bees:
@@ -92,24 +96,37 @@ class Swarm:
         self.close()
 
     @staticmethod
-    def _get_entry_point_tasks(tasks):
-        entry_task_ids = []
+    def _get_entry_point_tasks(tasks: List[Task]) -> Dict[int, str]:
+        entry_task_ids = {}
         for task in tasks:
             if len(task.predecessors) == 0:
-                entry_task_ids.append(task.id_)
+                entry_task_ids[task.id_] = task.name
         return entry_task_ids
+
+    def _simplify_results(self) -> Dict[str, List[Dict]]:
+        results = {}
+        for task_name, run_tasks in self.results.items():
+            results[task_name] = []
+            for task_output in run_tasks.values():
+                results[task_name].append(task_output)
+        return results
 
     def work(self, tasks: List[Task]):
         # get entry point task ids
-        entry_point_task_ids = self._get_entry_point_tasks(tasks)
+        entry_point_task_ids: Dict[int, str] = self._get_entry_point_tasks(tasks)
 
         # also update the current tasks
         for task in tasks:
             self.tasks[task.id_] = task
 
+        # update the empty initialized task graph
+        for task in tasks:
+            for pred_task in task.predecessors:
+                self.task_graph.add_edge(pred_task.id_, task.id_)
+
         # add entry point tasks to the job queue
-        for task_id in entry_point_task_ids:
-            Console.get_instance().log(f'Swarm scheduling {task_id}')
+        for task_id, task_name in entry_point_task_ids.items():
+            Console.get_instance().log(f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers
@@ -124,7 +141,8 @@ class Swarm:
         if self.exception:
             raise self.exception['message']
 
-        return self.results
+        results: Dict[str, List[Dict]] = self._simplify_results()
+        return results
 
     def close(self):
         self.results = self.manager.dict()

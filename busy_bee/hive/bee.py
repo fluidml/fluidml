@@ -4,6 +4,7 @@ from queue import Empty
 import time
 from typing import Dict, Any, List
 
+from networkx import DiGraph, shortest_path_length
 from rich.progress import Progress, BarColumn
 
 from busy_bee.common.task import Task, Resource
@@ -40,6 +41,7 @@ class BusyBee(BaseBee):
                  running_queue: List[int],
                  done_queue: List[int],
                  tasks: Dict[str, Task],
+                 task_graph: DiGraph,
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
                  results: Dict[str, Any]):
@@ -50,6 +52,7 @@ class BusyBee(BaseBee):
         self.running_queue = running_queue
         self.done_queue = done_queue
         self.tasks = tasks
+        self.task_graph = task_graph
         self.results = results
 
     def _is_task_ready(self, task: Task):
@@ -62,24 +65,47 @@ class BusyBee(BaseBee):
         results = {}
         for predecessor in task.predecessors:
             try:
-                results = {**results, **{predecessor.name: self.results[predecessor.id_]}}
+                results = {**results, **{predecessor.name: self.results[predecessor.name][predecessor.id_]['results']}}
             except TypeError:
                 print('Each task has to return a dict.')
                 raise
 
         return results
 
+    def _extract_kwargs_from_ancestors(self, task: Task) -> Dict[str, Dict]:
+        ancestor_task_ids = list(shortest_path_length(self.task_graph, target=task.id_).keys())[::-1]
+        config = {self.tasks[id_].name: self.tasks[id_].kwargs for id_ in ancestor_task_ids}
+        return config
+
+    def _add_results_to_shared_dict(self, results: Dict, task: Task):
+        # Note: manager dicts can not be mutated, they have to be reassigned.
+        #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
+
+        if task.name not in self.results:
+            self.results[task.name] = {}
+
+        task_results = self.results[task.name]
+        task_results[task.id_] = {'results': results,
+                                  'config': task.config}
+        self.results[task.name] = task_results
+
     def _run_task(self, task: Task):
         # extract results from predecessors
-        results = self._extract_results_from_predecessors(task)
+        pred_results = self._extract_results_from_predecessors(task)
+
+        # create task config from ancestor task kwargs
+        task.config = self._extract_kwargs_from_ancestors(task=task)
 
         # add to list of running tasks
         self.running_queue.append(task.id_)
 
         # run task
-        Console.get_instance().log(f'Bee {self.bee_id} started running task {task.id_}.')
-        self.results[task.id_] = task.run(results, self.resource)
-        Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.id_}.')
+        Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
+        results: Dict = task.run(pred_results, self.resource)
+        Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+
+        # add results to shared results dict
+        self._add_results_to_shared_dict(results=results, task=task)
 
         # put task in done_queue
         self.done_queue.append(task.id_)
@@ -105,7 +131,7 @@ class BusyBee(BaseBee):
             # TODO: Do we need a lock here?
             # run task only if it has not been executed already
             if task_id in self.done_queue or task_id in self.running_queue:
-                Console.get_instance().log(f'Task {task_id} is currently running or already finished.')
+                Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
                 continue
 
             # all good to run the task
@@ -120,10 +146,11 @@ class BusyBee(BaseBee):
                     continue
 
                 if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {successor.id_} is currently running or already finished.')
+                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
+                                               f'is currently running or already finished.')
                     continue
 
-                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.id_}.')
+                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
 
 
