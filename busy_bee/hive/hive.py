@@ -5,14 +5,41 @@ from busy_bee.common.logging import Console
 
 from busy_bee.common.task import Task, Resource
 from busy_bee.hive.bee import BusyBee, QueenBee
+from abc import ABC
 
 import random
+
+
+class ResultsStorage(ABC):
+    def construct(self):
+        pass
+
+    def save_results(self, task_name, task_defining_config):
+        """[summary]
+        """
+        pass
+
+    def get_results(self, task_name, task_defining_config) -> Dict:
+        """
+        Query method to get the results if they exist already
+        """
+        pass
+
+    def destruct(self):
+        pass
+
+
+class LocalFileStorage(ResultsStorage):
+    def __init__(self, base_dir: str):
+        self.base_dir = base_dir
+    pass
 
 
 class Swarm:
     def __init__(self,
                  n_bees: int,
                  resources: Optional[List[Resource]] = None,
+                 results_storage: ResultsStorage = LocalFileStorage(),
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
                  exit_on_error: bool = True):
