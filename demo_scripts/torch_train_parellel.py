@@ -17,7 +17,7 @@ class SimpleModule(torch.nn.Module):
         return self.linear(input_)
 
 
-@dataclass(init=True)
+@dataclass
 class DeviceResource(Resource):
     device_id: str
 
