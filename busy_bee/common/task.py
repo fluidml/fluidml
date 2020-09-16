@@ -22,7 +22,7 @@ class Task(ABC, DependencyMixin):
         self.id_ = id_
         self.kwargs = kwargs
 
-        self.config = None
+        self.unique_config: Optional[Dict] = None
 
     @abstractmethod
     def run(self,

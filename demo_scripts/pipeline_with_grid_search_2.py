@@ -1,16 +1,16 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
-import multiprocessing
 import os
-from typing import List, Optional, Dict
+from typing import List, Dict
 
-import torch
 import yaml
 
 from busy_bee.common import Resource
 from busy_bee.flow import Flow
 from busy_bee.flow import GridTaskSpec
 from busy_bee.hive import Swarm
+from busy_bee.hive.honeycomb import LocalFileStorage
+from demo_scripts.utils.gpu import get_balanced_devices
 
 
 def parse(results: Dict, recource: Resource, in_dir: str):
@@ -89,22 +89,8 @@ def parse_args():
 
 @dataclass
 class TaskResource(Resource):
-    base_dir: str
     device: str
     seed: int
-
-
-def get_balanced_devices(count: Optional[int] = None,
-                         use_cuda: bool = True) -> List[str]:
-    count = count if count is not None else multiprocessing.cpu_count()
-    if use_cuda and torch.cuda.is_available():
-        devices = [f'cuda:{id_}' for id_ in range(torch.cuda.device_count())]
-    else:
-        devices = ['cpu']
-    factor = int(count / len(devices))
-    remainder = count % len(devices)
-    devices = devices * factor + devices[:remainder]
-    return devices
 
 
 def main():
@@ -122,19 +108,18 @@ def main():
     # create list of task specs
     tasks = [task for task in tasks.values()]
 
-    # ToDo: Include resource creation/allocation inside of swarm?
     # create list of resources
     devices = get_balanced_devices(count=args.num_bees, use_cuda=args.use_cuda)
     resources = [TaskResource(device=devices[i],
-                              seed=args.seed,
-                              base_dir=args.base_dir) for i in range(args.num_bees)]
+                              seed=args.seed) for i in range(args.num_bees)]
+
+    # create local file storage used for versioning
+    results_storage = LocalFileStorage(base_dir=args.base_dir)
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_bees=args.num_bees, resources=resources) as swarm:
+    with Swarm(n_bees=args.num_bees, resources=resources, results_storage=results_storage) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
-
-    print(results)
 
 
 if __name__ == '__main__':

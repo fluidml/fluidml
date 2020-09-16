@@ -1,11 +1,13 @@
-from typing import List
+import multiprocessing
+from typing import List, Optional
 
 import torch
 
 
-def get_balanced_devices(count: int,
-                         no_cuda: bool = False) -> List[str]:
-    if not no_cuda and torch.cuda.is_available():
+def get_balanced_devices(count: Optional[int] = None,
+                         use_cuda: bool = True) -> List[str]:
+    count = count if count is not None else multiprocessing.cpu_count()
+    if use_cuda and torch.cuda.is_available():
         devices = [f'cuda:{id_}' for id_ in range(torch.cuda.device_count())]
     else:
         devices = ['cpu']
