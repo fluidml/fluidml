@@ -29,18 +29,18 @@ class Flow:
         # convert task_specs to dict, so it can be queried by name
         name_to_task_spec = {spec.name: spec for spec in task_specs}
 
-        # task graph holding the user defined dependency structure
-        task_graph = DiGraph()
+        # task spec graph holding the user defined dependency structure
+        task_spec_graph = DiGraph()
         for spec in task_specs:
             for predecessor in spec.predecessors:
-                task_graph.add_edge(predecessor.name, spec.name)
+                task_spec_graph.add_edge(predecessor.name, spec.name)
 
         # topological ordering of tasks in graph
         # if a specific task to execute is provided, remove non dependent tasks from graph
         if self._task_to_execute:
-            sorted_names = list(shortest_path_length(task_graph, target=self._task_to_execute).keys())[::-1]
+            sorted_names = list(shortest_path_length(task_spec_graph, target=self._task_to_execute).keys())[::-1]
         else:
-            sorted_names = list(topological_sort(task_graph))
+            sorted_names = list(topological_sort(task_spec_graph))
 
         # get sorted list of task specs
         sorted_specs = [name_to_task_spec[name] for name in sorted_names]
@@ -75,7 +75,7 @@ class Flow:
                     expanded_tasks_by_name[task.name].append(task)
                     task_id += 1
 
-        # final list of tasks
+        # create final dict of tasks
         tasks = [task for expanded_tasks in expanded_tasks_by_name.values() for task in expanded_tasks]
         return tasks
 

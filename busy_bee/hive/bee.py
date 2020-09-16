@@ -2,13 +2,13 @@ from abc import abstractmethod
 from multiprocessing import Process, Queue
 from queue import Empty
 import time
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
-from networkx import DiGraph, shortest_path_length
 from rich.progress import Progress, BarColumn
 
 from busy_bee.common.task import Task, Resource
 from busy_bee.common.logging import Console
+from busy_bee.hive.honeycomb import ResultsStorage
 
 
 class BaseBee(Process):
@@ -41,10 +41,10 @@ class BusyBee(BaseBee):
                  running_queue: List[int],
                  done_queue: List[int],
                  tasks: Dict[str, Task],
-                 task_graph: DiGraph,
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
-                 results: Dict[str, Any]):
+                 results: Dict[str, Any],
+                 results_storage: Optional[ResultsStorage] = None):
         super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.bee_id = bee_id
         self.resource = resource
@@ -52,8 +52,8 @@ class BusyBee(BaseBee):
         self.running_queue = running_queue
         self.done_queue = done_queue
         self.tasks = tasks
-        self.task_graph = task_graph
         self.results = results
+        self.results_storage = results_storage
 
     def _is_task_ready(self, task: Task):
         for predecessor in task.predecessors:
@@ -72,12 +72,7 @@ class BusyBee(BaseBee):
 
         return results
 
-    def _extract_kwargs_from_ancestors(self, task: Task) -> Dict[str, Dict]:
-        ancestor_task_ids = list(shortest_path_length(self.task_graph, target=task.id_).keys())[::-1]
-        config = {self.tasks[id_].name: self.tasks[id_].kwargs for id_ in ancestor_task_ids}
-        return config
-
-    def _add_results_to_shared_dict(self, results: Dict, task: Task):
+    def _add_results_to_results_dict(self, results: Dict, task: Task):
         # Note: manager dicts can not be mutated, they have to be reassigned.
         #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
 
@@ -86,26 +81,43 @@ class BusyBee(BaseBee):
 
         task_results = self.results[task.name]
         task_results[task.id_] = {'results': results,
-                                  'config': task.config}
+                                  'config': task.unique_config}
         self.results[task.name] = task_results
+
+    def _run_task_using_results_storage(self, task: Task, pred_results: Dict) -> Dict:
+        results = self.results_storage.get_results(task=task)
+
+        if results is None:
+            # run task
+            Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
+            results: Dict = task.run(pred_results, self.resource)
+            Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+
+            # TODO: This probably needs a lock
+            self.results_storage.save_results(task=task, results=results)
+        else:
+            Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+
+        return results
 
     def _run_task(self, task: Task):
         # extract results from predecessors
         pred_results = self._extract_results_from_predecessors(task)
 
-        # create task config from ancestor task kwargs
-        task.config = self._extract_kwargs_from_ancestors(task=task)
-
         # add to list of running tasks
         self.running_queue.append(task.id_)
 
-        # run task
-        Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
-        results: Dict = task.run(pred_results, self.resource)
-        Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+        if self.results_storage:
+            # run task using file storage for versioning
+            results: Dict = self._run_task_using_results_storage(task=task, pred_results=pred_results)
+        else:
+            # run task only
+            Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
+            results: Dict = task.run(pred_results, self.resource)
+            Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
 
         # add results to shared results dict
-        self._add_results_to_shared_dict(results=results, task=task)
+        self._add_results_to_results_dict(results=results, task=task)
 
         # put task in done_queue
         self.done_queue.append(task.id_)
