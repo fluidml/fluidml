@@ -1,30 +1,35 @@
-from typing import Callable, Dict, List, Optional, Any
+from argparse import ArgumentParser
+from dataclasses import dataclass
+import os
+from typing import List, Dict
 
-import networkx as nx
 import yaml
 
-from busy_bee import Swarm, Task, Resource
-from demo_scripts.utils import create_run_configs
+from busy_bee.common import Resource
+from busy_bee.flow import Flow
+from busy_bee.flow import GridTaskSpec
+from busy_bee.hive import Swarm
+from busy_bee.hive.honeycomb import LocalFileStorage
+from demo_scripts.utils.gpu import get_balanced_devices
 
 
-def parse(in_dir: str):
-    return {}
-    # a - 3
-
-
-def preprocess(pipeline: List[str]):
-    return {}
-
-
-def featurize_tokens(type_: str, batch_size: int):
+def parse(results: Dict, resource: Resource, in_dir: str):
     return {}
 
 
-def featurize_cells(type_: str, batch_size: int):
+def preprocess(results: Dict, resource: Resource, pipeline: List[str]):
     return {}
 
 
-def train(model, dataloader, evaluator, optimizer, num_epochs):
+def featurize_tokens(results: Dict, resource: Resource, type_: str, batch_size: int):
+    return {}
+
+
+def featurize_cells(results: Dict, resource: Resource, type_: str, batch_size: int):
+    return {}
+
+
+def train(results: Dict, resource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
     return {}
 
 
@@ -35,12 +40,15 @@ TASK_TO_CALLABLE = {'parse': parse,
                     'train': train}
 
 
+CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+
 """
 # task pipeline
 a -> b -> c -> e
        \- d -/
 
-# task pipeline including grid search args
+# task pipeline once grid search args are expanded
 a1 -> b1 -> c1/d1 -> e1
                   -> e2
          -> c2/d1 -> e3
@@ -48,96 +56,70 @@ a1 -> b1 -> c1/d1 -> e1
 """
 
 
-class MyTask(Task):
-    def __init__(self,
-                 id_: int,
-                 name: str,
-                 task: Callable,
-                 kwargs: Dict):
-        super().__init__(id_=id_, name=name)
-        self.id_ = id_
-        self.task = task
-        self.kwargs = kwargs
+def parse_args():
+    parser = ArgumentParser()
+    parser.add_argument('--task',
+                        default='train',
+                        type=str,
+                        help='Task to be executed (level 0 keys in config).')
+    parser.add_argument('--use-cuda',
+                        default=True,
+                        help='If set, cuda (gpu) is used.',
+                        action='store_true')
+    parser.add_argument('--seed',
+                        default=42,
+                        type=int)
+    parser.add_argument('--base-dir',
+                        default=os.path.join(CURRENT_DIR, 'experiments'),
+                        type=str)
+    parser.add_argument('--config',
+                        default=os.path.join(CURRENT_DIR, 'config.yaml'),
+                        type=str,
+                        help='Path to config file.',)
+    parser.add_argument('--pipeline',
+                        default=os.path.join(CURRENT_DIR, 'pipeline.yaml'),
+                        type=str,
+                        help='Path to pipeline file.',)
+    parser.add_argument('--num-bees',
+                        default=3,
+                        type=int,
+                        help='Number of spawned worker processes.')
+    return parser.parse_args()
 
-    def run(self, results: Dict[str, Any], resource: Resource):
-        result = self.task(**self.kwargs)
-        return result
 
-
-def get_entry_point_tasks(graph):
-    tasks = []
-    for node in graph.nodes:
-        if len(list(graph.predecessors(node))) == 0:
-            tasks.append(node)
-    assert len(tasks) > 0, 'The dependency graph does not have any entry-point nodes.'
-    return tasks
+@dataclass
+class TaskResource(Resource):
+    device: str
+    seed: int
 
 
 def main():
+    args = parse_args()
+
     # load pipeline and config (tasks are named equally)
-    pipeline = yaml.safe_load(open('pipeline.yaml', 'r'))
-    config = yaml.safe_load(open('config.yaml', 'r'))
+    pipeline = yaml.safe_load(open(args.pipeline, 'r'))
+    config = yaml.safe_load(open(args.config, 'r'))
 
-    # split grid search config in individual run configs
-    single_run_configs = create_run_configs(config_grid_search=config)
+    # create task-spec objects and register dependencies (defined in pipeline.yaml)
+    tasks = {task: GridTaskSpec(task=TASK_TO_CALLABLE[task], gs_config=config[task]) for task in pipeline}
+    for task_name, task in tasks.items():
+        task.requires([tasks[dep] for dep in pipeline[task_name]])
 
-    # get all unique tasks, taking task dependency and kwargs dependency into account
-    id_to_task_dict = {}
-    task_id = 0
-    for config in single_run_configs:
-        for task_name, dependencies in pipeline.items():
-            # create task object, holding its kwargs (config parameters)
-            task = {'name': task_name,
-                    'task': TASK_TO_CALLABLE[task_name],
-                    'kwargs': config[task_name]}
+    # create list of task specs
+    tasks = [task for task in tasks.values()]
 
-            # add kwargs of dependent tasks for later comparison
-            dep_kwargs = []
-            for dep in dependencies:
-                dep_kwargs.append(config[dep])
-            task['dep_kwargs'] = dep_kwargs
+    # create list of resources
+    devices = get_balanced_devices(count=args.num_bees, use_cuda=args.use_cuda)
+    resources = [TaskResource(device=devices[i],
+                              seed=args.seed) for i in range(args.num_bees)]
 
-            # check if task object is already included in task dictionary, skip if yes
-            if task in id_to_task_dict.values():
-                continue
+    # create local file storage used for versioning
+    results_storage = LocalFileStorage(base_dir=args.base_dir)
 
-            # if no, add task to task dictionary
-            id_to_task_dict[task_id] = task
-
-            # increment task_id counter
-            task_id += 1
-
-    # create graph object, to model task dependencies
-    graph = nx.DiGraph()
-    for id_i, task_i in id_to_task_dict.items():
-        # for task_i, get kwargs of dependent tasks
-        dep_kwargs = task_i['dep_kwargs']
-        for id_j, task_j in id_to_task_dict.items():
-            # for task_j, get kwargs
-            kwargs = task_j['kwargs']
-            # create an edge between task_j and task_i if task_j depends on task_i
-            if kwargs in dep_kwargs:
-                graph.add_edge(id_j, id_i)
-
-    # convert task_dict to an abstract Task class -> Interface for swarm
-    id_to_task = {}
-    for id_, task_dict in id_to_task_dict.items():
-        task = MyTask(id_=id_,
-                      name=task_dict['name'],
-                      task=task_dict['task'],
-                      kwargs=task_dict['kwargs'])
-        id_to_task[id_] = task
-
-    # Register dependencies
-    tasks = []
-    for id_, task in id_to_task.items():
-        pre_task_ids = list(graph.predecessors(id_))
-        task.requires([id_to_task[id_] for id_ in pre_task_ids])
-        tasks.append(task)
-
-    # run swarm
-    with Swarm(n_bees=3, refresh_every=5, exit_on_error=True) as swarm:
-        results = swarm.work(tasks=tasks)
+    # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
+    with Swarm(n_bees=args.num_bees, resources=resources, results_storage=None) as swarm:
+        flow = Flow(swarm=swarm, task_to_execute=args.task)
+        results = flow.run(tasks)
 
 
 if __name__ == '__main__':
