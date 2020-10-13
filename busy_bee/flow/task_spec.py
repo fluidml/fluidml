@@ -17,7 +17,7 @@ class TaskSpec(BaseTaskSpec):
 
     def __init__(self,
                  task: Union[type, Callable],
-                 task_kwargs: Dict[str, Any],
+                 task_kwargs: Optional[Dict[str, Any]] = {},
                  name: Optional[str] = None):
         super().__init__(task, name)
         self.task_kwargs = task_kwargs
