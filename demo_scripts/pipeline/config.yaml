@@ -17,7 +17,7 @@ featurize_cells:
 
 featurize_tokens:
   type_: flair
-  batch_size: [10, 30]
+  batch_size: [10, 30, 50]
 
 train:
   model:

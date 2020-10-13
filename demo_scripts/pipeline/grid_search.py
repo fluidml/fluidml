@@ -117,7 +117,7 @@ def main():
     results_storage = LocalFileStorage(base_dir=args.base_dir)
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_bees=args.num_bees, resources=resources, results_storage=None) as swarm:
+    with Swarm(n_bees=args.num_bees, resources=resources, results_storage=results_storage) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
 

@@ -1,5 +1,7 @@
 from busy_bee.common.task import Task, Resource
 from busy_bee.hive import Swarm
+from busy_bee.flow import Flow
+from busy_bee.flow.task_spec import TaskSpec
 from typing import Dict, Any
 from torchnlp.datasets import trec_dataset
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -8,6 +10,7 @@ from sklearn.metrics import classification_report
 from flair.data import Sentence
 from flair.embeddings import WordEmbeddings, DocumentPoolEmbeddings
 import numpy as np
+from datasets import load_dataset
 
 
 def results_available(results, task_name, value) -> bool:
@@ -15,13 +18,17 @@ def results_available(results, task_name, value) -> bool:
 
 
 class DatasetFetchTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "dataset")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
-        dataset = trec_dataset(train=True)
-        sentences = [sample["text"] for sample in dataset]
-        labels = [sample["label"] for sample in dataset]
+        dataset = load_dataset("reuters21578", "ModApte")
+        sentences = []
+        labels = []
+        for item in dataset["train"]:
+            if len(item["topics"]) > 0:
+                sentences.append(item["text"])
+                labels.append(item["topics"][0])
         task_results = {
             "sentences": sentences,
             "labels": labels
@@ -30,8 +37,8 @@ class DatasetFetchTask(Task):
 
 
 class PreProcessTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "pre_process")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "dataset", "sentences"), "Sentences must be present"
@@ -43,8 +50,8 @@ class PreProcessTask(Task):
 
 
 class TFIDFFeaturizeTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "tfidf_featurize")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
@@ -57,8 +64,8 @@ class TFIDFFeaturizeTask(Task):
 
 
 class GloveFeaturizeTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "glove_featurize")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
@@ -74,8 +81,8 @@ class GloveFeaturizeTask(Task):
 
 
 class TrainTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "train")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "tfidf_featurize", "vectors"), "TF-IDF Vectors must be present"
@@ -85,23 +92,23 @@ class TrainTask(Task):
         stacked_vectors = np.hstack((results["tfidf_featurize"]["vectors"], results["glove_featurize"]["vectors"]))
         model.fit(stacked_vectors, results["dataset"]["labels"])
         task_results = {
-            "model": model
+            "model": model,
+            "vectors": stacked_vectors,
+            "labels": results["dataset"]["labels"],
         }
         return task_results
 
 
 class EvaluateTask(Task):
-    def __init__(self, id_: int):
-        super().__init__(id_, "evaluate_task")
+    def __init__(self, name: str, id_: str):
+        super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
-        assert results_available(results, "tfidf_featurize", "vectors"), "TF-IDF Vectors must be present"
-        assert results_available(results, "glove_featurize", "vectors"), "Glove Vectors must be present"
-        assert results_available(results, "dataset", "labels"), "Labels must be present"
         assert results_available(results, "train", "model"), "Trained model must be present"
-        stacked_vectors = np.hstack((results["tfidf_featurize"]["vectors"], results["glove_featurize"]["vectors"]))
-        predictions = results["train"]["model"].predict(stacked_vectors)
-        report = classification_report(results["dataset"]["labels"], predictions)
+        assert results_available(results, "train", "vectors"), "Vectors must be present"
+        assert results_available(results, "train", "labels"), "labels must be present"
+        predictions = results["train"]["model"].predict(results["train"]["vectors"])
+        report = classification_report(results["train"]["labels"], predictions)
         task_results = {
             "classification_report": report
         }
@@ -110,20 +117,20 @@ class EvaluateTask(Task):
 
 def main():
 
-    # create all tasks
-    dataset_fetch_task = DatasetFetchTask(1)
-    pre_process_task = PreProcessTask(2)
-    featurize_task_1 = TFIDFFeaturizeTask(3)
-    featurize_task_2 = GloveFeaturizeTask(4)
-    train_task = TrainTask(5)
-    evaluate_task = EvaluateTask(6)
+    # create all task specs
+    dataset_fetch_task = TaskSpec(task=DatasetFetchTask, name="dataset")
+    pre_process_task = TaskSpec(task=PreProcessTask, name="pre_process")
+    featurize_task_1 = TaskSpec(task=GloveFeaturizeTask, name="glove_featurize")
+    featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, name="tfidf_featurize")
+    train_task = TaskSpec(task=TrainTask, name="train")
+    evaluate_task = TaskSpec(task=EvaluateTask, name="evaluate")
 
     # dependencies between tasks
     pre_process_task.requires([dataset_fetch_task])
     featurize_task_1.requires([pre_process_task])
     featurize_task_2.requires([pre_process_task])
     train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
-    evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
+    evaluate_task.requires([train_task])
 
     # all tasks
     tasks = [dataset_fetch_task,
@@ -133,8 +140,9 @@ def main():
              evaluate_task]
 
     with Swarm(n_bees=3, refresh_every=5) as swarm:
-        results = swarm.work(tasks)
-    print(results[6]["classification_report"])
+        flow = Flow(swarm=swarm)
+        results = flow.run(tasks)
+    print(results["evaluate"])
 
 
 if __name__ == "__main__":
