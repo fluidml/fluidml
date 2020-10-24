@@ -3,7 +3,7 @@ import json
 import os
 from typing import List, Dict, Optional
 
-from busy_bee.common import Task
+from fluidml.common import Task
 
 
 class ResultsStorage(ABC):

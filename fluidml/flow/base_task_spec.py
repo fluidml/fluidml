@@ -1,9 +1,9 @@
 from typing import Optional, List, Union, Callable, Dict, Any
 from abc import ABC, abstractmethod
 
-from busy_bee.common.dependency import DependencyMixin
-from busy_bee.common import Task
-from busy_bee.common.utils import MyTask
+from fluidml.common.dependency import DependencyMixin
+from fluidml.common import Task
+from fluidml.common.utils import MyTask
 
 
 class BaseTaskSpec(DependencyMixin, ABC):

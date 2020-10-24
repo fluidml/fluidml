@@ -6,10 +6,10 @@ from typing import Optional, Type, List, Dict
 
 from networkx import DiGraph, shortest_path_length
 
-from busy_bee.common.logging import Console
-from busy_bee.common.task import Task, Resource
-from busy_bee.hive.bee import BusyBee, QueenBee
-from busy_bee.hive.honeycomb import ResultsStorage
+from fluidml.common.logging import Console
+from fluidml.common.task import Task, Resource
+from fluidml.hive.bee import BusyBee, QueenBee
+from fluidml.hive.honeycomb import ResultsStorage
 
 
 class Swarm:
