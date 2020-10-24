@@ -6,9 +6,9 @@ from typing import Dict, Any, List, Optional
 
 from rich.progress import Progress, BarColumn
 
-from busy_bee.common.task import Task, Resource
-from busy_bee.common.logging import Console
-from busy_bee.hive.honeycomb import ResultsStorage
+from fluidml.common.task import Task, Resource
+from fluidml.common.logging import Console
+from fluidml.hive.honeycomb import ResultsStorage
 
 
 class BaseBee(Process):

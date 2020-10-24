@@ -5,9 +5,9 @@ from typing import List, Any, Dict, Optional
 from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
 
-from busy_bee.common import Task
-from busy_bee.flow.task_spec import BaseTaskSpec
-from busy_bee.hive import Swarm
+from fluidml.common import Task
+from fluidml.flow.task_spec import BaseTaskSpec
+from fluidml.hive import Swarm
 
 
 class Flow:

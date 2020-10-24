@@ -1,6 +1,6 @@
 from typing import Any, Dict, Callable
 
-from busy_bee.common import Task, Resource
+from fluidml.common import Task, Resource
 
 
 class MyTask(Task):

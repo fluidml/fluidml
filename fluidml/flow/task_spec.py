@@ -2,8 +2,8 @@ from copy import deepcopy
 from itertools import product
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
-from busy_bee.flow import BaseTaskSpec
-from busy_bee.common import Task
+from fluidml.flow import BaseTaskSpec
+from fluidml.common import Task
 
 
 class TaskSpec(BaseTaskSpec):
