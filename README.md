@@ -1,4 +1,7 @@
-<img src="https://github.com/rajcscw/busy-bee/blob/fluidml/logo/fluid_ml_logo.png" width="350">
+![fluidML Logo](https://github.com/rajcscw/busy-bee/blob/fluidml/logo/fluid_ml_logo.png)
+
+--------------------------------------------------------------------------------
+
 A minimal framework for parallelizing machine learning tasks in python.
 
 
