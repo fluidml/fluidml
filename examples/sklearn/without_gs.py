@@ -140,7 +140,7 @@ def main():
              train_task,
              evaluate_task]
 
-    with Swarm(n_bees=3, refresh_every=5) as swarm:
+    with Swarm(n_dolphins=3, refresh_every=5) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
     print(results["evaluate"])
