@@ -1,16 +1,17 @@
-from busy_bee.common.task import Task, Resource
-from busy_bee.hive import Swarm
-from busy_bee.flow import Flow
-from busy_bee.flow.task_spec import TaskSpec
 from typing import Dict, Any
-from torchnlp.datasets import trec_dataset
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import classification_report
+
+from datasets import load_dataset
 from flair.data import Sentence
 from flair.embeddings import WordEmbeddings, DocumentPoolEmbeddings
 import numpy as np
-from datasets import load_dataset
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import classification_report
+
+from fluidml.common.task import Task, Resource
+from fluidml.hive import Swarm
+from fluidml.flow import Flow
+from fluidml.flow.task_spec import TaskSpec
 
 
 def results_available(results, task_name, value) -> bool:
@@ -18,7 +19,7 @@ def results_available(results, task_name, value) -> bool:
 
 
 class DatasetFetchTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -37,7 +38,7 @@ class DatasetFetchTask(Task):
 
 
 class PreProcessTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -50,7 +51,7 @@ class PreProcessTask(Task):
 
 
 class TFIDFFeaturizeTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -64,7 +65,7 @@ class TFIDFFeaturizeTask(Task):
 
 
 class GloveFeaturizeTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -81,7 +82,7 @@ class GloveFeaturizeTask(Task):
 
 
 class TrainTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -100,7 +101,7 @@ class TrainTask(Task):
 
 
 class EvaluateTask(Task):
-    def __init__(self, name: str, id_: str):
+    def __init__(self, name: str, id_: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
