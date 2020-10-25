@@ -3,9 +3,9 @@ from typing import Dict, Any
 
 import torch
 
-from busy_bee.hive import Swarm
-from busy_bee.common import Task, Resource
 from demo_scripts.utils.gpu import get_balanced_devices
+from fluidml.hive import Swarm
+from fluidml.common import Task, Resource
 
 
 class SimpleModule(torch.nn.Module):
@@ -24,14 +24,14 @@ class DeviceResource(Resource):
 
 class TrainModuleTask(Task):
     def __init__(self, id_: int, n_inputs: int, n_outputs: int, epochs: int, batch_size: int, lr: float):
-        super().__init__(id_, "train_task")
+        super().__init__(name="train_task", id_=id_, )
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
         self.epochs = epochs
         self.batch_size = batch_size
         self.lr = lr
 
-    def run(self, results: Dict[str, Any], resource: Resource) -> Dict[str, Any]:
+    def run(self, results: Dict[str, Any], resource: DeviceResource) -> Dict[str, Any]:
         device = resource.device_id
         model = SimpleModule(self.n_inputs, self.n_outputs)
         optimizer = torch.optim.SGD(lr=self.lr,
@@ -55,7 +55,7 @@ def main():
     n_tasks = 10
     n_bees = 3
 
-    resources = get_balanced_devices(count=n_bees, no_cuda=False)
+    resources = get_balanced_devices(count=n_bees, use_cuda=True)
     resources = [DeviceResource(device) for device in resources]
 
     tasks = [TrainModuleTask(i + 1, 10, 10, int(1e+4), 5, 1.0) for i in range(n_tasks)]

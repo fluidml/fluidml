@@ -7,4 +7,10 @@ setup(name="fluidml",
       author_email="raj1514@gmail.com",
       packages=find_packages(),
       install_requires=['networkx', 'rich'],
-      extras_require={'demo': ["pyyaml", "torch", "flair", "pytorch-nlp"]})
+      extras_require={'demo': ["datasets",
+                               "flair",
+                               "numpy",
+                               "pytorch-nlp",
+                               "pyyaml",
+                               "sklearn",
+                               "torch"]})
