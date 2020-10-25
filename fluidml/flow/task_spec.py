@@ -1,9 +1,43 @@
+from abc import ABC, abstractmethod
 from copy import deepcopy
 from itertools import product
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
-from fluidml.flow import BaseTaskSpec
+from fluidml.common.dependency import DependencyMixin
+from fluidml.common.utils import MyTask
 from fluidml.common import Task
+
+
+class BaseTaskSpec(DependencyMixin, ABC):
+    def __init__(self,
+                 task: Union[type, Callable],
+                 name: Optional[str] = None):
+        DependencyMixin.__init__(self)
+        self.task = task
+        self.name = name if name is not None else self.task.__name__
+
+    def _create_task_object(self,
+                            task_kwargs: Dict[str, Any],
+                            task_id: Optional[int] = None) -> Task:
+        if isinstance(self.task, type):
+            task = self.task(id_=task_id, name=self.name, **task_kwargs)
+            task.kwargs = task_kwargs
+        elif isinstance(self.task, Callable):
+            task = MyTask(id_=task_id, task=self.task, name=self.name, kwargs=task_kwargs)
+        else:
+            raise TypeError(f'{self.task} needs to be a Class object (type="type") or a Callable, e.g. a function.'
+                            f'But it is of type "{type(self.task)}".')
+        return task
+
+    @abstractmethod
+    def build(self) -> List[Task]:
+        """Builds task from the specification
+
+        Returns:
+            List[Task]: task objects that are created
+        """
+
+        raise NotImplementedError
 
 
 class TaskSpec(BaseTaskSpec):
@@ -17,10 +51,10 @@ class TaskSpec(BaseTaskSpec):
 
     def __init__(self,
                  task: Union[type, Callable],
-                 task_kwargs: Optional[Dict[str, Any]] = {},
+                 task_kwargs: Optional[Dict[str, Any]] = None,
                  name: Optional[str] = None):
         super().__init__(task, name)
-        self.task_kwargs = task_kwargs
+        self.task_kwargs = task_kwargs if task_kwargs is not None else {}
 
     def build(self) -> List[Task]:
         task = self._create_task_object(task_id=None, task_kwargs=self.task_kwargs)

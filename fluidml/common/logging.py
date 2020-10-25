@@ -3,6 +3,7 @@ from rich import console
 
 class Console:
     __instance = None
+
     @staticmethod 
     def get_instance():
         """Static access method."""

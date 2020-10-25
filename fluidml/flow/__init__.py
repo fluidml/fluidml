@@ -1,3 +1,2 @@
-from .base_task_spec import BaseTaskSpec
-from .task_spec import TaskSpec, GridTaskSpec
+from .task_spec import BaseTaskSpec, TaskSpec, GridTaskSpec
 from .flow import Flow

@@ -7,7 +7,7 @@ from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
 from fluidml.flow.task_spec import BaseTaskSpec
-from fluidml.hive import Swarm
+from fluidml.swarm import Swarm
 
 
 class Flow:
