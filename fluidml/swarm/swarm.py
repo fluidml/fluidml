@@ -8,13 +8,13 @@ from networkx import DiGraph, shortest_path_length
 
 from fluidml.common.logging import Console
 from fluidml.common.task import Task, Resource
-from fluidml.hive.bee import BusyBee, QueenBee
-from fluidml.hive.honeycomb import ResultsStorage
+from fluidml.swarm.dolphin import Dolphin, Orca
+from fluidml.swarm.storage import ResultsStorage
 
 
 class Swarm:
     def __init__(self,
-                 n_bees: Optional[int] = None,
+                 n_dolphins: Optional[int] = None,
                  resources: Optional[List[Resource]] = None,
                  results_storage: Optional[ResultsStorage] = None,
                  start_method: str = 'spawn',
@@ -23,8 +23,8 @@ class Swarm:
 
         set_start_method(start_method, force=True)
 
-        self.n_bees = n_bees if n_bees else multiprocessing.cpu_count()
-        self.resources = Swarm._allocate_resources(self.n_bees, resources)
+        self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
+        self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
@@ -34,23 +34,23 @@ class Swarm:
         self.exception = self.manager.dict()
         self.tasks: Dict[int, Task] = {}
 
-        # queen bee for tracking
-        self.busy_bees = [QueenBee(done_queue=self.done_queue,
-                                   tasks=self.tasks,
-                                   exception=self.exception,
-                                   exit_on_error=exit_on_error,
-                                   refresh_every=refresh_every)]
-        # worker bees for task exection
-        self.busy_bees.extend([BusyBee(bee_id=i,
-                                       resource=self.resources[i],
-                                       scheduled_queue=self.scheduled_queue,
-                                       running_queue=self.running_queue,
-                                       done_queue=self.done_queue,
-                                       tasks=self.tasks,
-                                       exception=self.exception,
-                                       exit_on_error=exit_on_error,
-                                       results=self.results,
-                                       results_storage=self.results_storage) for i in range(self.n_bees)])
+        # orca worker for tracking
+        self.dolphins = [Orca(done_queue=self.done_queue,
+                              tasks=self.tasks,
+                              exception=self.exception,
+                              exit_on_error=exit_on_error,
+                              refresh_every=refresh_every)]
+        # dolphin workers for task exection
+        self.dolphins.extend([Dolphin(id_=i,
+                                      resource=self.resources[i],
+                                      scheduled_queue=self.scheduled_queue,
+                                      running_queue=self.running_queue,
+                                      done_queue=self.done_queue,
+                                      tasks=self.tasks,
+                                      exception=self.exception,
+                                      exit_on_error=exit_on_error,
+                                      results=self.results,
+                                      results_storage=self.results_storage) for i in range(self.n_dolphins)])
 
     def __enter__(self):
         return self
@@ -62,12 +62,12 @@ class Swarm:
         self.close()
 
     @staticmethod
-    def _allocate_resources(n_bees: int, resources: List[Resource]) -> List[Resource]:
+    def _allocate_resources(n_dolphins: int, resources: List[Resource]) -> List[Resource]:
         if not resources:
-            resources = [None] * n_bees
-        elif len(resources) != n_bees:
+            resources = [None] * n_dolphins
+        elif len(resources) != n_dolphins:
             # we assign resources to bees uniformly (from uniform distribution)
-            resources = random.choices(resources, k=n_bees)
+            resources = random.choices(resources, k=n_dolphins)
         return resources
 
     @staticmethod
@@ -122,12 +122,12 @@ class Swarm:
             self.scheduled_queue.put(task_id)
 
         # start the workers
-        for bee in self.busy_bees:
-            bee.start()
+        for dolphin in self.dolphins:
+            dolphin.start()
 
         # wait for them to finish
-        for bee in self.busy_bees:
-            bee.join()
+        for dolphin in self.dolphins:
+            dolphin.join()
 
         # if an exception was raised by a child process, re-raise it again in the parent.
         if self.exception:
@@ -140,5 +140,5 @@ class Swarm:
         self.results = self.manager.dict()
         self.tasks = self.manager.dict()
         self.done_queue = self.manager.dict()
-        for bee in self.busy_bees:
-            bee.close()
+        for dolphin in self.dolphins:
+            dolphin.close()

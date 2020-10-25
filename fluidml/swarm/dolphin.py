@@ -8,10 +8,10 @@ from rich.progress import Progress, BarColumn
 
 from fluidml.common.task import Task, Resource
 from fluidml.common.logging import Console
-from fluidml.hive.honeycomb import ResultsStorage
+from fluidml.swarm.storage import ResultsStorage
 
 
-class BaseBee(Process):
+class Wale(Process):
     def __init__(self,
                  exception: Dict[str, Exception],
                  exit_on_error: bool):
@@ -33,9 +33,9 @@ class BaseBee(Process):
             raise
 
 
-class BusyBee(BaseBee):
+class Dolphin(Wale):
     def __init__(self,
-                 bee_id: int,
+                 id_: int,
                  resource: Resource,
                  scheduled_queue: Queue,
                  running_queue: List[int],
@@ -46,7 +46,7 @@ class BusyBee(BaseBee):
                  results: Dict[str, Any],
                  results_storage: Optional[ResultsStorage] = None):
         super().__init__(exception=exception, exit_on_error=exit_on_error)
-        self.bee_id = bee_id
+        self.id_ = id_
         self.resource = resource
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
@@ -89,9 +89,9 @@ class BusyBee(BaseBee):
 
         if results is None:
             # run task
-            Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
+            Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             results: Dict = task.run(pred_results, self.resource)
-            Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+            Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
             # TODO: This probably needs a lock
             self.results_storage.save_results(task=task, results=results)
@@ -112,9 +112,9 @@ class BusyBee(BaseBee):
             results: Dict = self._run_task_using_results_storage(task=task, pred_results=pred_results)
         else:
             # run task only
-            Console.get_instance().log(f'Bee {self.bee_id} started running task {task.name}-{task.id_}.')
+            Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             results: Dict = task.run(pred_results, self.resource)
-            Console.get_instance().log(f'Bee {self.bee_id} completed running task {task.name}-{task.id_}.')
+            Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
         # add results to shared results dict
         self._add_results_to_results_dict(results=results, task=task)
@@ -131,7 +131,7 @@ class BusyBee(BaseBee):
             except Empty:
                 # terminate bee (worker) if all tasks have been processed
                 if len(self.done_queue) == len(self.tasks):
-                    Console.get_instance().log(f'Bee {self.bee_id}: leaving the swarm.')
+                    Console.get_instance().log(f'Dolphin {self.id_}: leaving the swarm.')
                     break
                 else:
                     # Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
@@ -154,7 +154,7 @@ class BusyBee(BaseBee):
                 # run task only if all dependencies are satisfied
                 if not self._is_task_ready(task=self.tasks[successor.id_]):
                     Console.get_instance().log(
-                        f'Bee {self.bee_id}: Dependencies are not satisfied yet for task {successor.id_}')
+                        f'Dolphin {self.id_}: Dependencies are not satisfied yet for task {successor.id_}')
                     continue
 
                 if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
@@ -162,11 +162,11 @@ class BusyBee(BaseBee):
                                                f'is currently running or already finished.')
                     continue
 
-                Console.get_instance().log(f'Bee {self.bee_id} is now scheduling {successor.name}-{successor.id_}.')
+                Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
 
 
-class QueenBee(BaseBee):
+class Orca(Wale):
     def __init__(self,
                  done_queue: List[int],
                  exception: Dict[str, Exception],

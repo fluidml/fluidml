@@ -3,8 +3,8 @@ from typing import Dict, Any
 
 import torch
 
-from demo_scripts.utils.gpu import get_balanced_devices
-from fluidml.hive import Swarm
+from examples.utils.gpu import get_balanced_devices
+from fluidml.swarm import Swarm
 from fluidml.common import Task, Resource
 
 

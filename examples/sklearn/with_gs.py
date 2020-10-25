@@ -9,9 +9,9 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
 from fluidml.common.task import Task, Resource
-from fluidml.hive import Swarm
+from fluidml.swarm import Swarm
 from fluidml.flow import Flow
-from fluidml.flow.task_spec import TaskSpec
+from fluidml.flow.task_spec import GridTaskSpec
 
 
 def results_available(results, task_name, value) -> bool:
@@ -19,7 +19,7 @@ def results_available(results, task_name, value) -> bool:
 
 
 class DatasetFetchTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, fetch_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -38,7 +38,7 @@ class DatasetFetchTask(Task):
 
 
 class PreProcessTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, process_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -51,7 +51,7 @@ class PreProcessTask(Task):
 
 
 class TFIDFFeaturizeTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, tfidf_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -65,7 +65,7 @@ class TFIDFFeaturizeTask(Task):
 
 
 class GloveFeaturizeTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, glove_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -82,7 +82,7 @@ class GloveFeaturizeTask(Task):
 
 
 class TrainTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, train_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -101,7 +101,7 @@ class TrainTask(Task):
 
 
 class EvaluateTask(Task):
-    def __init__(self, name: str, id_: int):
+    def __init__(self, name: str, id_: int, eval_param: int):
         super().__init__(name, id_)
 
     def run(self, results: Dict[str, Any], resource: Resource):
@@ -119,12 +119,12 @@ class EvaluateTask(Task):
 def main():
 
     # create all task specs
-    dataset_fetch_task = TaskSpec(task=DatasetFetchTask, name="dataset")
-    pre_process_task = TaskSpec(task=PreProcessTask, name="pre_process")
-    featurize_task_1 = TaskSpec(task=GloveFeaturizeTask, name="glove_featurize")
-    featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, name="tfidf_featurize")
-    train_task = TaskSpec(task=TrainTask, name="train")
-    evaluate_task = TaskSpec(task=EvaluateTask, name="evaluate")
+    dataset_fetch_task = GridTaskSpec(task=DatasetFetchTask, name="dataset", gs_config={"fetch_param": 1})
+    pre_process_task = GridTaskSpec(task=PreProcessTask, name="pre_process", gs_config={"process_param": 1})
+    featurize_task_1 = GridTaskSpec(task=GloveFeaturizeTask, name="glove_featurize", gs_config={"glove_param": [5, 10]})
+    featurize_task_2 = GridTaskSpec(task=TFIDFFeaturizeTask, name="tfidf_featurize", gs_config={"tfidf_param": 10})
+    train_task = GridTaskSpec(task=TrainTask, name="train", gs_config={"train_param": 10})
+    evaluate_task = GridTaskSpec(task=EvaluateTask, name="evaluate", gs_config={"eval_param": 5})
 
     # dependencies between tasks
     pre_process_task.requires([dataset_fetch_task])

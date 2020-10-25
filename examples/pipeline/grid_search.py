@@ -5,12 +5,12 @@ from typing import List, Dict
 
 import yaml
 
-from demo_scripts.utils.gpu import get_balanced_devices
+from examples.utils.gpu import get_balanced_devices
 from fluidml.common import Resource
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec
-from fluidml.hive import Swarm
-from fluidml.hive.honeycomb import LocalFileStorage
+from fluidml.swarm import Swarm
+from fluidml.swarm.storage import LocalFileStorage
 
 
 def parse(results: Dict, resource: Resource, in_dir: str):
