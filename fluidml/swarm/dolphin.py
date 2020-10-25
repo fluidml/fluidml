@@ -11,7 +11,7 @@ from fluidml.common.logging import Console
 from fluidml.swarm.storage import ResultsStorage
 
 
-class Wale(Process):
+class Whale(Process):
     def __init__(self,
                  exception: Dict[str, Exception],
                  exit_on_error: bool):
@@ -33,7 +33,7 @@ class Wale(Process):
             raise
 
 
-class Dolphin(Wale):
+class Dolphin(Whale):
     def __init__(self,
                  id_: int,
                  resource: Resource,
@@ -166,7 +166,7 @@ class Dolphin(Wale):
                 self.scheduled_queue.put(successor.id_)
 
 
-class Orca(Wale):
+class Orca(Whale):
     def __init__(self,
                  done_queue: List[int],
                  exception: Dict[str, Exception],

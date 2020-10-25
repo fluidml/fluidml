@@ -119,7 +119,7 @@ class EvaluateTask(Task):
 def main():
 
     # create all task specs
-    dataset_fetch_task = GridTaskSpec(task=DatasetFetchTask, name="dataset", gs_config={"fetch_param": 1})
+    dataset_fetch_task = TaskSpec(task=DatasetFetchTask, name="dataset", task_kwargs={"fetch_param": 1})
     pre_process_task = GridTaskSpec(task=PreProcessTask, name="pre_process", gs_config={"process_param": 1})
     featurize_task_1 = GridTaskSpec(task=GloveFeaturizeTask, name="glove_featurize", gs_config={"glove_param": [5, 10]})
     featurize_task_2 = GridTaskSpec(task=TFIDFFeaturizeTask, name="tfidf_featurize", gs_config={"tfidf_param": 10})
@@ -140,7 +140,7 @@ def main():
              train_task,
              evaluate_task]
 
-    with Swarm(n_bees=3, refresh_every=5) as swarm:
+    with Swarm(n_dolphins=3, refresh_every=5) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
     print(results["evaluate"])
