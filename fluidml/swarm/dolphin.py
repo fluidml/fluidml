@@ -105,7 +105,7 @@ class Dolphin(Whale):
             results: Dict = task.run(pred_results, self.resource)
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
-            # TODO: This probably needs a lock
+            # needs a lock to assure that for each task a unique storage path is created
             with self.lock:
                 path = self.results_storage.save_results(task=task, results=results)
         else:
