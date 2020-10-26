@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from multiprocessing import Process, Queue
+from multiprocessing import Process, Queue, Lock
 from queue import Empty
 import time
 from typing import Dict, Any, List, Optional, Tuple
@@ -40,6 +40,7 @@ class Dolphin(Whale):
                  scheduled_queue: Queue,
                  running_queue: List[int],
                  done_queue: List[int],
+                 lock: Lock,
                  tasks: Dict[int, Task],
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
@@ -51,6 +52,7 @@ class Dolphin(Whale):
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
+        self.lock = lock
         self.tasks = tasks
         self.results = results
         self.results_storage = results_storage
@@ -104,7 +106,8 @@ class Dolphin(Whale):
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
             # TODO: This probably needs a lock
-            path = self.results_storage.save_results(task=task, results=results)
+            with self.lock:
+                path = self.results_storage.save_results(task=task, results=results)
         else:
             results, path = results
             Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
