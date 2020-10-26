@@ -111,7 +111,7 @@ def main():
     # create list of resources
     devices = get_balanced_devices(count=args.num_dolphins, use_cuda=args.use_cuda)
     resources = [TaskResource(device=devices[i],
-                              seed=args.seed) for i in range(args.num_bees)]
+                              seed=args.seed) for i in range(args.num_dolphins)]
 
     # create local file storage used for versioning
     results_storage = LocalFileStorage(base_dir=args.base_dir)

@@ -32,7 +32,7 @@ class Swarm:
         self.results = self.manager.dict()
         self.results_storage = results_storage
         self.exception = self.manager.dict()
-        self.tasks: Dict[int, Task] = {}
+        self.tasks = self.manager.dict()
 
         # orca worker for tracking
         self.dolphins = [Orca(done_queue=self.done_queue,
@@ -89,9 +89,10 @@ class Swarm:
     def _add_config_to_tasks(self):
         task_graph = self._create_task_graph()
 
-        for task in self.tasks.values():
+        for id_, task in self.tasks.items():
             config = self._extract_kwargs_from_ancestors(task=task, task_graph=task_graph)
             task.unique_config = config
+            self.tasks[id_] = task
 
     def _extract_kwargs_from_ancestors(self, task: Task, task_graph: DiGraph) -> Dict[str, Dict]:
         ancestor_task_ids = list(shortest_path_length(task_graph, target=task.id_).keys())[::-1]
