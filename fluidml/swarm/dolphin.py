@@ -2,7 +2,7 @@ from abc import abstractmethod
 from multiprocessing import Process, Queue
 from queue import Empty
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 
 from rich.progress import Progress, BarColumn
 
@@ -40,7 +40,7 @@ class Dolphin(Whale):
                  scheduled_queue: Queue,
                  running_queue: List[int],
                  done_queue: List[int],
-                 tasks: Dict[str, Task],
+                 tasks: Dict[int, Task],
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
                  results: Dict[str, Any],
@@ -85,7 +85,17 @@ class Dolphin(Whale):
         self.results[task.name] = task_results
 
     def _run_task_using_results_storage(self, task: Task, pred_results: Dict) -> Dict:
-        results = self.results_storage.get_results(task=task)
+        if self.tasks[task.id_].storage_path is None:
+            task.storage_path = {}
+            self.tasks[task.id_] = task
+
+        # for all predecessor tasks write their storage path history in the current task storage path
+        for predecessor in task.predecessors:
+            for name, pred_path in self.tasks[predecessor.id_].storage_path.items():
+                task.storage_path[name] = pred_path
+        self.tasks[task.id_] = task
+
+        results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task=task)
 
         if results is None:
             # run task
@@ -94,10 +104,14 @@ class Dolphin(Whale):
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
             # TODO: This probably needs a lock
-            self.results_storage.save_results(task=task, results=results)
+            path = self.results_storage.save_results(task=task, results=results)
         else:
+            results, path = results
             Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
 
+        # Write unique storage path (e.g. run_dir) of task to its task object
+        task.storage_path[task.name] = path
+        self.tasks[task.id_] = task
         return results
 
     def _run_task(self, task: Task):
@@ -154,7 +168,8 @@ class Dolphin(Whale):
                 # run task only if all dependencies are satisfied
                 if not self._is_task_ready(task=self.tasks[successor.id_]):
                     Console.get_instance().log(
-                        f'Dolphin {self.id_}: Dependencies are not satisfied yet for task {successor.id_}')
+                        f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
+                        f'task {successor.name}-{successor.id_}')
                     continue
 
                 if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
@@ -171,7 +186,7 @@ class Orca(Whale):
                  done_queue: List[int],
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
-                 tasks: Dict[str, Task],
+                 tasks: Dict[int, Task],
                  refresh_every: int):
         super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.refresh_every = refresh_every
