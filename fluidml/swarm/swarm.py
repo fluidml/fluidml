@@ -1,5 +1,5 @@
 import multiprocessing
-from multiprocessing import Manager, set_start_method, Queue
+from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict
@@ -27,6 +27,7 @@ class Swarm:
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
+        self.lock = Lock()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
         self.results = self.manager.dict()
@@ -46,6 +47,7 @@ class Swarm:
                                       scheduled_queue=self.scheduled_queue,
                                       running_queue=self.running_queue,
                                       done_queue=self.done_queue,
+                                      lock=self.lock,
                                       tasks=self.tasks,
                                       exception=self.exception,
                                       exit_on_error=exit_on_error,
