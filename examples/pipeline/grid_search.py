@@ -8,7 +8,7 @@ import yaml
 from examples.utils.gpu import get_balanced_devices
 from fluidml.common import Resource
 from fluidml.flow import Flow
-from fluidml.flow import GridTaskSpec
+from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
 from fluidml.swarm.storage import LocalFileStorage
 
@@ -17,7 +17,7 @@ def parse(results: Dict, resource: Resource, in_dir: str):
     return {}
 
 
-def preprocess(results: Dict, resource: Resource, pipeline: List[str]):
+def preprocess(results: Dict, resource: Resource, pipeline: List[str], abc: List[int]):
     return {}
 
 
@@ -30,6 +30,11 @@ def featurize_cells(results: Dict, resource: Resource, type_: str, batch_size: i
 
 
 def train(results: Dict, resource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
+    return {'score': 2.}  # 'score': 2.
+
+
+def evaluate(results: Dict, resource: Resource):
+    print(results)
     return {}
 
 
@@ -37,7 +42,8 @@ TASK_TO_CALLABLE = {'parse': parse,
                     'preprocess': preprocess,
                     'featurize_tokens': featurize_tokens,
                     'featurize_cells': featurize_cells,
-                    'train': train}
+                    'train': train,
+                    'evaluate': evaluate}
 
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -45,21 +51,24 @@ CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
 
 """
 # task pipeline
-a -> b -> c -> e
-       \- d -/
+parse -> preprocess -> featurize_tokens -> train -> evaluate
+                    \- featurize_cells  -/
 
-# task pipeline once grid search args are expanded
-a1 -> b1 -> c1/d1 -> e1
-                  -> e2
-         -> c2/d1 -> e3
-                  -> e4
+# task pipeline once grid search specs are expanded
+parse --> preprocess_1 -> featurize_tokens_1 ----> train -> evaluate (reduce grid search)
+                       \- featurize_tokens_2 --\/
+                       \- featurize_cells    --/\> train -/
+                      
+      \-> preprocess_2 -> featurize_tokens_1 ----> train -/
+                       \- featurize_tokens_2 --\/
+                       \- featurize_cells    --/\> train -/
 """
 
 
 def parse_args():
     parser = ArgumentParser()
     parser.add_argument('--task',
-                        default='train',
+                        default='evaluate',
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
     parser.add_argument('--use-cuda',
@@ -81,7 +90,7 @@ def parse_args():
                         type=str,
                         help='Path to pipeline file.',)
     parser.add_argument('--num-dolphins',
-                        default=3,
+                        default=5,
                         type=int,
                         help='Number of spawned worker processes.')
     return parser.parse_args()
@@ -101,7 +110,12 @@ def main():
     config = yaml.safe_load(open(args.config, 'r'))
 
     # create task-spec objects and register dependencies (defined in pipeline.yaml)
-    tasks = {task: GridTaskSpec(task=TASK_TO_CALLABLE[task], gs_config=config[task]) for task in pipeline}
+    tasks = {task_name: (GridTaskSpec(task=TASK_TO_CALLABLE[task_name],
+                                      gs_config=config[task_name])
+                         if task_name != 'evaluate' else
+                         TaskSpec(task=TASK_TO_CALLABLE[task_name],
+                                  task_kwargs=config[task_name],
+                                  reduce=True)) for task_name in pipeline}
     for task_name, task in tasks.items():
         task.requires([tasks[dep] for dep in pipeline[task_name]])
 
