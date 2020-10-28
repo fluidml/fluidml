@@ -75,7 +75,7 @@ class Flow:
                     expanded_tasks_by_name[task.name].append(task)
                     task_id += 1
 
-        # create final dict of tasks
+        # create final list of tasks
         tasks = [task for expanded_tasks in expanded_tasks_by_name.values() for task in expanded_tasks]
         return tasks
 
