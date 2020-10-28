@@ -16,7 +16,7 @@ class DependencyMixin(object):
             predecessor.required_by(self)
 
     def required_by(self, successor: Any):
-        """Adds a successorpre"""
+        """Adds a successor"""
 
         self._successors.append(successor)
 

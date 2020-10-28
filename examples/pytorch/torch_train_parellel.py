@@ -24,7 +24,7 @@ class DeviceResource(Resource):
 
 class TrainModuleTask(Task):
     def __init__(self, id_: int, n_inputs: int, n_outputs: int, epochs: int, batch_size: int, lr: float):
-        super().__init__(name="train_task", id_=id_, )
+        super().__init__(name="train_task", id_=id_)
         self.n_inputs = n_inputs
         self.n_outputs = n_outputs
         self.epochs = epochs
@@ -53,14 +53,14 @@ class TrainModuleTask(Task):
 
 def main():
     n_tasks = 10
-    n_bees = 3
+    n_dolphins = 3
 
-    resources = get_balanced_devices(count=n_bees, use_cuda=True)
+    resources = get_balanced_devices(count=n_dolphins, use_cuda=True)
     resources = [DeviceResource(device) for device in resources]
 
     tasks = [TrainModuleTask(i + 1, 10, 10, int(1e+4), 5, 1.0) for i in range(n_tasks)]
 
-    with Swarm(n_bees=n_bees, refresh_every=5, resources=resources) as swarm:
+    with Swarm(n_dolphins=n_dolphins, refresh_every=5, resources=resources) as swarm:
         results = swarm.work(tasks)
 
     print(results[1])

@@ -80,7 +80,7 @@ def parse_args():
                         default=os.path.join(CURRENT_DIR, 'pipeline.yaml'),
                         type=str,
                         help='Path to pipeline file.',)
-    parser.add_argument('--num-bees',
+    parser.add_argument('--num-dolphins',
                         default=3,
                         type=int,
                         help='Number of spawned worker processes.')
@@ -109,15 +109,15 @@ def main():
     tasks = [task for task in tasks.values()]
 
     # create list of resources
-    devices = get_balanced_devices(count=args.num_bees, use_cuda=args.use_cuda)
+    devices = get_balanced_devices(count=args.num_dolphins, use_cuda=args.use_cuda)
     resources = [TaskResource(device=devices[i],
-                              seed=args.seed) for i in range(args.num_bees)]
+                              seed=args.seed) for i in range(args.num_dolphins)]
 
     # create local file storage used for versioning
     results_storage = LocalFileStorage(base_dir=args.base_dir)
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_bees=args.num_bees, resources=resources, results_storage=results_storage) as swarm:
+    with Swarm(n_dolphins=args.num_dolphins, resources=resources, results_storage=results_storage) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
 
