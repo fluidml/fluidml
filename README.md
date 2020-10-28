@@ -6,6 +6,8 @@
 
 </div>
 
+[![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=svg)](https://circleci.com/gh/fluidml/fluidml/tree/main)
+
 ---
 
 
