@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from collections import defaultdict
 from multiprocessing import Process, Queue, Lock
 from queue import Empty
 import time
@@ -67,7 +68,9 @@ class Dolphin(Whale):
         results = {}
         for predecessor in task.predecessors:
             try:
-                results = {**results, **{predecessor.name: self.results[predecessor.name][predecessor.id_]['results']}}
+                results = {**results,
+                           **{f'{predecessor.name}-{predecessor.id_}':
+                              self.results[predecessor.name][predecessor.id_]['results']}}
             except TypeError:
                 print('Each task has to return a dict.')
                 raise
@@ -75,7 +78,7 @@ class Dolphin(Whale):
         return results
 
     def _add_results_to_results_dict(self, results: Dict, task: Task):
-        # Note: manager dicts can not be mutated, they have to be reassigned.
+        # Note: manager scripts can not be mutated, they have to be reassigned.
         #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
 
         if task.name not in self.results:
@@ -87,17 +90,18 @@ class Dolphin(Whale):
         self.results[task.name] = task_results
 
     def _run_task_using_results_storage(self, task: Task, pred_results: Dict) -> Dict:
-        if self.tasks[task.id_].storage_path is None:
-            task.storage_path = {}
+        with self.lock:
+            if self.tasks[task.id_].storage_path is None:
+                task.storage_path = defaultdict(set)
+                self.tasks[task.id_] = task
+
+            # for all predecessor tasks write their storage path history in the current task storage path
+            for predecessor in task.predecessors:
+                for name, pred_path in self.tasks[predecessor.id_].storage_path.items():
+                    task.storage_path[name].update(pred_path)
             self.tasks[task.id_] = task
 
-        # for all predecessor tasks write their storage path history in the current task storage path
-        for predecessor in task.predecessors:
-            for name, pred_path in self.tasks[predecessor.id_].storage_path.items():
-                task.storage_path[name] = pred_path
-        self.tasks[task.id_] = task
-
-        results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task=task)
+            results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task=task)
 
         if results is None:
             # run task
@@ -109,20 +113,23 @@ class Dolphin(Whale):
             with self.lock:
                 path = self.results_storage.save_results(task=task, results=results)
         else:
-            results, path = results
-            Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+            with self.lock:
+                results, path = results
+                Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
 
-        # Write unique storage path (e.g. run_dir) of task to its task object
-        task.storage_path[task.name] = path
-        self.tasks[task.id_] = task
+        with self.lock:
+            # Write unique storage path (e.g. run_dir) of task to its task object
+            task.storage_path[task.name].add(path)
+            self.tasks[task.id_] = task
         return results
 
     def _run_task(self, task: Task):
         # extract results from predecessors
-        pred_results = self._extract_results_from_predecessors(task)
+        with self.lock:
+            pred_results = self._extract_results_from_predecessors(task)
 
-        # add to list of running tasks
-        self.running_queue.append(task.id_)
+            # add to list of running tasks
+            self.running_queue.append(task.id_)
 
         if self.results_storage:
             # run task using file storage for versioning
@@ -133,11 +140,12 @@ class Dolphin(Whale):
             results: Dict = task.run(pred_results, self.resource)
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
-        # add results to shared results dict
-        self._add_results_to_results_dict(results=results, task=task)
+        with self.lock:
+            # add results to shared results dict
+            self._add_results_to_results_dict(results=results, task=task)
 
-        # put task in done_queue
-        self.done_queue.append(task.id_)
+            # put task in done_queue
+            self.done_queue.append(task.id_)
 
     def _work(self):
         while not self.exception:

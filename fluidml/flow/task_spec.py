@@ -11,10 +11,12 @@ from fluidml.common import Task
 class BaseTaskSpec(DependencyMixin, ABC):
     def __init__(self,
                  task: Union[type, Callable],
-                 name: Optional[str] = None):
+                 name: Optional[str] = None,
+                 reduce: Optional[bool] = None):
         DependencyMixin.__init__(self)
         self.task = task
         self.name = name if name is not None else self.task.__name__
+        self.reduce = reduce
 
     def _create_task_object(self,
                             task_kwargs: Dict[str, Any],
@@ -52,8 +54,9 @@ class TaskSpec(BaseTaskSpec):
     def __init__(self,
                  task: Union[type, Callable],
                  task_kwargs: Optional[Dict[str, Any]] = None,
-                 name: Optional[str] = None):
-        super().__init__(task, name)
+                 name: Optional[str] = None,
+                 reduce: Optional[bool] = None):
+        super().__init__(task, name, reduce)
         self.task_kwargs = task_kwargs if task_kwargs is not None else {}
 
     def build(self) -> List[Task]:

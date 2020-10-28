@@ -43,8 +43,8 @@ class LocalFileStorage(ResultsStorage):
     def save_results(self, task: Task, results: Dict) -> str:
         task_dir = os.path.join(self.base_dir, task.name)
         run_dir = LocalFileStorage._make_run_dir(task_dir=task_dir)
-
-        json.dump(task.storage_path, open(os.path.join(run_dir, 'info.json'), 'w'))
+        task_history = {name: sorted(storage_path) for name, storage_path in task.storage_path.items()}
+        json.dump(task_history, open(os.path.join(run_dir, 'info.json'), 'w'))
         json.dump(results, open(os.path.join(run_dir, 'result.json'), 'w'))
         json.dump(task.unique_config, open(os.path.join(run_dir, 'config.json'), 'w'))
         return run_dir

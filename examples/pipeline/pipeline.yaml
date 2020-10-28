@@ -12,3 +12,6 @@ featurize_cells:
 train:
   - featurize_tokens
   - featurize_cells
+
+evaluate:
+  - train
