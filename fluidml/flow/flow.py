@@ -44,6 +44,8 @@ class Flow:
                 raise ValueError('Object spec has to be of instance type GridTaskSpec or TaskSpec.')
             name_to_params[spec.name].extend(task_configs)
 
+        # TODO: do we need this unit test?
+        # in case no tasks are provided to flow
         if name_to_params:
             task_names, values = zip(*name_to_params.items())
             single_run_configs = [dict(zip(task_names, params)) for params in product(*values)]
