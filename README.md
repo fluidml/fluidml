@@ -14,7 +14,7 @@
 
 ## Examples
 
-## Licence
+## License
 
 ## Citation
 
