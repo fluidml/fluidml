@@ -42,4 +42,4 @@ train:
   num_epochs: 100
 
 evaluate:
-  {}
+  metric: 'f1'

@@ -39,7 +39,7 @@ class Flow:
             if isinstance(spec, GridTaskSpec):
                 task_configs = spec.task_configs
             elif isinstance(spec, TaskSpec):
-                task_configs = spec.task_kwargs
+                task_configs = [spec.task_kwargs]
             else:
                 raise ValueError('Object spec has to be of instance type GridTaskSpec or TaskSpec.')
             name_to_params[spec.name].extend(task_configs)

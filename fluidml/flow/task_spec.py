@@ -78,7 +78,7 @@ class GridTaskSpec(BaseTaskSpec):
                  gs_config: Dict[str, Any],
                  name: Optional[str] = None):
         super().__init__(task, name)
-        self.task_configs = self._split_gs_config(config_grid_search=gs_config)
+        self.task_configs: List[Dict] = self._split_gs_config(config_grid_search=gs_config)
 
     def build(self) -> List[Task]:
         tasks = [self._create_task_object(task_id=None, task_kwargs=config) for config in self.task_configs]
