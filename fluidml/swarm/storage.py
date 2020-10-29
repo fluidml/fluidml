@@ -12,12 +12,12 @@ class ResultsStorage(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_results(self, task: Task) -> Optional[Dict]:
+    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
         """ Query method to get the results if they exist already """
         raise NotImplementedError
 
     @abstractmethod
-    def save_results(self, task: Task, results: Dict):
+    def save_results(self, task_name: str, unique_config: Dict, results: Dict, history: Optional[Dict] = None):
         """ Method to save new results """
         raise NotImplementedError
 
@@ -30,23 +30,24 @@ class LocalFileStorage(ResultsStorage):
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
 
-    def get_results(self, task: Task) -> Optional[Tuple[Dict, str]]:
-        task_dir = os.path.join(self.base_dir, task.name)
+    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Tuple[Dict, str]]:
+        task_dir = os.path.join(self.base_dir, task_name)
 
         exist_run_dirs = LocalFileStorage._scan_task_dir(task_dir=task_dir)
-        run_dir = LocalFileStorage._get_run_dir(task_config=task.unique_config, exist_run_dirs=exist_run_dirs)
+        run_dir = LocalFileStorage._get_run_dir(task_config=unique_config, exist_run_dirs=exist_run_dirs)
         if run_dir:
             result = json.load(open(os.path.join(run_dir, 'result.json'), 'r'))
             return result, run_dir
         return None
 
-    def save_results(self, task: Task, results: Dict) -> str:
-        task_dir = os.path.join(self.base_dir, task.name)
+    def save_results(self, task_name: str, unique_config: Dict, results: Dict, history: Optional[Dict] = None) -> str:
+        task_dir = os.path.join(self.base_dir, task_name)
         run_dir = LocalFileStorage._make_run_dir(task_dir=task_dir)
-        task_history = {name: sorted(storage_path) for name, storage_path in task.storage_path.items()}
+
+        task_history = {name: sorted(path) for name, path in history.items()}
         json.dump(task_history, open(os.path.join(run_dir, 'info.json'), 'w'))
         json.dump(results, open(os.path.join(run_dir, 'result.json'), 'w'))
-        json.dump(task.unique_config, open(os.path.join(run_dir, 'config.json'), 'w'))
+        json.dump(unique_config, open(os.path.join(run_dir, 'config.json'), 'w'))
         return run_dir
 
     @staticmethod

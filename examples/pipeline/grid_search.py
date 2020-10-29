@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import yaml
 
@@ -71,6 +71,11 @@ def parse_args():
                         default='evaluate',
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
+    parser.add_argument('--force',
+                        default='None',
+                        choices=['all', 'selected'],
+                        type=Optional[str],
+                        help='Task to be executed (level 0 keys in config).')
     parser.add_argument('--use-cuda',
                         default=True,
                         help='If set, cuda (gpu) is used.',
@@ -131,9 +136,12 @@ def main():
     results_storage = LocalFileStorage(base_dir=args.base_dir)
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_dolphins=args.num_dolphins, resources=resources, results_storage=results_storage) as swarm:
+    with Swarm(n_dolphins=args.num_dolphins,
+               resources=resources,
+               results_storage=results_storage) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task)
         results = flow.run(tasks)
+        print(results)
 
 
 if __name__ == '__main__':
