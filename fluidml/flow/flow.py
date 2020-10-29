@@ -108,12 +108,12 @@ class Flow:
         merged_config: Dict = Flow._reformat_config(merged_config)
         return merged_config
 
-    @staticmethod
-    def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]],
-                                 task_spec: BaseTaskSpec) -> List[List[Task]]:
-        predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in task_spec.predecessors]
-        task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
-        return task_combinations
+    # @staticmethod
+    # def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]],
+    #                              task_spec: BaseTaskSpec) -> List[List[Task]]:
+    #     predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in task_spec.predecessors]
+    #     task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
+    #     return task_combinations
 
     # @staticmethod
     # def _generate_tasks(task_specs: List[BaseTaskSpec]) -> List[Task]:
