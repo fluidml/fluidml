@@ -6,7 +6,7 @@ from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
-from fluidml.flow.task_spec import BaseTaskSpec, GridTaskSpec
+from fluidml.flow.task_spec import BaseTaskSpec, GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
 
 
@@ -35,11 +35,20 @@ class Flow:
     @staticmethod
     def _create_single_run_configs(task_specs: List[BaseTaskSpec]) -> List[Dict]:
         name_to_params = defaultdict(list)
-        for spec in task_specs[:-1]:
-            task_configs = spec.task_configs if isinstance(spec, GridTaskSpec) else spec.task_kwargs
+        for spec in task_specs:
+            if isinstance(spec, GridTaskSpec):
+                task_configs = spec.task_configs
+            elif isinstance(spec, TaskSpec):
+                task_configs = spec.task_kwargs
+            else:
+                raise ValueError('Object spec has to be of instance type GridTaskSpec or TaskSpec.')
             name_to_params[spec.name].extend(task_configs)
-        task_names, values = zip(*name_to_params.items())
-        single_run_configs = [dict(zip(task_names, params)) for params in product(*values)]
+
+        if name_to_params:
+            task_names, values = zip(*name_to_params.items())
+            single_run_configs = [dict(zip(task_names, params)) for params in product(*values)]
+        else:
+            single_run_configs = [{}]
         return single_run_configs
 
     def _order_task_specs(self,
