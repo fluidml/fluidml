@@ -1,4 +1,5 @@
 import pytest
+
 from fluidml.flow import Flow
 from fluidml.swarm import Swarm
 
