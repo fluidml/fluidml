@@ -33,7 +33,7 @@ def train(results: Dict, resource: Resource, model, dataloader, evaluator, optim
     return {'score': 2.}  # 'score': 2.
 
 
-def evaluate(results: Dict, resource: Resource):
+def evaluate(results: Dict, resource: Resource, metric: str):
     print(results)
     return {}
 
@@ -74,7 +74,7 @@ def parse_args():
     parser.add_argument('--force',
                         default='None',
                         choices=['all', 'selected'],
-                        type=Optional[str],
+                        type=str,
                         help='Task to be executed (level 0 keys in config).')
     parser.add_argument('--use-cuda',
                         default=True,
