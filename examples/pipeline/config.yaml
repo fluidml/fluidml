@@ -9,7 +9,7 @@ preprocess:
                'remove_multi_spaces',
                'stem'
              ]]
-#  abc: [1, 2]
+  abc: [2, 3]
 
 featurize_cells:
   type_: flair
@@ -17,7 +17,7 @@ featurize_cells:
 
 featurize_tokens:
   type_: flair
-  batch_size: [10, 30, 50]
+  batch_size: [10, 20]
 
 train:
   model:
@@ -38,5 +38,8 @@ train:
     drop_last: false
   optimizer:
     type_: 'adam'
-    lr: [0.01, 0.001]
+    lr: 0.01
   num_epochs: 100
+
+evaluate:
+  metric: 'f1'

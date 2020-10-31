@@ -21,9 +21,7 @@ class Task(ABC, DependencyMixin):
         self.name = name if name is not None else self.__class__.__name__
         self.id_ = id_
         self.kwargs = kwargs
-
         self.unique_config: Optional[Dict] = None
-        self.storage_path: Optional[Dict] = None
 
     @abstractmethod
     def run(self,
