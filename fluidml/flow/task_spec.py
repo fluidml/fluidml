@@ -18,14 +18,16 @@ class BaseTaskSpec(DependencyMixin, ABC):
         self.name = name if name is not None else self.task.__name__
         self.reduce = reduce
 
+        self.force: Optional[str] = None
+
     def _create_task_object(self,
                             task_kwargs: Dict[str, Any],
                             task_id: Optional[int] = None) -> Task:
         if isinstance(self.task, type):
-            task = self.task(id_=task_id, name=self.name, **task_kwargs)
+            task = self.task(id_=task_id, name=self.name, force=self.force, **task_kwargs)
             task.kwargs = task_kwargs
         elif isinstance(self.task, Callable):
-            task = MyTask(id_=task_id, task=self.task, name=self.name, kwargs=task_kwargs)
+            task = MyTask(id_=task_id, task=self.task, name=self.name, force=self.force, kwargs=task_kwargs)
         else:
             raise TypeError(f'{self.task} needs to be a Class object (type="type") or a Callable, e.g. a function.'
                             f'But it is of type "{type(self.task)}".')

@@ -131,6 +131,19 @@ class Dolphin(Whale):
                                                          results=results,
                                                          history=history)
 
+        # if task.force = True -> run the task and overwrite existing results
+        elif task.force:
+            Console.get_instance().log(f'Dolphin {self.id_} started re-running task {task.name}-{task.id_}.')
+            results: Dict = task.run(results=pred_results, resource=self.resource)
+            Console.get_instance().log(f'Dolphin {self.id_} completed re-running task {task.name}-{task.id_}.')
+
+            # needs a lock to assure that for each task a unique storage path is created
+            with self.lock:
+                path = self.results_storage.update_results(task_name=task.name,
+                                                           unique_config=task.unique_config,
+                                                           results=results,
+                                                           history=history)
+
         # take results from results storage (unpack the tuple)
         else:
             with self.lock:
