@@ -4,19 +4,6 @@ import os
 from shutil import rmtree
 from typing import List, Dict, Optional, Tuple
 
-from fluidml.common import Task
-
-
-def delete_dir_content(run_dir: str):
-    for element in os.scandir(run_dir):
-        try:
-            if element.is_file() or os.path.islink(element.path):
-                os.unlink(element.path)
-            elif element.is_dir():
-                rmtree(element.path)
-        except OSError as e:
-            print(f'Failed to delete {element.path}. Reason: {e}.')
-
 
 class ResultsStorage(ABC):
     @abstractmethod
