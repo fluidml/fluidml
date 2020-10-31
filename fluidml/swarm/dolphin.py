@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from collections import defaultdict
 from multiprocessing import Process, Queue, Lock
 from queue import Empty
 import time
@@ -67,62 +68,89 @@ class Dolphin(Whale):
         results = {}
         for predecessor in task.predecessors:
             try:
-                results = {**results, **{predecessor.name: self.results[predecessor.name][predecessor.id_]['results']}}
+                results = {**results,
+                           **{f'{predecessor.name}-{predecessor.id_}':
+                              self.results[predecessor.name][predecessor.id_]['results']}}
             except TypeError:
                 print('Each task has to return a dict.')
                 raise
 
         return results
 
-    def _add_results_to_results_dict(self, results: Dict, task: Task):
-        # Note: manager dicts can not be mutated, they have to be reassigned.
+    def _extract_history_from_predecessors(self, task: Task) -> Dict[str, set]:
+        history = defaultdict(set)
+        for predecessor in task.predecessors:
+            for name, pred_path in self.results[predecessor.name][predecessor.id_]['history'].items():
+                history[name].update(pred_path)
+        return history
+
+    def _add_history_to_results_dict(self, history: Dict, task: Task):
+        # Note: manager scripts can not be mutated, they have to be reassigned.
         #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
 
         if task.name not in self.results:
             self.results[task.name] = {}
 
         task_results = self.results[task.name]
-        task_results[task.id_] = {'results': results,
-                                  'config': task.unique_config}
+        task_results[task.id_] = {'history': history}
+        self.results[task.name] = task_results
+
+    def _add_results_to_results_dict(self, results: Dict, task: Task):
+        # Note: manager scripts can not be mutated, they have to be reassigned.
+        #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
+
+        if task.name not in self.results:
+            self.results[task.name] = {}
+
+        task_results = self.results[task.name]
+
+        if task.id_ not in task_results:
+            task_results[task.id_] = {}
+
+        task_results[task.id_].update({'results': results,
+                                       'config': task.unique_config})
         self.results[task.name] = task_results
 
     def _run_task_using_results_storage(self, task: Task, pred_results: Dict) -> Dict:
-        if self.tasks[task.id_].storage_path is None:
-            task.storage_path = {}
-            self.tasks[task.id_] = task
+        with self.lock:
+            history = self._extract_history_from_predecessors(task=task)
 
-        # for all predecessor tasks write their storage path history in the current task storage path
-        for predecessor in task.predecessors:
-            for name, pred_path in self.tasks[predecessor.id_].storage_path.items():
-                task.storage_path[name] = pred_path
-        self.tasks[task.id_] = task
-
-        results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task=task)
-
+            # try to get results from results storage
+            results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task_name=task.name,
+                                                                                   unique_config=task.unique_config)
+        # if results is none, it could not be retrieved -> run the task
         if results is None:
-            # run task
             Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
-            results: Dict = task.run(pred_results, self.resource)
+            results: Dict = task.run(results=pred_results, resource=self.resource)
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
             # needs a lock to assure that for each task a unique storage path is created
             with self.lock:
-                path = self.results_storage.save_results(task=task, results=results)
-        else:
-            results, path = results
-            Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+                path = self.results_storage.save_results(task_name=task.name,
+                                                         unique_config=task.unique_config,
+                                                         results=results,
+                                                         history=history)
 
-        # Write unique storage path (e.g. run_dir) of task to its task object
-        task.storage_path[task.name] = path
-        self.tasks[task.id_] = task
+        # take results from results storage (unpack the tuple)
+        else:
+            with self.lock:
+                results, path = results
+                Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+
+        with self.lock:
+            # add task storage path to task history and add history to results dict
+            history[task.name].add(path)
+            self._add_history_to_results_dict(history=history, task=task)
+
         return results
 
     def _run_task(self, task: Task):
         # extract results from predecessors
-        pred_results = self._extract_results_from_predecessors(task)
+        with self.lock:
+            pred_results = self._extract_results_from_predecessors(task)
 
-        # add to list of running tasks
-        self.running_queue.append(task.id_)
+            # add to list of running tasks
+            self.running_queue.append(task.id_)
 
         if self.results_storage:
             # run task using file storage for versioning
@@ -130,14 +158,15 @@ class Dolphin(Whale):
         else:
             # run task only
             Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
-            results: Dict = task.run(pred_results, self.resource)
+            results: Dict = task.run(results=pred_results, resource=self.resource)
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
-        # add results to shared results dict
-        self._add_results_to_results_dict(results=results, task=task)
+        with self.lock:
+            # add results to shared results dict
+            self._add_results_to_results_dict(results=results, task=task)
 
-        # put task in done_queue
-        self.done_queue.append(task.id_)
+            # put task in done_queue
+            self.done_queue.append(task.id_)
 
     def _work(self):
         while not self.exception:

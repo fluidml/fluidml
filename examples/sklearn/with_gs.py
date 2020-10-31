@@ -11,7 +11,7 @@ from sklearn.metrics import classification_report
 from fluidml.common.task import Task, Resource
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow
-from fluidml.flow.task_spec import GridTaskSpec
+from fluidml.flow.task_spec import GridTaskSpec, TaskSpec
 
 
 def results_available(results, task_name, value) -> bool:

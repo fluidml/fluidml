@@ -1,10 +1,11 @@
+# from collections import defaultdict
 import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
-from typing import Optional, Type, List, Dict
+from typing import Optional, Type, List, Dict  # , Tuple, Union
 
-from networkx import DiGraph, shortest_path_length
+# from networkx import DiGraph, shortest_path_length
 
 from fluidml.common.logging import Console
 from fluidml.common.task import Task, Resource
@@ -33,7 +34,7 @@ class Swarm:
         self.results = self.manager.dict()
         self.results_storage = results_storage
         self.exception = self.manager.dict()
-        self.tasks: Dict[int, Task] = self.manager.dict()
+        self.tasks: Dict[int, Task] = {}  # self.manager.dict()
 
         # orca worker for tracking
         self.dolphins = [Orca(done_queue=self.done_queue,
@@ -88,25 +89,78 @@ class Swarm:
                 results[task_name].append(task_output)
         return results
 
-    def _add_config_to_tasks(self):
-        task_graph = self._create_task_graph()
-
-        for id_, task in self.tasks.items():
-            config = self._extract_kwargs_from_ancestors(task=task, task_graph=task_graph)
-            task.unique_config = config
-            self.tasks[id_] = task
-
-    def _extract_kwargs_from_ancestors(self, task: Task, task_graph: DiGraph) -> Dict[str, Dict]:
-        ancestor_task_ids = list(shortest_path_length(task_graph, target=task.id_).keys())[::-1]
-        config = {self.tasks[id_].name: self.tasks[id_].kwargs for id_ in ancestor_task_ids}
-        return config
-
-    def _create_task_graph(self) -> DiGraph:
-        task_graph = DiGraph()
-        for task in self.tasks.values():
-            for pred_task in task.predecessors:
-                task_graph.add_edge(pred_task.id_, task.id_)
-        return task_graph
+    # @staticmethod
+    # def _update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
+    #     if isinstance(d1, dict) and isinstance(d2, dict):
+    #         # Unwrap d1 and d2 in new dictionary to keep non-shared keys with **d1, **d2
+    #         # Next unwrap a dict that treats shared keys
+    #         # If two keys have an equal value, we take that value as new value
+    #         # If the values are not equal, we recursively merge them
+    #         return {**d1, **d2,
+    #                 **{k: d1[k] if d1[k] == d2[k] else Swarm._update_merge(d1[k], d2[k])
+    #                    for k in {*d1} & {*d2}}
+    #                 }
+    #     else:
+    #         # This case happens when values are merged
+    #         # It bundle values in a tuple, assuming the original dicts
+    #         # don't have tuples as values
+    #         if isinstance(d1, tuple) and not isinstance(d2, tuple):
+    #             combined = d1 + (d2,)
+    #         elif isinstance(d2, tuple) and not isinstance(d1, tuple):
+    #             combined = d2 + (d1,)
+    #         elif isinstance(d1, tuple) and isinstance(d2, tuple):
+    #             combined = d1 + d2
+    #         else:
+    #             combined = (d1, d2)
+    #         return tuple(sorted(element for i, element in enumerate(combined) if element not in combined[:i]))
+    #
+    # @staticmethod
+    # def _reformat_config(d: Dict) -> Dict:
+    #     for key, value in d.items():
+    #         # if isinstance(value, list):
+    #         #     d[key] = [value]
+    #         if isinstance(value, tuple):
+    #             d[key] = list(value)
+    #         elif isinstance(value, dict):
+    #             Swarm._reformat_config(value)
+    #         else:
+    #             continue
+    #     return d
+    #
+    # @staticmethod
+    # def _merge_configs(configs: List[Dict]) -> Dict:
+    #     merged_config = configs.pop(0)
+    #     for config in configs:
+    #         merged_config: Dict = Swarm._update_merge(merged_config, config)
+    #
+    #     # merged_config: Dict = Swarm._reformat_config(merged_config)
+    #     return merged_config
+    #
+    # def _extract_kwargs_from_ancestors(self, task: Task, task_graph: DiGraph) -> Dict[str, Dict]:
+    #     ancestor_task_ids = list(shortest_path_length(task_graph, target=task.id_).keys())[::-1]
+    #
+    #     # task_configs = defaultdict(list)
+    #     # for id_ in ancestor_task_ids:
+    #     #     task_configs[self.tasks[id_].name].append(self.tasks[id_].kwargs)
+    #     #
+    #     # config = {name: Swarm._merge_configs(configs=configs) for name, configs in task_configs.items()}
+    #     config = {self.tasks[id_].name: self.tasks[id_].kwargs for id_ in ancestor_task_ids}
+    #     return config
+    #
+    # def _add_config_to_tasks(self):
+    #     task_graph = self._create_task_graph()
+    #
+    #     for id_, task in self.tasks.items():
+    #         config = self._extract_kwargs_from_ancestors(task=task, task_graph=task_graph)
+    #         task.unique_config = config
+    #         self.tasks[id_] = task
+    #
+    # def _create_task_graph(self) -> DiGraph:
+    #     task_graph = DiGraph()
+    #     for task in self.tasks.values():
+    #         for pred_task in task.predecessors:
+    #             task_graph.add_edge(pred_task.id_, task.id_)
+    #     return task_graph
 
     def work(self, tasks: List[Task]):
         # get entry point task ids
@@ -117,7 +171,7 @@ class Swarm:
             self.tasks[task.id_] = task
 
         # add unique task configs to tasks
-        self._add_config_to_tasks()
+        # self._add_config_to_tasks()
 
         # add entry point tasks to the job queue
         for task_id, task_name in entry_point_tasks.items():
