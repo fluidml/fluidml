@@ -14,4 +14,5 @@ setup(name="fluidml",
                                    "pytorch-nlp",
                                    "pyyaml",
                                    "sklearn",
-                                   "torch"]})
+                                   "torch",
+                                   "dict-hash"]})
