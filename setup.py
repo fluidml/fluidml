@@ -15,4 +15,6 @@ setup(name="fluidml",
                                    "pyyaml",
                                    "sklearn",
                                    "torch",
-                                   "dict-hash"]})
+                                   "dict-hash",
+                                   "torch"]},
+      tests_require=['pytest'])

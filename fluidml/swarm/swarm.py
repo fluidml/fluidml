@@ -34,7 +34,7 @@ class Swarm:
         self.results = self.manager.dict()
         self.results_storage = results_storage
         self.exception = self.manager.dict()
-        self.tasks: Dict[int, Task] = self.manager.dict()
+        self.tasks: Dict[int, Task] = {}  # self.manager.dict()
 
         # orca worker for tracking
         self.dolphins = [Orca(done_queue=self.done_queue,

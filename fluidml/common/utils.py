@@ -1,4 +1,4 @@
-from typing import Any, Dict, Callable, Union, Tuple
+from typing import Any, Dict, Callable, Union, Tuple, Optional
 
 from fluidml.common import Task, Resource
 
@@ -10,10 +10,12 @@ class MyTask(Task):
                  name: str,
                  id_: int,
                  task: Callable,
-                 kwargs: Dict):
+                 kwargs: Dict,
+                 force: Optional[bool] = None):
         super().__init__(id_=id_, name=name)
         self.task = task
         self.kwargs = kwargs
+        self.force = force
 
     def run(self, results: Dict[str, Any], resource: Resource):
         result = self.task(results, resource, **self.kwargs)
