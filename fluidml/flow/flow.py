@@ -23,9 +23,11 @@ class Flow:
 
     def __init__(self,
                  swarm: Swarm,
-                 task_to_execute: Optional[str] = None):
+                 task_to_execute: Optional[str] = None,
+                 force: Optional[str] = None):
         self._swarm = swarm
         self._task_to_execute = task_to_execute
+        self._force = force
 
     @staticmethod
     def _create_task_spec_graph(task_specs: List[BaseTaskSpec]) -> DiGraph:
@@ -34,6 +36,18 @@ class Flow:
             for predecessor in spec.predecessors:
                 task_spec_graph.add_edge(predecessor.name, spec.name)
         return task_spec_graph
+
+    def _register_tasks_to_force_execute(self, task_specs: List[BaseTaskSpec]):
+        if self._force == 'selected':
+            assert self._task_to_execute is not None, '"task_to_execute" is required for force = "selected".'
+            for task_spec in task_specs:
+                if task_spec.name == self._task_to_execute:
+                    task_spec.force = True
+        elif self._force == 'all':
+            for task_spec in task_specs:
+                task_spec.force = True
+        elif self._force is not None:
+            raise ValueError(f'force = {self._force} is not supported. Choose "all" or "selected"')
 
     def _order_task_specs(self,
                           task_specs: List[BaseTaskSpec]) -> List[BaseTaskSpec]:
@@ -161,6 +175,7 @@ class Flow:
             Dict[str, Dict[str, Any]]: a nested dict of results
 
         """
+        self._register_tasks_to_force_execute(task_specs)
         ordered_task_specs = self._order_task_specs(task_specs)
         tasks = Flow._generate_tasks(ordered_task_specs)
         results = self._swarm.work(tasks)
