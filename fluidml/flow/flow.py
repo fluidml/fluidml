@@ -5,11 +5,12 @@ from typing import List, Any, Dict, Optional
 
 from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
+from dict_hash import sha256
 
 from fluidml.common import Task
 from fluidml.flow.task_spec import BaseTaskSpec
 from fluidml.swarm import Swarm
-from dict_hash import sha256
+from fluidml.common.utils import update_merge, reformat_config
 
 
 class Flow:
@@ -63,7 +64,6 @@ class Flow:
         # we validate the task combinations based on their path in the task graph
         # if two tasks have same parent task and their configs are different
         # then the combination is not valid
-        # TBD: may have to handle reduce spec
         tasks_in_path = [list(task.unique_config.keys()) for task in task_combination]
         tasks_in_path = list(set(reduce(lambda x, y: x + y, tasks_in_path, [])))
 
@@ -94,6 +94,16 @@ class Flow:
         return config
 
     @staticmethod
+    def _merge_task_combination_configs(task_combinations: List[List[Task]]):
+        task_configs = [task.unique_config for combination in task_combinations for task in combination]
+        merged_config = task_configs.pop(0)
+        for config in task_configs:
+            merged_config: Dict = update_merge(merged_config, config)
+
+        merged_config: Dict = reformat_config(merged_config)
+        return merged_config
+
+    @staticmethod
     def _generate_tasks(task_specs: List[BaseTaskSpec]) -> List[Task]:
         # keep track of expanded tasks by their names
         expanded_tasks_by_name = defaultdict(list)
@@ -104,22 +114,37 @@ class Flow:
             # get predecessor task combinations
             task_combinations = Flow._get_predecessor_product(expanded_tasks_by_name, exp_task)
 
-            # for each combination, create a new task
-            for task_combination in task_combinations:
+            if exp_task.reduce:
+                # if it is a reduce task, just add the predecessor task
+                # combinations as parents
                 tasks = exp_task.build()
 
-                # shared predecessor config
-                predecessor_config = Flow._combine_task_config(task_combination)
-
-                # TBD: need to think about predecessor config for reduce spec
-
-                # for each task that is created, add ids and dependencies
                 for task in tasks:
+                    # shared predecessor config
+                    predecessor_config = Flow._merge_task_combination_configs(task_combinations)
+
+                    for task_combination in task_combinations:
+                        task.requires(task_combination)
+
                     task.id_ = task_id
-                    task.requires(task_combination)
-                    task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
                     expanded_tasks_by_name[task.name].append(task)
+                    task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
                     task_id += 1
+            else:
+                # for each combination, create a new task
+                for task_combination in task_combinations:
+                    tasks = exp_task.build()
+
+                    # shared predecessor config
+                    predecessor_config = Flow._combine_task_config(task_combination)
+
+                    # for each task that is created, add ids and dependencies
+                    for task in tasks:
+                        task.id_ = task_id
+                        task.requires(task_combination)
+                        task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
+                        expanded_tasks_by_name[task.name].append(task)
+                        task_id += 1
 
         # create final list of tasks
         tasks = [task for expanded_tasks in expanded_tasks_by_name.values() for task in expanded_tasks]
