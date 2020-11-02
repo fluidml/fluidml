@@ -11,6 +11,7 @@ from fluidml.common import Task
 from fluidml.flow.task_spec import BaseTaskSpec
 from fluidml.swarm import Swarm
 from fluidml.common.utils import update_merge, reformat_config
+from fluidml.common.exception import NoTasksError
 
 
 class Flow:
@@ -97,7 +98,8 @@ class Flow:
                                  task_spec: BaseTaskSpec) -> List[List[Task]]:
         predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in task_spec.predecessors]
         task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
-        task_combinations = [combination for combination in task_combinations if Flow._validate_task_combination(combination)]
+        task_combinations = [combination for combination in task_combinations
+                             if Flow._validate_task_combination(combination)]
         return task_combinations
 
     @staticmethod
@@ -175,6 +177,8 @@ class Flow:
             Dict[str, Dict[str, Any]]: a nested dict of results
 
         """
+        if not task_specs:
+            raise NoTasksError("There are no tasks to run")
         self._register_tasks_to_force_execute(task_specs)
         ordered_task_specs = self._order_task_specs(task_specs)
         tasks = Flow._generate_tasks(ordered_task_specs)

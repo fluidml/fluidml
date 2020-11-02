@@ -31,7 +31,7 @@ jobs:
           name: run integration tests
           command: |
             . venv/bin/activate
-            pytest tests/integration
+            pytest --junitxml=test-reports/results_integration.xml tests/integration
 
       - store_test_results:
           path: test-reports

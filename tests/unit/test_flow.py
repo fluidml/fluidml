@@ -2,6 +2,7 @@ import pytest
 
 from fluidml.flow import Flow
 from fluidml.swarm import Swarm
+from fluidml.common.exception import NoTasksError
 
 
 @pytest.fixture
@@ -12,6 +13,6 @@ def swarm() -> Swarm:
 
 
 def test_flow_instantiation(swarm):
-    flow = Flow(swarm=swarm)
-    flow.run([])
-    assert True
+    with pytest.raises(NoTasksError):
+        flow = Flow(swarm=swarm)
+        flow.run([])
