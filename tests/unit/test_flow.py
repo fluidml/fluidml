@@ -12,7 +12,7 @@ def swarm() -> Swarm:
     swarm.close()
 
 
-def test_flow_instantiation(swarm):
+def test_flow_with_no_tasks(swarm):
     with pytest.raises(NoTasksError):
         flow = Flow(swarm=swarm)
         flow.run([])

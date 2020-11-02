@@ -136,9 +136,10 @@ class Flow:
                 tasks = exp_task.build()
 
                 for task in tasks:
-                    # shared predecessor config
+                    # predecessor config
                     predecessor_config = Flow._merge_task_combination_configs(task_combinations)
 
+                    # add dependencies
                     for task_combination in task_combinations:
                         task.requires(task_combination)
 
@@ -179,6 +180,7 @@ class Flow:
         """
         if not task_specs:
             raise NoTasksError("There are no tasks to run")
+
         self._register_tasks_to_force_execute(task_specs)
         ordered_task_specs = self._order_task_specs(task_specs)
         tasks = Flow._generate_tasks(ordered_task_specs)
