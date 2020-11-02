@@ -1,7 +1,7 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 import yaml
 
@@ -72,7 +72,7 @@ def parse_args():
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
     parser.add_argument('--force',
-                        default='None',
+                        default='all',
                         choices=['all', 'selected'],
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
@@ -139,7 +139,7 @@ def main():
     with Swarm(n_dolphins=args.num_dolphins,
                resources=resources,
                results_storage=results_storage) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute=args.task)
+        flow = Flow(swarm=swarm, task_to_execute=args.task, force=args.force)
         results = flow.run(tasks)
         print(results)
 
