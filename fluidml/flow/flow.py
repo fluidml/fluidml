@@ -38,15 +38,15 @@ class Flow:
                 task_spec_graph.add_edge(predecessor.name, spec.name)
         return task_spec_graph
 
-    def _register_tasks_to_force_execute(self, task_specs: List[BaseTaskSpec]):
+    def _register_tasks_to_force_execute(self, tasks: List[Task]):
         if self._force == 'selected':
             assert self._task_to_execute is not None, '"task_to_execute" is required for force = "selected".'
-            for task_spec in task_specs:
-                if task_spec.name == self._task_to_execute:
-                    task_spec.force = True
+            for task in tasks:
+                if task.name == self._task_to_execute:
+                    task.force = True
         elif self._force == 'all':
-            for task_spec in task_specs:
-                task_spec.force = True
+            for task in tasks:
+                task.force = True
         elif self._force is not None:
             raise ValueError(f'force = {self._force} is not supported. Choose "all" or "selected"')
 
@@ -181,8 +181,8 @@ class Flow:
         if not task_specs:
             raise NoTasksError("There are no tasks to run")
 
-        self._register_tasks_to_force_execute(task_specs)
         ordered_task_specs = self._order_task_specs(task_specs)
         tasks = Flow._generate_tasks(ordered_task_specs)
+        self._register_tasks_to_force_execute(tasks)
         results = self._swarm.work(tasks)
         return results
