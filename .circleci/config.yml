@@ -19,13 +19,19 @@ jobs:
             pip install .
     
       - run:
-          name: run tests
+          name: run unit tests
           command: |
             . venv/bin/activate
             mkdir test-reports
-            coverage run --source=./fluidml -m pytest --junitxml=test-reports/results.xml unittests
+            coverage run --source=./fluidml -m pytest --junitxml=test-reports/results.xml tests/unit
             coverage report
             coverage html --directory=test-reports
+
+      - run:
+          name: run integration tests
+          command: |
+            . venv/bin/activate
+            pytest --junitxml=test-reports/results_integration.xml tests/integration
 
       - store_test_results:
           path: test-reports
