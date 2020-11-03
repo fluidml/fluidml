@@ -1,11 +1,9 @@
 from collections import defaultdict
 from itertools import product
-from functools import reduce
 from typing import List, Any, Dict, Optional
 
 from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
-from dict_hash import sha256
 
 from fluidml.common import Task
 from fluidml.flow.task_spec import BaseTaskSpec
@@ -69,24 +67,29 @@ class Flow:
         sorted_specs = [name_to_task_spec[name] for name in sorted_names]
         return sorted_specs
 
+    @staticmethod
     def _validate_task_combination(task_combination: List[Task]) -> bool:
-        def _match(task_configs: List[Dict[str, Any]]):
-            config_hashes = [sha256(config) for config in task_configs]
-            if len(set(config_hashes)) == 1:
+        def _match(task_cfgs: List[Dict[str, Any]]):
+
+            unique_cfgs = []
+            for config in task_cfgs:
+                if config not in unique_cfgs:
+                    unique_cfgs.append(config)
+
+            if len(unique_cfgs) == 1:
                 return True
             return False
 
         # we validate the task combinations based on their path in the task graph
         # if two tasks have same parent task and their configs are different
         # then the combination is not valid
-        tasks_in_path = [list(task.unique_config.keys()) for task in task_combination]
-        tasks_in_path = list(set(reduce(lambda x, y: x + y, tasks_in_path, [])))
+        task_names_in_path = list(set(name for task in task_combination for name in task.unique_config))
 
         # for each task in path config
-        for task_key in tasks_in_path:
+        for name in task_names_in_path:
             # task configs
-            task_configs = [task.unique_config[task_key] for task in task_combination
-                            if task_key in task.unique_config.keys()]
+            task_configs = [task.unique_config[name] for task in task_combination
+                            if name in task.unique_config.keys()]
 
             # if they do not match, return False
             if not _match(task_configs):
