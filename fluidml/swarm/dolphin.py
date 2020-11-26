@@ -1,37 +1,16 @@
-from abc import abstractmethod
 from collections import defaultdict
-from multiprocessing import Process, Queue, Lock
+from multiprocessing import Queue, Lock
 from queue import Empty
 import time
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 
 from rich.progress import Progress, BarColumn
 
 from fluidml.common.task import Task, Resource
+from fluidml.common.exception import TaskResultTypeError
 from fluidml.common.logging import Console
 from fluidml.swarm.storage import ResultsStorage
-
-
-class Whale(Process):
-    def __init__(self,
-                 exception: Dict[str, Exception],
-                 exit_on_error: bool):
-        super().__init__(target=self.work,
-                         args=())
-        self.exception = exception
-        self.exit_on_error = exit_on_error
-
-    @abstractmethod
-    def _work(self):
-        raise NotImplementedError
-
-    def work(self):
-        try:
-            self._work()
-        except Exception as e:
-            if self.exit_on_error:
-                self.exception['message'] = e
-            raise
+from fluidml.swarm.whale import Whale
 
 
 class Dolphin(Whale):
@@ -67,13 +46,13 @@ class Dolphin(Whale):
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
         results = {}
         for predecessor in task.predecessors:
-            try:
+            predecessor_result = self.results[predecessor.name][predecessor.id_]
+            if isinstance(predecessor_result, dict):
                 results = {**results,
                            **{f'{predecessor.name}-{predecessor.id_}':
-                              self.results[predecessor.name][predecessor.id_]['results']}}
-            except TypeError:
-                print('Each task has to return a dict.')
-                raise
+                              predecessor_result}}
+            else:
+                raise TaskResultTypeError("Each task has to return a dict")
 
         return results
 
@@ -181,70 +160,50 @@ class Dolphin(Whale):
             # put task in done_queue
             self.done_queue.append(task.id_)
 
+    def _fetch_next_task(self) -> Union[str, None]:
+        task_id = None
+        try:
+            task_id = self.scheduled_queue.get(block=False, timeout=0.5)
+        except Empty:
+            Console.get_instance().log(f'Bee {self.id_}: waiting for tasks.')
+        return task_id
+
+    def _done(self) -> bool:
+        return self.exception or (len(self.done_queue) == len(self.tasks))
+
     def _work(self):
-        while not self.exception:
-            # TODO: Seems to work, test more
-            # get the next task in the queue
-            try:
-                task_id = self.scheduled_queue.get(block=False, timeout=0.5)
-            except Empty:
-                # terminate bee (worker) if all tasks have been processed
-                if len(self.done_queue) == len(self.tasks):
-                    Console.get_instance().log(f'Dolphin {self.id_}: leaving the swarm.')
-                    break
-                else:
-                    # Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
+        while not self._done():
+            # fetch next task to run
+            task_id = self._fetch_next_task()
+
+            # continue when there is a valid task to run
+            if task_id is not None:
+
+                # get current task from task_id
+                task = self.tasks[task_id]
+
+                # TODO: Do we need a lock here?
+                # run task only if it has not been executed already
+                if task_id in self.done_queue or task_id in self.running_queue:
+                    Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
                     continue
 
-            # get current task from task_id
-            task = self.tasks[task_id]
+                # all good to run the task
+                self._run_task(task)
 
-            # TODO: Do we need a lock here?
-            # run task only if it has not been executed already
-            if task_id in self.done_queue or task_id in self.running_queue:
-                Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
-                continue
+                # schedule the task's successors
+                self._schedule_successors(task)
 
-            # all good to run the task
-            self._run_task(task)
-
-            # get successor tasks and put them in task queue for processing
-            for successor in task.successors:
-                # run task only if all dependencies are satisfied
-                if not self._is_task_ready(task=self.tasks[successor.id_]):
-                    Console.get_instance().log(
-                        f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
-                        f'task {successor.name}-{successor.id_}')
-                    continue
-
-                if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
-                                               f'is currently running or already finished.')
-                    continue
-
+    def _schedule_successors(self, task: Task):
+        # get successor tasks and put them in task queue for processing
+        for successor in task.successors:
+            # run task only if all dependencies are satisfied
+            if not self._is_task_ready(task=self.tasks[successor.id_]):
+                Console.get_instance().log(
+                    f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
+                    f'task {successor.name}-{successor.id_}')
+            elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
+                Console.get_instance().log(f'Task {successor.name}-{successor.id_} is currently running or already finished.')
+            else:
                 Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
-
-
-class Orca(Whale):
-    def __init__(self,
-                 done_queue: List[int],
-                 exception: Dict[str, Exception],
-                 exit_on_error: bool,
-                 tasks: Dict[int, Task],
-                 refresh_every: int):
-        super().__init__(exception=exception, exit_on_error=exit_on_error)
-        self.refresh_every = refresh_every
-        self.done_queue = done_queue
-        self.tasks = tasks
-
-    def _work(self):
-        while len(self.done_queue) < len(self.tasks) and not self.exception:
-            # sleep for a while
-            time.sleep(self.refresh_every)
-
-            with Progress('[progress.description]{task.description}', BarColumn(),
-                          '[progress.percentage]{task.percentage:>3.0f}%',) as progress:
-
-                task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
-                progress.update(task, advance=len(self.done_queue))
