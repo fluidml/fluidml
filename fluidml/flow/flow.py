@@ -70,7 +70,6 @@ class Flow:
     @staticmethod
     def _validate_task_combination(task_combination: List[Task]) -> bool:
         def _match(task_cfgs: List[Dict[str, Any]]):
-
             unique_cfgs = []
             for config in task_cfgs:
                 if config not in unique_cfgs:
