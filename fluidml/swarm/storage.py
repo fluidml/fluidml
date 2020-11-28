@@ -45,17 +45,15 @@ class LocalFileStorage(ResultsStorage):
             return result, run_dir
         return None
 
-    def save_results(self, task_name: str, unique_config: Dict, results: Dict, history: Optional[Dict] = None) -> str:
+    def save_results(self, task_name: str, unique_config: Dict, results: Dict) -> str:
         task_dir = os.path.join(self.base_dir, task_name)
         run_dir = LocalFileStorage._make_run_dir(task_dir=task_dir)
 
-        task_history = {name: sorted(path) for name, path in history.items()}
-        json.dump(task_history, open(os.path.join(run_dir, 'info.json'), 'w'))
         pickle.dump(results, open(os.path.join(run_dir, 'result.p'), 'wb'))
         json.dump(unique_config, open(os.path.join(run_dir, 'config.json'), 'w'))
         return run_dir
 
-    def update_results(self, task_name: str, unique_config: Dict, results: Dict, history: Optional[Dict] = None) -> str:
+    def update_results(self, task_name: str, unique_config: Dict, results: Dict) -> str:
         task_dir = os.path.join(self.base_dir, task_name)
 
         # get existing run dir
@@ -66,8 +64,6 @@ class LocalFileStorage(ResultsStorage):
         LocalFileStorage._delete_dir_content(d=run_dir)
 
         # save new task results
-        task_history = {name: sorted(path) for name, path in history.items()}
-        json.dump(task_history, open(os.path.join(run_dir, 'info.json'), 'w'))
         pickle.dump(results, open(os.path.join(run_dir, 'result.p'), 'wb'))
         json.dump(unique_config, open(os.path.join(run_dir, 'config.json'), 'w'))
         return run_dir
