@@ -11,20 +11,20 @@ from fluidml.common.task import Task, Resource
 from fluidml.swarm.dolphin import Dolphin
 from fluidml.swarm.orca import Orca
 from fluidml.storage.base import ResultsStore
-from fluidml.storage.in_memory_storage import InMemoryStore
+from fluidml.storage.in_memory_store import InMemoryStore
+from fluidml.storage.utils import pack_results
 
 
 class Swarm:
     def __init__(self,
                  n_dolphins: Optional[int] = None,
                  resources: Optional[List[Resource]] = None,
-                 results_store: Optional[ResultsStore] = InMemoryStore(),
+                 results_store: Optional[ResultsStore] = None,
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
-                 exit_on_error: bool = True):
-
+                 exit_on_error: bool = True,
+                 return_results: bool = False):
         set_start_method(start_method, force=True)
-
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
         self.manager = Manager()
@@ -32,8 +32,9 @@ class Swarm:
         self.lock = Lock()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
-        self.results_store = results_store
+        self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
         self.exception = self.manager.dict()
+        self.return_results = return_results
         self.tasks: Dict[int, Task] = {}  # self.manager.dict()
 
         # orca worker for tracking
@@ -52,7 +53,7 @@ class Swarm:
                                       tasks=self.tasks,
                                       exception=self.exception,
                                       exit_on_error=exit_on_error,
-                                      results_storage=self.results_store) for i in range(self.n_dolphins)])
+                                      results_store=self.results_store) for i in range(self.n_dolphins)])
 
     def __enter__(self):
         return self
@@ -83,12 +84,9 @@ class Swarm:
                 entry_task_ids[task.id_] = task.name
         return entry_task_ids
 
-    def _simplify_results(self) -> Dict[str, List[Dict]]:
-        results = {}
-        for task_name, run_tasks in self.results.items():
-            results[task_name] = []
-            for task_output in run_tasks.values():
-                results[task_name].append(task_output)
+    def _collect_results(self):
+        task_configs = [(task.name, task.unique_config) for task in self.tasks.values()]
+        results = pack_results(self.results_store, task_configs)
         return results
 
     def work(self, tasks: List[Task]):
@@ -99,10 +97,7 @@ class Swarm:
         for task in tasks:
             self.tasks[task.id_] = task
 
-        # add unique task configs to tasks
-        # self._add_config_to_tasks()
-
-        # add entry point tasks to the job queue
+        # schedule entry point tasks
         for task_id, task_name in entry_point_tasks.items():
             Console.get_instance().log(f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
@@ -119,8 +114,9 @@ class Swarm:
         if self.exception:
             raise self.exception['message']
 
-        results: Dict[str, List[Dict]] = self._simplify_results()
-        return results
+        # return results
+        if self.return_results:
+            return self._collect_results()
 
     def close(self):
         self.tasks = self.manager.dict()
