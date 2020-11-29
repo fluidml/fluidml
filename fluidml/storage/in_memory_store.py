@@ -1,4 +1,4 @@
-from fluildml.base.storage import ResultsStore
+from fluidml.storage.base import ResultsStore
 from multiprocessing import Manager
 from typing import Dict, Optional
 
@@ -7,17 +7,19 @@ class InMemoryStore(ResultsStore):
     """
     This is an in-memory results store implemented using multiprocessing manager
     """
-    def __init__(self):
-        self._results_dict = Manager().dict()
+    def __init__(self, manager: Manager):
+        self._results_dict = manager.dict()
 
     def save_results(self, task_name: str, unique_config: Dict, results: Dict):
         if task_name not in self._results_dict:
             self._results_dict[task_name] = []
 
-        self._results_dict[task_name].append({
+        existing_results = self._results_dict[task_name]
+        existing_results.append({
             "results": results,
             "config": unique_config
         })
+        self._results_dict[task_name] = existing_results
 
     def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
         if task_name not in self._results_dict:

@@ -1,13 +1,12 @@
-from collections import defaultdict
 from multiprocessing import Queue, Lock
 from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 from fluidml.common.task import Task, Resource
-from fluidml.common.exception import TaskResultTypeError
 from fluidml.common.logging import Console
 from fluidml.swarm.whale import Whale
 from fluidml.storage.base import ResultsStore
+from fluidml.storage.utils import pack_results
 
 
 class Dolphin(Whale):
@@ -39,19 +38,13 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        results = defaultdict(list)
-        for predecessor in task.predecessors:
-            predecessor_result = self.results_store.get_results(task.task_name, task.unique_config)
-            if isinstance(predecessor_result, dict):
-                results[task.task_name].append(predecessor_result)
-            else:
-                raise TaskResultTypeError("Each task has to return a dict")
-
+        task_configs = [(predecessor.name, predecessor.unique_config) for predecessor in task.predecessors]
+        results = pack_results(self.results_store, task_configs)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
         with self.lock:
-            # try to get results from results storage
+            # try to get results from results store
             results: Optional[Tuple[Dict, str]] = self.results_store.get_results(task_name=task.name,
                                                                                  unique_config=task.unique_config)
         # if results is none or force is set, run the task now
@@ -70,11 +63,9 @@ class Dolphin(Whale):
             Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
 
     def _execute_task(self, task: Task):
-        # extract results from predecessors
+        # extract predecessor results
         with self.lock:
             pred_results = self._extract_results_from_predecessors(task)
-
-            # add to list of running tasks
             self.running_queue.append(task.id_)
 
         # run the task and save results

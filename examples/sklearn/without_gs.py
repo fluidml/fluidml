@@ -109,7 +109,7 @@ class EvaluateTask(Task):
         assert results_available(results, "train", "vectors"), "Vectors must be present"
         assert results_available(results, "train", "labels"), "labels must be present"
         predictions = results["train"]["model"].predict(results["train"]["vectors"])
-        report = classification_report(results["train"]["labels"], predictions)
+        report = classification_report(results["train"]["labels"], predictions, output_dict=True)
         task_results = {
             "classification_report": report
         }
@@ -140,7 +140,7 @@ def main():
              train_task,
              evaluate_task]
 
-    with Swarm(n_dolphins=3, refresh_every=5) as swarm:
+    with Swarm(n_dolphins=2, refresh_every=10, return_results=True) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
     print(results["evaluate"])
