@@ -10,14 +10,15 @@ from fluidml.common.logging import Console
 from fluidml.common.task import Task, Resource
 from fluidml.swarm.dolphin import Dolphin
 from fluidml.swarm.orca import Orca
-from fluidml.swarm.storage import ResultsStorage
+from fluidml.storage.base import ResultsStore
+from fluidml.storage.in_memory_storage import InMemoryStore
 
 
 class Swarm:
     def __init__(self,
                  n_dolphins: Optional[int] = None,
                  resources: Optional[List[Resource]] = None,
-                 results_storage: Optional[ResultsStorage] = None,
+                 results_store: Optional[ResultsStore] = InMemoryStore(),
                  start_method: str = 'spawn',
                  refresh_every: int = 1,
                  exit_on_error: bool = True):
@@ -31,8 +32,7 @@ class Swarm:
         self.lock = Lock()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
-        self.results = self.manager.dict()
-        self.results_storage = results_storage
+        self.results_store = results_store
         self.exception = self.manager.dict()
         self.tasks: Dict[int, Task] = {}  # self.manager.dict()
 
@@ -52,8 +52,7 @@ class Swarm:
                                       tasks=self.tasks,
                                       exception=self.exception,
                                       exit_on_error=exit_on_error,
-                                      results=self.results,
-                                      results_storage=self.results_storage) for i in range(self.n_dolphins)])
+                                      results_storage=self.results_store) for i in range(self.n_dolphins)])
 
     def __enter__(self):
         return self
@@ -124,7 +123,6 @@ class Swarm:
         return results
 
     def close(self):
-        self.results = self.manager.dict()
         self.tasks = self.manager.dict()
         self.done_queue = self.manager.dict()
         for dolphin in self.dolphins:
