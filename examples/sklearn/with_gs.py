@@ -15,7 +15,9 @@ from fluidml.flow.task_spec import GridTaskSpec, TaskSpec
 
 
 def results_available(results, task_name, value) -> bool:
-    return results.get(task_name, None) is not None and results[task_name].get(value, None) is not None
+    return results.get(task_name, None) is not None and \
+           results[task_name].get("result", None) is not None and  \
+           results[task_name]["result"].get(value, None) is not None
 
 
 class DatasetFetchTask(Task):
@@ -43,7 +45,7 @@ class PreProcessTask(Task):
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "dataset", "sentences"), "Sentences must be present"
-        pre_processed_sentences = [sentence for sentence in results["dataset"]["sentences"]]
+        pre_processed_sentences = [sentence for sentence in results["dataset"]["result"]["sentences"]]
         task_results = {
             "sentences": pre_processed_sentences,
         }
@@ -57,7 +59,7 @@ class TFIDFFeaturizeTask(Task):
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
         tfidf = TfidfVectorizer()
-        tfidf_vectors = tfidf.fit_transform(results["pre_process"]["sentences"]).toarray()
+        tfidf_vectors = tfidf.fit_transform(results["pre_process"]["result"]["sentences"]).toarray()
         task_results = {
             "vectors": tfidf_vectors
         }
@@ -70,7 +72,7 @@ class GloveFeaturizeTask(Task):
 
     def run(self, results: Dict[str, Any], resource: Resource):
         assert results_available(results, "pre_process", "sentences"), "Sentences must be present"
-        sentences = [Sentence(sent) for sent in results["pre_process"]["sentences"]]
+        sentences = [Sentence(sent) for sent in results["pre_process"]["result"]["sentences"]]
         embedder = DocumentPoolEmbeddings([WordEmbeddings("glove")])
         embedder.embed(sentences)
         glove_vectors = [sent.embedding.cpu().numpy() for sent in sentences]
@@ -90,12 +92,13 @@ class TrainTask(Task):
         assert results_available(results, "glove_featurize", "vectors"), "Glove Vectors must be present"
         assert results_available(results, "dataset", "labels"), "Labels must be present"
         model = LogisticRegression(max_iter=50)
-        stacked_vectors = np.hstack((results["tfidf_featurize"]["vectors"], results["glove_featurize"]["vectors"]))
-        model.fit(stacked_vectors, results["dataset"]["labels"])
+        stacked_vectors = np.hstack((results["tfidf_featurize"]["result"]["vectors"],
+                                     results["glove_featurize"]["result"]["vectors"]))
+        model.fit(stacked_vectors, results["dataset"]["result"]["labels"])
         task_results = {
             "model": model,
             "vectors": stacked_vectors,
-            "labels": results["dataset"]["labels"],
+            "labels": results["dataset"]["result"]["labels"],
         }
         return task_results
 
@@ -108,8 +111,8 @@ class EvaluateTask(Task):
         assert results_available(results, "train", "model"), "Trained model must be present"
         assert results_available(results, "train", "vectors"), "Vectors must be present"
         assert results_available(results, "train", "labels"), "labels must be present"
-        predictions = results["train"]["model"].predict(results["train"]["vectors"])
-        report = classification_report(results["train"]["labels"], predictions)
+        predictions = results["train"]["result"]["model"].predict(results["train"]["result"]["vectors"])
+        report = classification_report(results["train"]["result"]["labels"], predictions, output_dict=True)
         task_results = {
             "classification_report": report
         }
