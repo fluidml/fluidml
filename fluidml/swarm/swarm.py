@@ -1,17 +1,16 @@
-# from collections import defaultdict
 import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
-from typing import Optional, Type, List, Dict
+from typing import Optional, Type, List, Dict, Union, Any
 
 
 from fluidml.common.logging import Console
 from fluidml.common.task import Task, Resource
-from fluidml.swarm.dolphin import Dolphin
-from fluidml.swarm.orca import Orca
-from fluidml.storage.base import ResultsStore
-from fluidml.storage.in_memory_store import InMemoryStore
+from fluidml.swarm import Dolphin
+from fluidml.swarm import Orca
+from fluidml.storage import ResultsStore
+from fluidml.storage import InMemoryStore
 from fluidml.storage.utils import pack_results
 
 
@@ -35,7 +34,7 @@ class Swarm:
         self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
         self.exception = self.manager.dict()
         self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
-        self.tasks: Dict[int, Task] = {}  # self.manager.dict()
+        self.tasks: Dict[int, Task] = {}
 
         # orca worker for tracking
         self.dolphins = [Orca(done_queue=self.done_queue,
@@ -84,13 +83,14 @@ class Swarm:
                 entry_task_ids[task.id_] = task.name
         return entry_task_ids
 
-    def _collect_results(self):
+    def _collect_results(self) -> Dict[str, Any]:
         task_configs = [(task.name, task.unique_config) for task in self.tasks.values()]
-        # TODO: return results only when self.return_results is set
-        results = pack_results(self.results_store, task_configs)
+        results = pack_results(results_store=self.results_store,
+                               task_configs=task_configs,
+                               return_results=self.return_results)
         return results
 
-    def work(self, tasks: List[Task]):
+    def work(self, tasks: List[Task]) -> Optional[Dict[str, Union[List[Dict], Dict]]]:
         # get entry point task ids
         entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)
 
