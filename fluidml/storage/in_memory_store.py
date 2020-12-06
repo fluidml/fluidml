@@ -1,6 +1,7 @@
-from fluidml.storage.base import ResultsStore
 from multiprocessing import Manager
 from typing import Dict, Optional
+
+from fluidml.storage import ResultsStore
 
 
 class InMemoryStore(ResultsStore):

@@ -6,10 +6,10 @@ from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
-from fluidml.flow.task_spec import BaseTaskSpec
-from fluidml.swarm import Swarm
 from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError
+from fluidml.flow.task_spec import BaseTaskSpec
+from fluidml.swarm import Swarm
 
 
 class Flow:

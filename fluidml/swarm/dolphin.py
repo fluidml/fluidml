@@ -4,8 +4,8 @@ from typing import Dict, Any, List, Optional, Tuple, Union
 
 from fluidml.common.task import Task, Resource
 from fluidml.common.logging import Console
-from fluidml.swarm.whale import Whale
-from fluidml.storage.base import ResultsStore
+from fluidml.swarm import Whale
+from fluidml.storage import ResultsStore
 from fluidml.storage.utils import pack_results
 
 
@@ -75,12 +75,12 @@ class Dolphin(Whale):
             # put task in done_queue
             self.done_queue.append(task.id_)
 
-    def _fetch_next_task(self) -> Union[str, None]:
+    def _fetch_next_task(self) -> Union[int, None]:
         task_id = None
         try:
             task_id = self.scheduled_queue.get(block=False, timeout=0.5)
         except Empty:
-            Console.get_instance().log(f'Bee {self.id_}: waiting for tasks.')
+            Console.get_instance().log(f'Dolphin {self.id_}: waiting for tasks.')
         return task_id
 
     def _done(self) -> bool:
@@ -118,7 +118,8 @@ class Dolphin(Whale):
                     f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
                     f'task {successor.name}-{successor.id_}')
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                Console.get_instance().log(f'Task {successor.name}-{successor.id_} is currently running or already finished.')
+                Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
+                                           f'is currently running or already finished.')
             else:
                 Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
