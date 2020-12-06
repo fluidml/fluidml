@@ -4,21 +4,22 @@ import pickle
 from shutil import rmtree
 from typing import List, Dict, Optional, Tuple
 
-from fluidml.storage.base import ResultsStore
+from fluidml.storage import ResultsStore
 
 
 class LocalFileStore(ResultsStore):
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
 
-    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Tuple[Dict, str]]:
+    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:  # Optional[Tuple[Dict, str]]
         task_dir = os.path.join(self.base_dir, task_name)
 
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         run_dir = LocalFileStore._get_run_dir(task_config=unique_config, exist_run_dirs=exist_run_dirs)
         if run_dir:
             result = pickle.load(open(os.path.join(run_dir, 'result.p'), 'rb'))
-            return result, run_dir
+            # TODO: History log file?
+            return result  # , run_dir
         return None
 
     def save_results(self, task_name: str, unique_config: Dict, results: Dict) -> str:
@@ -36,8 +37,11 @@ class LocalFileStore(ResultsStore):
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         run_dir = LocalFileStore._get_run_dir(task_config=unique_config, exist_run_dirs=exist_run_dirs)
 
-        # delete existing task results
-        LocalFileStore._delete_dir_content(d=run_dir)
+        if run_dir:
+            # delete existing task results
+            LocalFileStore._delete_dir_content(d=run_dir)
+        else:
+            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
 
         # save new task results
         pickle.dump(results, open(os.path.join(run_dir, 'result.p'), 'wb'))
@@ -54,6 +58,7 @@ class LocalFileStore(ResultsStore):
 
     @staticmethod
     def _delete_dir_content(d: str):
+        assert isinstance(d, str)
         for element in os.scandir(d):
             try:
                 if element.is_file() or os.path.islink(element.path):
