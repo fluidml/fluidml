@@ -34,7 +34,7 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
         self.exception = self.manager.dict()
-        self.return_results = return_results
+        self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}  # self.manager.dict()
 
         # orca worker for tracking
@@ -86,6 +86,7 @@ class Swarm:
 
     def _collect_results(self):
         task_configs = [(task.name, task.unique_config) for task in self.tasks.values()]
+        # TODO: return results only when self.return_results is set
         results = pack_results(self.results_store, task_configs)
         return results
 
@@ -115,8 +116,7 @@ class Swarm:
             raise self.exception['message']
 
         # return results
-        if self.return_results:
-            return self._collect_results()
+        return self._collect_results()
 
     def close(self):
         self.tasks = self.manager.dict()
