@@ -32,8 +32,7 @@ class MongoDBStore(ResultsStore):
         if result.count() > 0:
             result = [item for item in result]
             result = sorted(result, key=lambda item: item["_id"].generation_time, reverse=True)
-            fetched_results = result[0]
-            fetched_results["results"] = pickle.loads(fetched_results["results"])
+            fetched_results = pickle.loads(result[0]["results"])
         client.close()
         return fetched_results
 

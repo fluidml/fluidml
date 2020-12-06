@@ -12,6 +12,7 @@ from fluidml.common.task import Task, Resource
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow
 from fluidml.flow.task_spec import TaskSpec
+from fluidml.storage.mongo_db_store import MongoDBStore
 
 
 def results_available(results, task_name, value) -> bool:
@@ -143,7 +144,13 @@ def main():
              train_task,
              evaluate_task]
 
-    with Swarm(n_dolphins=2, refresh_every=10, return_results=True) as swarm:
+    # mongo results store
+    results_store = MongoDBStore("mongodb://localhost:27017/", "test", "results_collection")
+
+    with Swarm(n_dolphins=2,
+               refresh_every=10,
+               return_results=True,
+               results_store=results_store) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
     print(results["evaluate"])
