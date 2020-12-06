@@ -2,7 +2,7 @@ import json
 import os
 import pickle
 from shutil import rmtree
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional
 
 from fluidml.storage import ResultsStore
 
@@ -86,9 +86,3 @@ class LocalFileStore(ResultsStore):
         new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir
-
-    def construct(self):
-        raise ValueError('The LocalFileStore needs no construction.')
-
-    def destruct(self):
-        raise ValueError('The LocalFileStore needs no destruction.')
