@@ -145,7 +145,7 @@ def main():
              evaluate_task]
 
     # mongo results store
-    results_store = MongoDBStore("mongodb://localhost:27017/", "test", "results_collection")
+    results_store = MongoDBStore("test2")
 
     with Swarm(n_dolphins=2,
                refresh_every=10,

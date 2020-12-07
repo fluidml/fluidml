@@ -80,7 +80,8 @@ class Dolphin(Whale):
         try:
             task_id = self.scheduled_queue.get(block=False, timeout=0.5)
         except Empty:
-            Console.get_instance().log(f'Dolphin {self.id_}: waiting for tasks.')
+            pass
+            # Console.get_instance().log(f'Dolphin {self.id_}: waiting for tasks.')
         return task_id
 
     def _done(self) -> bool:

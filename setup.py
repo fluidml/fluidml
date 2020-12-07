@@ -15,5 +15,5 @@ setup(name="fluidml",
                                    "pyyaml",
                                    "sklearn",
                                    "torch"],
-                      'mongo-store': ['pymongo']},
+                      'mongo-store': ['mongoengine']},
       tests_require=['pytest'])
