@@ -6,10 +6,10 @@ from networkx import DiGraph, shortest_path_length
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
-from fluidml.flow.task_spec import BaseTaskSpec
-from fluidml.swarm import Swarm
 from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError
+from fluidml.flow import BaseTaskSpec
+from fluidml.swarm import Swarm
 
 
 class Flow:
@@ -70,7 +70,6 @@ class Flow:
     @staticmethod
     def _validate_task_combination(task_combination: List[Task]) -> bool:
         def _match(task_cfgs: List[Dict[str, Any]]):
-
             unique_cfgs = []
             for config in task_cfgs:
                 if config not in unique_cfgs:
