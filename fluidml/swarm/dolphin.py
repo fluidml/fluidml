@@ -1,37 +1,12 @@
-from abc import abstractmethod
-from collections import defaultdict
-from multiprocessing import Process, Queue, Lock
+from multiprocessing import Queue, Lock
 from queue import Empty
-import time
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 
-from rich.progress import Progress, BarColumn
-
-from fluidml.common.task import Task, Resource
+from fluidml.common import Task, Resource
 from fluidml.common.logging import Console
-from fluidml.swarm.storage import ResultsStorage
-
-
-class Whale(Process):
-    def __init__(self,
-                 exception: Dict[str, Exception],
-                 exit_on_error: bool):
-        super().__init__(target=self.work,
-                         args=())
-        self.exception = exception
-        self.exit_on_error = exit_on_error
-
-    @abstractmethod
-    def _work(self):
-        raise NotImplementedError
-
-    def work(self):
-        try:
-            self._work()
-        except Exception as e:
-            if self.exit_on_error:
-                self.exception['message'] = e
-            raise
+from fluidml.swarm import Whale
+from fluidml.storage import ResultsStore
+from fluidml.storage.utils import pack_results
 
 
 class Dolphin(Whale):
@@ -45,8 +20,7 @@ class Dolphin(Whale):
                  tasks: Dict[int, Task],
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
-                 results: Dict[str, Any],
-                 results_storage: Optional[ResultsStorage] = None):
+                 results_store: Optional[ResultsStore] = None):
         super().__init__(exception=exception, exit_on_error=exit_on_error)
         self.id_ = id_
         self.resource = resource
@@ -55,8 +29,7 @@ class Dolphin(Whale):
         self.done_queue = done_queue
         self.lock = lock
         self.tasks = tasks
-        self.results = results
-        self.results_storage = results_storage
+        self.results_store = results_store
 
     def _is_task_ready(self, task: Task):
         for predecessor in task.predecessors:
@@ -65,186 +38,90 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        results = {}
-        for predecessor in task.predecessors:
-            try:
-                results = {**results,
-                           **{f'{predecessor.name}-{predecessor.id_}':
-                              self.results[predecessor.name][predecessor.id_]['results']}}
-            except TypeError:
-                print('Each task has to return a dict.')
-                raise
-
+        task_configs = [(predecessor.name, predecessor.unique_config) for predecessor in task.predecessors]
+        results = pack_results(self.results_store, task_configs)
         return results
 
-    def _extract_history_from_predecessors(self, task: Task) -> Dict[str, set]:
-        history = defaultdict(set)
-        for predecessor in task.predecessors:
-            for name, pred_path in self.results[predecessor.name][predecessor.id_]['history'].items():
-                history[name].update(pred_path)
-        return history
-
-    def _add_history_to_results_dict(self, history: Dict, task: Task):
-        # Note: manager scripts can not be mutated, they have to be reassigned.
-        #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
-
-        if task.name not in self.results:
-            self.results[task.name] = {}
-
-        task_results = self.results[task.name]
-        task_results[task.id_] = {'history': history}
-        self.results[task.name] = task_results
-
-    def _add_results_to_results_dict(self, results: Dict, task: Task):
-        # Note: manager scripts can not be mutated, they have to be reassigned.
-        #   see the first Note: https://docs.python.org/2/library/multiprocessing.html#managers
-
-        if task.name not in self.results:
-            self.results[task.name] = {}
-
-        task_results = self.results[task.name]
-
-        if task.id_ not in task_results:
-            task_results[task.id_] = {}
-
-        task_results[task.id_].update({'results': results,
-                                       'config': task.unique_config})
-        self.results[task.name] = task_results
-
-    def _run_task_using_results_storage(self, task: Task, pred_results: Dict) -> Dict:
+    def _run_task(self, task: Task, pred_results: Dict):
         with self.lock:
-            history = self._extract_history_from_predecessors(task=task)
-
-            # try to get results from results storage
-            results: Optional[Tuple[Dict, str]] = self.results_storage.get_results(task_name=task.name,
-                                                                                   unique_config=task.unique_config)
-        # if results is none, it could not be retrieved -> run the task
-        if results is None:
+            # try to get results from results store
+            results: Optional[Tuple[Dict, str]] = self.results_store.get_results(task_name=task.name,
+                                                                                 unique_config=task.unique_config)
+        # if results is none or force is set, run the task now
+        if results is None or task.force:
             Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             results: Dict = task.run(results=pred_results, resource=self.resource)
             Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
-            # needs a lock to assure that for each task a unique storage path is created
+            # save/update the results
             with self.lock:
-                path = self.results_storage.save_results(task_name=task.name,
-                                                         unique_config=task.unique_config,
-                                                         results=results,
-                                                         history=history)
+                save_function = self.results_store.update_results if task.force else self.results_store.save_results
+                save_function(task_name=task.name, unique_config=task.unique_config, results=results)
 
-        # if task.force = True -> run the task and overwrite existing results
-        elif task.force:
-            Console.get_instance().log(f'Dolphin {self.id_} started re-running task {task.name}-{task.id_}.')
-            results: Dict = task.run(results=pred_results, resource=self.resource)
-            Console.get_instance().log(f'Dolphin {self.id_} completed re-running task {task.name}-{task.id_}.')
-
-            # needs a lock to assure that for each task a unique storage path is created
-            with self.lock:
-                path = self.results_storage.update_results(task_name=task.name,
-                                                           unique_config=task.unique_config,
-                                                           results=results,
-                                                           history=history)
-
-        # take results from results storage (unpack the tuple)
+        # take results from results store and continue
         else:
-            with self.lock:
-                results, path = results
-                Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+            Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
 
-        with self.lock:
-            # add task storage path to task history and add history to results dict
-            history[task.name].add(path)
-            self._add_history_to_results_dict(history=history, task=task)
-
-        return results
-
-    def _run_task(self, task: Task):
-        # extract results from predecessors
+    def _execute_task(self, task: Task):
+        # extract predecessor results
         with self.lock:
             pred_results = self._extract_results_from_predecessors(task)
-
-            # add to list of running tasks
             self.running_queue.append(task.id_)
 
-        if self.results_storage:
-            # run task using file storage for versioning
-            results: Dict = self._run_task_using_results_storage(task=task, pred_results=pred_results)
-        else:
-            # run task only
-            Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
-            results: Dict = task.run(results=pred_results, resource=self.resource)
-            Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
+        # run the task and save results
+        self._run_task(task, pred_results)
 
         with self.lock:
-            # add results to shared results dict
-            self._add_results_to_results_dict(results=results, task=task)
-
             # put task in done_queue
             self.done_queue.append(task.id_)
 
+    def _fetch_next_task(self) -> Union[int, None]:
+        task_id = None
+        try:
+            task_id = self.scheduled_queue.get(block=False, timeout=0.5)
+        except Empty:
+            pass
+            # Console.get_instance().log(f'Dolphin {self.id_}: waiting for tasks.')
+        return task_id
+
+    def _done(self) -> bool:
+        return self.exception or (len(self.done_queue) == len(self.tasks))
+
     def _work(self):
-        while not self.exception:
-            # TODO: Seems to work, test more
-            # get the next task in the queue
-            try:
-                task_id = self.scheduled_queue.get(block=False, timeout=0.5)
-            except Empty:
-                # terminate bee (worker) if all tasks have been processed
-                if len(self.done_queue) == len(self.tasks):
-                    Console.get_instance().log(f'Dolphin {self.id_}: leaving the swarm.')
-                    break
-                else:
-                    # Console.get_instance().log(f'Bee {self.bee_id}: waiting for tasks.')
-                    continue
+        while not self._done():
+            # fetch next task to run
+            task_id = self._fetch_next_task()
 
-            # get current task from task_id
-            task = self.tasks[task_id]
+            # continue when there is a valid task to run
+            if task_id is not None:
 
-            # TODO: Do we need a lock here?
-            # run task only if it has not been executed already
-            if task_id in self.done_queue or task_id in self.running_queue:
-                Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
-                continue
+                # get current task from task_id
+                task = self.tasks[task_id]
 
-            # all good to run the task
-            self._run_task(task)
+                # TODO: Do we need a lock here? -> Yes, without I saw how 2 workers executed same task.
+                with self.lock:
+                    # run task only if it has not been executed already
+                    if task_id in self.done_queue or task_id in self.running_queue:
+                        Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
+                        continue
 
-            # get successor tasks and put them in task queue for processing
-            for successor in task.successors:
-                # run task only if all dependencies are satisfied
-                if not self._is_task_ready(task=self.tasks[successor.id_]):
-                    Console.get_instance().log(
-                        f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
-                        f'task {successor.name}-{successor.id_}')
-                    continue
+                # all good to execute the task
+                self._execute_task(task)
 
-                if successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                    Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
-                                               f'is currently running or already finished.')
-                    continue
+                # schedule the task's successors
+                self._schedule_successors(task)
 
+    def _schedule_successors(self, task: Task):
+        # get successor tasks and put them in task queue for processing
+        for successor in task.successors:
+            # run task only if all dependencies are satisfied
+            if not self._is_task_ready(task=self.tasks[successor.id_]):
+                Console.get_instance().log(
+                    f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
+                    f'task {successor.name}-{successor.id_}')
+            elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
+                Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
+                                           f'is currently running or already finished.')
+            else:
                 Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
-
-
-class Orca(Whale):
-    def __init__(self,
-                 done_queue: List[int],
-                 exception: Dict[str, Exception],
-                 exit_on_error: bool,
-                 tasks: Dict[int, Task],
-                 refresh_every: int):
-        super().__init__(exception=exception, exit_on_error=exit_on_error)
-        self.refresh_every = refresh_every
-        self.done_queue = done_queue
-        self.tasks = tasks
-
-    def _work(self):
-        while len(self.done_queue) < len(self.tasks) and not self.exception:
-            # sleep for a while
-            time.sleep(self.refresh_every)
-
-            with Progress('[progress.description]{task.description}', BarColumn(),
-                          '[progress.percentage]{task.percentage:>3.0f}%',) as progress:
-
-                task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
-                progress.update(task, advance=len(self.done_queue))

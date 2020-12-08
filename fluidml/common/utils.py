@@ -1,4 +1,4 @@
-from typing import Any, Dict, Callable, Union, Tuple, Optional
+from typing import Any, Dict, Callable, Union, Tuple
 
 from fluidml.common import Task, Resource
 
