@@ -3,9 +3,8 @@ from copy import deepcopy
 from itertools import product
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
-from fluidml.common.dependency import DependencyMixin
+from fluidml.common import Task, DependencyMixin
 from fluidml.common.utils import MyTask
-from fluidml.common import Task
 
 
 class BaseTaskSpec(DependencyMixin, ABC):

@@ -6,11 +6,9 @@ from typing import Optional, Type, List, Dict, Union, Any
 
 
 from fluidml.common.logging import Console
-from fluidml.common.task import Task, Resource
-from fluidml.swarm import Dolphin
-from fluidml.swarm import Orca
-from fluidml.storage import ResultsStore
-from fluidml.storage import InMemoryStore
+from fluidml.common import Task, Resource
+from fluidml.swarm import Dolphin, Orca
+from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.utils import pack_results
 
 

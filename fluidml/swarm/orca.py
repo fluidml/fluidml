@@ -3,7 +3,7 @@ from typing import Dict, List
 
 from rich.progress import Progress, BarColumn
 
-from fluidml.common.task import Task
+from fluidml.common import Task
 from fluidml.swarm import Whale
 
 
