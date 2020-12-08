@@ -98,11 +98,12 @@ class Dolphin(Whale):
                 # get current task from task_id
                 task = self.tasks[task_id]
 
-                # TODO: Do we need a lock here?
-                # run task only if it has not been executed already
-                if task_id in self.done_queue or task_id in self.running_queue:
-                    Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
-                    continue
+                # TODO: Do we need a lock here? -> Yes, without I saw how 2 workers executed same task.
+                with self.lock:
+                    # run task only if it has not been executed already
+                    if task_id in self.done_queue or task_id in self.running_queue:
+                        Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
+                        continue
 
                 # all good to execute the task
                 self._execute_task(task)
