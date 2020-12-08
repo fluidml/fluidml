@@ -4,7 +4,6 @@ from fluidml.flow import Flow
 from fluidml.swarm import Swarm
 from fluidml.common.exception import NoTasksError
 from fluidml.flow.task_spec import TaskSpec
-# from fluidml.common.task import Task
 
 
 @pytest.fixture
