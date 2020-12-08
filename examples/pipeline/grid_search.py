@@ -10,7 +10,7 @@ from fluidml.common import Resource
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
-from fluidml.storage import LocalFileStore
+from fluidml.storage import LocalFileStore, MongoDBStore
 
 
 def parse(results: Dict, resource: Resource, in_dir: str):
@@ -72,7 +72,7 @@ def parse_args():
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
     parser.add_argument('--force',
-                        default=None,
+                        default='all',
                         choices=[None, 'all', 'selected'],
                         type=str,
                         help='Task to be executed (level 0 keys in config).')
@@ -95,7 +95,7 @@ def parse_args():
                         type=str,
                         help='Path to pipeline file.',)
     parser.add_argument('--num-dolphins',
-                        default=4,
+                        default=1,
                         type=int,
                         help='Number of spawned worker processes.')
     return parser.parse_args()
@@ -133,7 +133,8 @@ def main():
                               seed=args.seed) for i in range(args.num_dolphins)]
 
     # create local file storage used for versioning
-    results_store = LocalFileStore(base_dir=args.base_dir)
+    # results_store = LocalFileStore(base_dir=args.base_dir)
+    results_store = MongoDBStore("test3")
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_dolphins=args.num_dolphins,

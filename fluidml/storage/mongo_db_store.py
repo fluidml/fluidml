@@ -1,11 +1,22 @@
-# from bson import Binary
 import pickle
 from typing import Optional, Dict
 
 import mongoengine as me
-# from pymongo import MongoClient
 
 from fluidml.storage import ResultsStore
+
+
+def connection(func):
+    """ Decorator to handle connecting and disconnecting to/from db """
+    def wrapper_connect_disconnect_db(self, *args, **kwargs):
+        me.connect(db=self._db, host=self._host)
+        result = func(self, *args, **kwargs)
+        me.disconnect()
+        return result
+
+    # support for calling method without decorator logic
+    wrapper_connect_disconnect_db.no_connection = func
+    return wrapper_connect_disconnect_db
 
 
 class MongoDBStore(ResultsStore):
@@ -17,35 +28,47 @@ class MongoDBStore(ResultsStore):
         self._db = db
         self._collection_name = collection_name
 
+    @connection
     def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
-        """
-        Returns the latest results
-        """
-        me.connect(db=self._db, host=self._host)
+        """ Returns the latest results if available """
         task_result_cls = self._get_task_result_class()
-        result = task_result_cls.objects(name=task_name, unique_config=unique_config)
+        try:
+            result = task_result_cls.objects(name=task_name).get(unique_config=unique_config)
+            pass
+        except me.DoesNotExist:
+            result = None
+        if result is not None:
+            result = pickle.loads(result.results.read())
+        return result
 
-        fetched_results = None
-        if result.count() > 0:
-            result = [item for item in result]
-            result = sorted(result, key=lambda item: item.id.generation_time, reverse=True)
-            fetched_results = pickle.loads(result[0].results.read())
-        me.disconnect()
-        return fetched_results
-
+    @connection
     def update_results(self, task_name: str, unique_config: Dict, results: Dict):
-        self.save_results(task_name, unique_config, results)
+        """ Overwrite existing results """
+        task_result_cls = self._get_task_result_class()
+        try:
+            result = task_result_cls.objects(name=task_name).get(unique_config=unique_config)
+            pass
+        except me.DoesNotExist:
+            result = None
+        if result is not None:
+            result.delete()
+        task_result = task_result_cls(name=task_name,
+                                      unique_config=unique_config,
+                                      results=pickle.dumps(results))
+        task_result.save()
 
+    @connection
     def save_results(self, task_name: str, unique_config: Dict, results: Dict):
-        me.connect(db=self._db, host=self._host)
+        """ Save new results """
         task_result_cls = self._get_task_result_class()
         task_result = task_result_cls(name=task_name,
                                       unique_config=unique_config,
                                       results=pickle.dumps(results))
         task_result.save()
-        me.disconnect()
 
     def _get_task_result_class(self):
+        # Hack to set the collection name dynamically from user input
+        # Default is the document class name lower-cased, here: "task_result"
         class TaskResult(me.Document):
             name = me.StringField()
             unique_config = me.DictField()
@@ -55,52 +78,12 @@ class MongoDBStore(ResultsStore):
         return TaskResult
 
 
-# class MongoDBStore(ResultsStore):
-#     def __init__(self, uri: str, db: str, collection_name: str):
-#         self._uri = uri
-#         self._db = db
-#         self._collection_name = collection_name
-#
-#     def _get_client(self):
-#         client = MongoClient(self._uri)
-#         return client
-#
-#     def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
-#         """
-#         Returns the latest results
-#         """
-#         client = self._get_client()
-#         collection = client[self._db][self._collection_name]
-#         result = collection.find(filter={"name": task_name, "unique_config": unique_config})
-#         fetched_results = None
-#         if len(list(result)) > 0:
-#             result = [item for item in result]
-#             result = sorted(result, key=lambda item: item["_id"].generation_time, reverse=True)
-#             fetched_results = pickle.loads(result[0]["results"])
-#         client.close()
-#         return fetched_results
-#
-#     def update_results(self, task_name: str, unique_config: Dict, results: Dict):
-#         self.save_results(task_name, unique_config, results)
-#
-#     def save_results(self, task_name: str, unique_config: Dict, results: Dict):
-#         client = self._get_client()
-#         collection = client[self._db][self._collection_name]
-#         document = {
-#             "name": task_name,
-#             "unique_config": unique_config,
-#             "results": Binary(pickle.dumps(results))
-#         }
-#         collection.insert_one(document)
-#         client.close()
-
-
 def main():
     store = MongoDBStore("test")
     task_config = {"param_a": 23, "param_b": 55}
     task_results = {"Result": 5}
     task_name = "task_1"
-    store.save_results(task_name, task_config, task_results)
+    store.update_results(task_name, task_config, task_results)
     result = store.get_results(task_name, task_config)
     print(result)
 
