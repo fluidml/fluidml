@@ -8,7 +8,7 @@ from networkx.algorithms.dag import topological_sort
 from fluidml.common import Task
 from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError
-from fluidml.flow.task_spec import BaseTaskSpec
+from fluidml.flow import BaseTaskSpec
 from fluidml.swarm import Swarm
 
 

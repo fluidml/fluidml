@@ -8,10 +8,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
-from fluidml.common.task import Task, Resource
+from fluidml.common import Task, Resource
 from fluidml.swarm import Swarm
-from fluidml.flow import Flow
-from fluidml.flow.task_spec import TaskSpec
+from fluidml.flow import Flow, TaskSpec
 from fluidml.storage import MongoDBStore
 
 

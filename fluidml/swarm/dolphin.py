@@ -2,7 +2,7 @@ from multiprocessing import Queue, Lock
 from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
-from fluidml.common.task import Task, Resource
+from fluidml.common import Task, Resource
 from fluidml.common.logging import Console
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
