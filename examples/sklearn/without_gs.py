@@ -9,6 +9,7 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
+from rich import print
 
 from fluidml.common import Task, Resource
 from fluidml.swarm import Swarm
@@ -196,7 +197,7 @@ def main():
                results_store=results_store) as swarm:
         flow = Flow(swarm=swarm, force="all")
         results = flow.run(tasks)
-    print(results["evaluate"])
+    print(results["evaluate"]["result"])
 
 
 if __name__ == "__main__":
