@@ -95,7 +95,7 @@ def parse_args():
                         type=str,
                         help='Path to pipeline file.',)
     parser.add_argument('--num-dolphins',
-                        default=1,
+                        default=4,
                         type=int,
                         help='Number of spawned worker processes.')
     return parser.parse_args()
@@ -138,8 +138,7 @@ def main():
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_dolphins=args.num_dolphins,
-               resources=resources,
-               results_store=results_store) as swarm:
+               resources=resources) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task, force=args.force)
         results = flow.run(tasks)
         print(results)
