@@ -1,8 +1,9 @@
+from dataclasses import dataclass
 from typing import Dict
 
 import pytest
 
-from fluidml.common.task import Task
+from fluidml.common import Task, Resource
 
 
 class DummyTask(Task):
@@ -16,3 +17,14 @@ class DummyTask(Task):
 @pytest.fixture
 def dummy_task():
     return DummyTask
+
+
+@dataclass
+class TaskResource(Resource):
+    device: str
+    seed: int
+
+
+@pytest.fixture
+def dummy_resource():
+    return TaskResource
