@@ -1,39 +1,31 @@
 from typing import List, Dict
 
-import pytest
-
 from fluidml.common import Resource
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
 
 
-@pytest.fixture
 def parse(results: Dict, resource: Resource, in_dir: str):
     return {}
 
 
-@pytest.fixture
 def preprocess(results: Dict, resource: Resource, pipeline: List[str], abc: int):
     return {}
 
 
-@pytest.fixture
 def featurize_tokens(results: Dict, resource: Resource, type_: str, batch_size: int):
     return {}
 
 
-@pytest.fixture
 def featurize_cells(results: Dict, resource: Resource, type_: str, batch_size: int):
     return {}
 
 
-@pytest.fixture
 def train(results: Dict, resource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
     return {'score': 2.}  # 'score': 2.
 
 
-@pytest.fixture
 def evaluate(results: Dict, resource: Resource, metric: str):
     print(results)
     return {}
@@ -84,12 +76,19 @@ def test_pipeline(dummy_resource):
     # devices = get_balanced_devices(count=num_workers, use_cuda=True)
     resources = [dummy_resource(seed=42) for i in range(num_workers)]
 
-    # create local file storage used for versioning, default InMemoryStore
-
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_dolphins=num_workers,
                resources=resources,
                results_store=None) as swarm:
         flow = Flow(swarm=swarm, task_to_execute='evaluate', force=None)
         results = flow.run(tasks)
-        assert len(results) == 14
+
+        num_expanded_tasks = 0
+        for name, gs_runs in results.items():
+            if isinstance(gs_runs, List):
+                for run in gs_runs:
+                    num_expanded_tasks += 1
+            else:
+                num_expanded_tasks += 1
+
+        assert num_expanded_tasks == 14

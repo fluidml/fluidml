@@ -1,1 +1,0 @@
-{"parse": {"in_dir": "/some/dir"}, "preprocess": {"pipeline": "a", "abc": 2}, "featurize_tokens": {"type_": "flair", "batch_size": 2}}
