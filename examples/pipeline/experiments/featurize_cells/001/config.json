@@ -1,0 +1,1 @@
+{"parse": {"in_dir": "/some/dir"}, "preprocess": {"pipeline": "a", "abc": 1}, "featurize_cells": {"type_": "glove", "batch_size": 4}}

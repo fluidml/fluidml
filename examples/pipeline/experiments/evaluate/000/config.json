@@ -1,0 +1,1 @@
+{"parse": {"in_dir": "/some/dir"}, "preprocess": {"pipeline": ["a", "b"], "abc": [1, 2]}, "featurize_tokens": {"type_": "flair", "batch_size": 2}, "featurize_cells": {"type_": "glove", "batch_size": 4}, "train": {"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10}, "evaluate": {"metric": "accuracy"}}
