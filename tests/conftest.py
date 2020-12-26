@@ -21,7 +21,6 @@ def dummy_task():
 
 @dataclass
 class TaskResource(Resource):
-    device: str
     seed: int
 
 

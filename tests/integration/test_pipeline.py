@@ -2,7 +2,6 @@ from typing import List, Dict
 
 import pytest
 
-from examples.utils.gpu import get_balanced_devices
 from fluidml.common import Resource
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
@@ -82,9 +81,8 @@ def test_pipeline(dummy_resource):
              train_task,
              evaluate_task]
 
-    devices = get_balanced_devices(count=num_workers, use_cuda=True)
-    resources = [dummy_resource(device=devices[i],
-                                seed=42) for i in range(num_workers)]
+    # devices = get_balanced_devices(count=num_workers, use_cuda=True)
+    resources = [dummy_resource(seed=42) for i in range(num_workers)]
 
     # create local file storage used for versioning, default InMemoryStore
 
