@@ -7,11 +7,9 @@ class MyTask(Task):
     """A constructor class that creates a task object from a callable."""
 
     def __init__(self,
-                 name: str,
-                 id_: int,
                  task: Callable,
                  kwargs: Dict):
-        super().__init__(id_=id_, name=name)
+        super().__init__()
         self.task = task
         self.kwargs = kwargs
 

@@ -1,16 +1,30 @@
 from argparse import ArgumentParser
 from dataclasses import dataclass
+import multiprocessing
 import os
-from typing import List, Dict
+from typing import List, Dict, Optional
 
+import torch
 import yaml
 
-from examples.utils.gpu import get_balanced_devices
 from fluidml.common import Resource
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
 from fluidml.storage import LocalFileStore, MongoDBStore, InMemoryStore
+
+
+def get_balanced_devices(count: Optional[int] = None,
+                         use_cuda: bool = True) -> List[str]:
+    count = count if count is not None else multiprocessing.cpu_count()
+    if use_cuda and torch.cuda.is_available():
+        devices = [f'cuda:{id_}' for id_ in range(torch.cuda.device_count())]
+    else:
+        devices = ['cpu']
+    factor = int(count / len(devices))
+    remainder = count % len(devices)
+    devices = devices * factor + devices[:remainder]
+    return devices
 
 
 def parse(results: Dict, resource: Resource, in_dir: str):
@@ -138,7 +152,8 @@ def main():
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_dolphins=args.num_dolphins,
-               resources=resources) as swarm:
+               resources=resources,
+               results_store=results_store) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task, force=args.force)
         results = flow.run(tasks)
         print(results)

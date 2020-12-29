@@ -1,5 +1,5 @@
-import multiprocess
-from multiprocess import Manager, set_start_method, Queue, Lock
+import multiprocessing
+from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
@@ -22,7 +22,7 @@ class Swarm:
                  exit_on_error: bool = True,
                  return_results: bool = False):
         set_start_method(start_method, force=True)
-        self.n_dolphins = n_dolphins if n_dolphins else multiprocess.cpu_count()
+        self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
@@ -40,7 +40,7 @@ class Swarm:
                               exception=self.exception,
                               exit_on_error=exit_on_error,
                               refresh_every=refresh_every)]
-        # dolphin workers for task exection
+        # dolphin workers for task execution
         self.dolphins.extend([Dolphin(id_=i,
                                       resource=self.resources[i],
                                       scheduled_queue=self.scheduled_queue,
