@@ -187,7 +187,7 @@ def main():
              train_task,
              evaluate_task]
 
-    with Swarm(n_dolphins=2,
+    with Swarm(n_dolphins=1,
                refresh_every=10,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)

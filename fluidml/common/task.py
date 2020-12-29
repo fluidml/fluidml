@@ -14,12 +14,10 @@ class Task(ABC, DependencyMixin):
     """Abstract class for task"""
 
     def __init__(self,
-                 name: str,
-                 id_: Optional[int] = None,
                  kwargs: Optional[Dict] = None):
         DependencyMixin.__init__(self)
-        self.name = name if name is not None else self.__class__.__name__
-        self.id_ = id_
+        self.name = None
+        self.id_ = None
         self.kwargs = kwargs
         self.unique_config: Optional[Dict] = None
         self.force: Optional[bool] = None

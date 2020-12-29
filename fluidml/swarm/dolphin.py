@@ -1,4 +1,4 @@
-from multiprocess import Queue, Lock
+from multiprocessing import Queue, Lock
 from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
