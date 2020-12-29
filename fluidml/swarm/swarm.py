@@ -1,5 +1,5 @@
-import multiprocess
-from multiprocess import Manager, set_start_method, Queue, Lock
+import multiprocessing
+from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
@@ -22,16 +22,18 @@ class Swarm:
                  exit_on_error: bool = True,
                  return_results: bool = False):
         set_start_method(start_method, force=True)
-        self.n_dolphins = n_dolphins if n_dolphins else multiprocess.cpu_count()
+        self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
         self.manager = Manager()
         self.scheduled_queue = Queue()
         self.lock = Lock()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
-        self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
+        self.results_store = results_store if results_store is not None else InMemoryStore(
+            self.manager)
         self.exception = self.manager.dict()
-        self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
+        self.return_results = True if isinstance(
+            self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
         # orca worker for tracking
@@ -82,7 +84,8 @@ class Swarm:
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
-        task_configs = [(task.name, task.unique_config) for task in self.tasks.values()]
+        task_configs = [(task.name, task.unique_config)
+                        for task in self.tasks.values()]
         results = pack_results(results_store=self.results_store,
                                task_configs=task_configs,
                                return_results=self.return_results)
@@ -98,7 +101,8 @@ class Swarm:
 
         # schedule entry point tasks
         for task_id, task_name in entry_point_tasks.items():
-            Console.get_instance().log(f'Swarm scheduling task {task_name}-{task_id}.')
+            Console.get_instance().log(
+                f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers
