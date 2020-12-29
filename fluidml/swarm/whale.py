@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from multiprocess import Process
+from multiprocessing import Process
 from typing import Dict
 
 
