@@ -7,8 +7,8 @@ from fluidml.common import Task, Resource
 
 
 class DummyTask(Task):
-    def __init__(self, name: str, id_: int, x: int):
-        super().__init__(name=name, id_=id_)
+    def __init__(self, x: int):
+        super().__init__()
 
     def run(self, results, resource) -> Dict:
         return {}
