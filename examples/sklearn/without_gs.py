@@ -16,15 +16,9 @@ from fluidml.swarm import Swarm
 from fluidml.flow import Flow, TaskSpec
 
 
-def results_available(results, task_name, value) -> bool:
-    return results.get(task_name, None) is not None and \
-        results[task_name].get("result", None) is not None and  \
-        results[task_name]["result"].get(value, None) is not None
-
-
 class DatasetFetchTask(Task):
-    def __init__(self, name: str, id_: int):
-        super().__init__(name, id_)
+    def __init__(self):
+        super().__init__()
 
     def _get_split(self, dataset, split):
         if split == "test":
@@ -58,8 +52,8 @@ class DatasetFetchTask(Task):
 
 
 class PreProcessTask(Task):
-    def __init__(self, name: str, id_: int, pre_processing_steps: List[str]):
-        super().__init__(name, id_)
+    def __init__(self, pre_processing_steps: List[str]):
+        super().__init__()
         self._pre_processing_steps = pre_processing_steps
 
     def _pre_process(self, text: str) -> str:
@@ -85,8 +79,8 @@ class PreProcessTask(Task):
 
 
 class TFIDFFeaturizeTask(Task):
-    def __init__(self, name: str, id_: int, min_df: int, max_features: int):
-        super().__init__(name, id_)
+    def __init__(self, min_df: int, max_features: int):
+        super().__init__()
         self._min_df = min_df
         self._max_features = max_features
 
@@ -103,8 +97,8 @@ class TFIDFFeaturizeTask(Task):
 
 
 class GloveFeaturizeTask(Task):
-    def __init__(self, name: str, id_: int):
-        super().__init__(name, id_)
+    def __init__(self):
+        super().__init__()
 
     def run(self, results: Dict[str, Any], resource: Resource):
         task_results = {}
@@ -122,8 +116,8 @@ class GloveFeaturizeTask(Task):
 
 
 class TrainTask(Task):
-    def __init__(self, name: str, id_: int, max_iter: int, class_weight: str):
-        super().__init__(name, id_)
+    def __init__(self, max_iter: int, class_weight: str):
+        super().__init__()
         self._max_iter = max_iter
         self._class_weight = class_weight
 
@@ -141,8 +135,8 @@ class TrainTask(Task):
 
 
 class EvaluateTask(Task):
-    def __init__(self, name: str, id_: int):
-        super().__init__(name, id_)
+    def __init__(self):
+        super().__init__()
 
     def run(self, results: Dict[str, Any], resource: Resource):
         task_results = {}
