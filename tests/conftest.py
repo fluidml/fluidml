@@ -10,7 +10,7 @@ class DummyTask(Task):
     def __init__(self, x: int):
         super().__init__()
 
-    def run(self, results, resource) -> Dict:
+    def run(self, results, task_config, resource) -> Dict:
         return {}
 
 
