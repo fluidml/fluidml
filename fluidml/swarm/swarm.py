@@ -29,9 +29,11 @@ class Swarm:
         self.lock = Lock()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
-        self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
+        self.results_store = results_store if results_store is not None else InMemoryStore(
+            self.manager)
         self.exception = self.manager.dict()
-        self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
+        self.return_results = True if isinstance(
+            self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
         # orca worker for tracking
@@ -40,7 +42,7 @@ class Swarm:
                               exception=self.exception,
                               exit_on_error=exit_on_error,
                               refresh_every=refresh_every)]
-        # dolphin workers for task exection
+        # dolphin workers for task execution
         self.dolphins.extend([Dolphin(id_=i,
                                       resource=self.resources[i],
                                       scheduled_queue=self.scheduled_queue,
@@ -82,7 +84,8 @@ class Swarm:
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
-        task_configs = [(task.name, task.unique_config) for task in self.tasks.values()]
+        task_configs = [(task.name, task.unique_config)
+                        for task in self.tasks.values()]
         results = pack_results(results_store=self.results_store,
                                task_configs=task_configs,
                                return_results=self.return_results)
@@ -98,7 +101,8 @@ class Swarm:
 
         # schedule entry point tasks
         for task_id, task_name in entry_point_tasks.items():
-            Console.get_instance().log(f'Swarm scheduling task {task_name}-{task_id}.')
+            Console.get_instance().log(
+                f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers

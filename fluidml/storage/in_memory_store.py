@@ -34,4 +34,4 @@ class InMemoryStore(ResultsStore):
         # not required to delete the results, since it is in-memory
         # results will be cleared after each run and
         # a task would not run more than once
-        self.save_results(self, task_name, unique_config)
+        self.save_results(task_name, unique_config, results)

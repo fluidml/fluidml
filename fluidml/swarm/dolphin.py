@@ -6,7 +6,7 @@ from fluidml.common import Task, Resource
 from fluidml.common.logging import Console
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
-from fluidml.storage.utils import pack_results
+from fluidml.storage.utils import pack_predecessor_results
 
 
 class Dolphin(Whale):
@@ -38,8 +38,10 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        task_configs = [(predecessor.name, predecessor.unique_config) for predecessor in task.predecessors]
-        results = pack_results(self.results_store, task_configs)
+        task_configs = [(predecessor.name, predecessor.unique_config)
+                        for predecessor in task.predecessors]
+        results = pack_predecessor_results(
+            self.results_store, task_configs, task.reduce)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
@@ -49,18 +51,23 @@ class Dolphin(Whale):
                                                                                  unique_config=task.unique_config)
         # if results is none or force is set, run the task now
         if results is None or task.force:
-            Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
-            results: Dict = task.run(results=pred_results, resource=self.resource)
-            Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
+            Console.get_instance().log(
+                f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
+            results: Dict = task.run(
+                results=pred_results, task_config=task.unique_config, resource=self.resource)
+            Console.get_instance().log(
+                f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
             # save/update the results
             with self.lock:
                 save_function = self.results_store.update_results if task.force else self.results_store.save_results
-                save_function(task_name=task.name, unique_config=task.unique_config, results=results)
+                save_function(task_name=task.name,
+                              unique_config=task.unique_config, results=results)
 
         # take results from results store and continue
         else:
-            Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
+            Console.get_instance().log(
+                f'Task {task.name}-{task.id_} already executed.')
 
     def _execute_task(self, task: Task):
         # extract predecessor results
@@ -102,7 +109,8 @@ class Dolphin(Whale):
                 with self.lock:
                     # run task only if it has not been executed already
                     if task_id in self.done_queue or task_id in self.running_queue:
-                        Console.get_instance().log(f'Task {task.name}-{task_id} is currently running or already finished.')
+                        Console.get_instance().log(
+                            f'Task {task.name}-{task_id} is currently running or already finished.')
                         continue
 
                 # all good to execute the task
@@ -123,5 +131,6 @@ class Dolphin(Whale):
                 Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
                                            f'is currently running or already finished.')
             else:
-                Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
+                Console.get_instance().log(
+                    f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
