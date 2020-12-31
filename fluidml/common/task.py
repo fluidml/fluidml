@@ -21,15 +21,18 @@ class Task(ABC, DependencyMixin):
         self.kwargs = kwargs
         self.unique_config: Optional[Dict] = None
         self.force: Optional[bool] = None
+        self.reduce = False
 
     @abstractmethod
     def run(self,
             results: Dict[str, Any],
+            task_config: Dict[str, Any],
             resource: Resource) -> Optional[Dict[str, Any]]:
         """Implementation of core logic of task
 
         Args:
             results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
+            task_config: unique config of the task/path in the graph (includes predecessor config)
             resource (Resource): resource to use (automatically passed by swarm)
 
         Returns:

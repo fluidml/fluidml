@@ -13,11 +13,11 @@ class MyTask(Task):
         self.task = task
         self.kwargs = kwargs
 
-    def run(self, results: Dict[str, Any], resource: Optional[Resource] = None):
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Optional[Resource] = None):
         if resource is not None:
-            result = self.task(results, resource, **self.kwargs)
+            result = self.task(results, task_config, resource, **self.kwargs)
         else:
-            result = self.task(results, **self.kwargs)
+            result = self.task(results, task_config, **self.kwargs)
         return result
 
 

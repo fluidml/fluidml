@@ -8,7 +8,6 @@
 
 ---
 
-
 **FluidML** is a lightweight framework for developing machine learning pipelines. 
 
 Developing machine learning models is a challenging process, with a wide range of sub-tasks: data collection, pre-processing, model development, hyper-parameter tuning and deployment. Each of these tasks is iterative in nature and requires lot of iterations to get it right with good performance.

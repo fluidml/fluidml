@@ -46,17 +46,20 @@ class Flow:
             for task in tasks:
                 task.force = True
         elif self._force is not None:
-            raise ValueError(f'force = {self._force} is not supported. Choose "all" or "selected"')
+            raise ValueError(
+                f'force = {self._force} is not supported. Choose "all" or "selected"')
 
     def _order_task_specs(self,
                           task_specs: List[BaseTaskSpec]) -> List[BaseTaskSpec]:
         # task spec graph holding the user defined dependency structure
-        task_spec_graph: DiGraph = Flow._create_task_spec_graph(task_specs=task_specs)
+        task_spec_graph: DiGraph = Flow._create_task_spec_graph(
+            task_specs=task_specs)
 
         # topological ordering of tasks in graph
         # if a specific task to execute is provided, remove non dependent tasks from graph
         if self._task_to_execute:
-            sorted_names = list(shortest_path_length(task_spec_graph, target=self._task_to_execute).keys())[::-1]
+            sorted_names = list(shortest_path_length(
+                task_spec_graph, target=self._task_to_execute).keys())[::-1]
         else:
             sorted_names = list(topological_sort(task_spec_graph))
 
@@ -82,7 +85,8 @@ class Flow:
         # we validate the task combinations based on their path in the task graph
         # if two tasks have same parent task and their configs are different
         # then the combination is not valid
-        task_names_in_path = list(set(name for task in task_combination for name in task.unique_config))
+        task_names_in_path = list(
+            set(name for task in task_combination for name in task.unique_config))
 
         # for each task in path config
         for name in task_names_in_path:
@@ -98,8 +102,10 @@ class Flow:
     @staticmethod
     def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]],
                                  task_spec: BaseTaskSpec) -> List[List[Task]]:
-        predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in task_spec.predecessors]
-        task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
+        predecessor_tasks = [expanded_tasks_by_name[predecessor.name]
+                             for predecessor in task_spec.predecessors]
+        task_combinations = [list(item) for item in product(
+            *predecessor_tasks)] if predecessor_tasks else [[]]
         task_combinations = [combination for combination in task_combinations
                              if Flow._validate_task_combination(combination)]
         return task_combinations
@@ -113,7 +119,8 @@ class Flow:
 
     @staticmethod
     def _merge_task_combination_configs(task_combinations: List[List[Task]]):
-        task_configs = [task.unique_config for combination in task_combinations for task in combination]
+        task_configs = [
+            task.unique_config for combination in task_combinations for task in combination]
         merged_config = task_configs.pop(0)
         for config in task_configs:
             merged_config: Dict = update_merge(merged_config, config)
@@ -130,7 +137,8 @@ class Flow:
         # for each task to expand
         for exp_task in task_specs:
             # get predecessor task combinations
-            task_combinations = Flow._get_predecessor_product(expanded_tasks_by_name, exp_task)
+            task_combinations = Flow._get_predecessor_product(
+                expanded_tasks_by_name, exp_task)
 
             if exp_task.reduce:
                 # if it is a reduce task, just add the predecessor task
@@ -139,15 +147,18 @@ class Flow:
 
                 for task in tasks:
                     # predecessor config
-                    predecessor_config = Flow._merge_task_combination_configs(task_combinations)
+                    predecessor_config = Flow._merge_task_combination_configs(
+                        task_combinations)
 
                     # add dependencies
                     for task_combination in task_combinations:
                         task.requires(task_combination)
 
                     task.id_ = task_id
+                    task.reduce = True
                     expanded_tasks_by_name[task.name].append(task)
-                    task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
+                    task.unique_config = {
+                        **predecessor_config, **{task.name: task.kwargs}}
                     task_id += 1
             else:
                 # for each combination, create a new task
@@ -155,18 +166,21 @@ class Flow:
                     tasks = exp_task.build()
 
                     # shared predecessor config
-                    predecessor_config = Flow._combine_task_config(task_combination)
+                    predecessor_config = Flow._combine_task_config(
+                        task_combination)
 
                     # for each task that is created, add ids and dependencies
                     for task in tasks:
                         task.id_ = task_id
                         task.requires(task_combination)
-                        task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
+                        task.unique_config = {
+                            **predecessor_config, **{task.name: task.kwargs}}
                         expanded_tasks_by_name[task.name].append(task)
                         task_id += 1
 
         # create final list of tasks
-        tasks = [task for expanded_tasks in expanded_tasks_by_name.values() for task in expanded_tasks]
+        tasks = [task for expanded_tasks in expanded_tasks_by_name.values()
+                 for task in expanded_tasks]
         return tasks
 
     def run(self,
