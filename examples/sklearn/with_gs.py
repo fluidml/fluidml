@@ -163,7 +163,8 @@ class ModelSelectionTask(Task):
 
     def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
         sorted_results = sorted(results["reduced_results"], key=lambda model_result: model_result["result"]
-                                ["evaluation_results"]["val"]["classification_report"]["macro avg"]["f1-score"], reverse=True)
+                                ["evaluation_results"]["val"]["classification_report"]["macro avg"]["f1-score"],
+                                reverse=True)
         task_results = {
             "best_config": sorted_results[0]["config"],
             "best_performance": sorted_results[0]["result"]
@@ -175,8 +176,8 @@ def main():
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
-    pre_process_task = GridTaskSpec(task=PreProcessTask, gs_config={
-        "pre_processing_steps": ["lower_case", "remove_punct"]})
+    pre_process_task = TaskSpec(task=PreProcessTask, task_kwargs={
+                                "pre_processing_steps": ["lower_case", "remove_punct"]})
     featurize_task_1 = TaskSpec(
         task=GloveFeaturizeTask)
     featurize_task_2 = GridTaskSpec(
