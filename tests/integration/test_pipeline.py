@@ -6,27 +6,27 @@ from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
 
 
-def parse(results: Dict, resource: Resource, in_dir: str):
+def parse(results: Dict, task_config: Dict, resource: Resource, in_dir: str):
     return {}
 
 
-def preprocess(results: Dict, resource: Resource, pipeline: List[str], abc: int):
+def preprocess(results: Dict, task_config: Dict, resource: Resource, pipeline: List[str], abc: int):
     return {}
 
 
-def featurize_tokens(results: Dict, resource: Resource, type_: str, batch_size: int):
+def featurize_tokens(results: Dict, task_config: Dict, resource: Resource, type_: str, batch_size: int):
     return {}
 
 
-def featurize_cells(results: Dict, resource: Resource, type_: str, batch_size: int):
+def featurize_cells(results: Dict, task_config: Dict, resource: Resource, type_: str, batch_size: int):
     return {}
 
 
-def train(results: Dict, resource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
+def train(results: Dict, task_config: Dict, resource: Resource, model, dataloader, evaluator, optimizer, num_epochs):
     return {'score': 2.}  # 'score': 2.
 
 
-def evaluate(results: Dict, resource: Resource, metric: str):
+def evaluate(results: Dict, task_config: Dict, resource: Resource, metric: str):
     print(results)
     return {}
 
@@ -52,11 +52,16 @@ def test_pipeline(dummy_resource):
 
     # initialize all task specs
     parse_task = GridTaskSpec(task=parse, gs_config={"in_dir": "/some/dir"})
-    preprocess_task = GridTaskSpec(task=preprocess, gs_config={"pipeline": ['a', 'b'], "abc": 1})
-    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={"type_": "flair", 'batch_size': [2, 3]})
-    featurize_cells_task = GridTaskSpec(task=featurize_cells, gs_config={"type_": "glove", "batch_size": 4})
-    train_task = GridTaskSpec(task=train, gs_config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10})
-    evaluate_task = TaskSpec(task=evaluate, reduce=True, task_kwargs={"metric": "accuracy"})
+    preprocess_task = GridTaskSpec(task=preprocess, gs_config={
+                                   "pipeline": ['a', 'b'], "abc": 1})
+    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={
+                                         "type_": "flair", 'batch_size': [2, 3]})
+    featurize_cells_task = GridTaskSpec(task=featurize_cells, gs_config={
+                                        "type_": "glove", "batch_size": 4})
+    train_task = GridTaskSpec(task=train, gs_config={
+                              "model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10})
+    evaluate_task = TaskSpec(task=evaluate, reduce=True,
+                             task_kwargs={"metric": "accuracy"})
 
     # dependencies between tasks
     preprocess_task.requires([parse_task])

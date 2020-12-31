@@ -36,10 +36,10 @@ class DatasetFetchTask(Task):
             labels.append(item["label-coarse"])
         return sentences, labels
 
-    def run(self, results: Dict[str, Any], resource: Resource):
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
         dataset = load_dataset("trec")
         splits = ["train", "val", "test"]
-        task_results = {}
+        dataset_splits = {}
         for split in splits:
             dataset_split = self._get_split(dataset, split)
             sentences, labels = self._get_sentences_and_labels(dataset_split)
@@ -47,7 +47,8 @@ class DatasetFetchTask(Task):
                 "sentences": sentences,
                 "labels": labels
             }
-            task_results[split] = split_results
+            dataset_splits[split] = split_results
+        task_results = {"raw_dataset": dataset_splits}
         return task_results
 
 
@@ -69,12 +70,14 @@ class PreProcessTask(Task):
                     r"\d+", "<num>", pre_processed_text)
         return pre_processed_text
 
-    def run(self, results: Dict[str, Any], resource: Resource):
-        task_results = {}
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        pre_processed_splits = {}
         for split in ["train", "val", "test"]:
             pre_processed_sentences = [
-                self._pre_process(sentence) for sentence in results["dataset"]["result"][split]["sentences"]]
-            task_results[split] = {"sentences": pre_processed_sentences}
+                self._pre_process(sentence) for sentence in results["raw_dataset"][split]["sentences"]]
+            pre_processed_splits[split] = {
+                "sentences": pre_processed_sentences}
+        task_results = {"pre_processed_dataset": pre_processed_splits}
         return task_results
 
 
@@ -84,15 +87,16 @@ class TFIDFFeaturizeTask(Task):
         self._min_df = min_df
         self._max_features = max_features
 
-    def run(self, results: Dict[str, Any], resource: Resource):
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
         tfidf_model = TfidfVectorizer(
             min_df=self._min_df, max_features=self._max_features)
-        tfidf_model.fit(results["pre_process"]["result"]["train"]["sentences"])
-        task_results = {}
+        tfidf_model.fit(results["pre_processed_dataset"]["train"]["sentences"])
+        featurized_splits = {}
         for split in ["train", "val", "test"]:
             tfidf_vectors = tfidf_model.transform(
-                results["pre_process"]["result"][split]["sentences"]).toarray()
-            task_results[split] = {"vectors": tfidf_vectors}
+                results["pre_processed_dataset"][split]["sentences"]).toarray()
+            featurized_splits[split] = {"vectors": tfidf_vectors}
+        task_results = {"tfidf_featurized_dataset": featurized_splits}
         return task_results
 
 
@@ -100,18 +104,19 @@ class GloveFeaturizeTask(Task):
     def __init__(self):
         super().__init__()
 
-    def run(self, results: Dict[str, Any], resource: Resource):
-        task_results = {}
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        featurized_splits = {}
         for split in ["train", "val", "test"]:
             sentences = [Sentence(sent)
-                         for sent in results["pre_process"]["result"][split]["sentences"]]
+                         for sent in results["pre_processed_dataset"][split]["sentences"]]
             embedder = DocumentPoolEmbeddings([WordEmbeddings("glove")])
             embedder.embed(sentences)
             glove_vectors = [sent.embedding.cpu().numpy()
                              for sent in sentences]
             glove_vectors = np.array(glove_vectors).reshape(
                 len(glove_vectors), -1)
-            task_results[split] = {"vectors": glove_vectors}
+            featurized_splits[split] = {"vectors": glove_vectors}
+        task_results = {"glove_featurized_dataset": featurized_splits}
         return task_results
 
 
@@ -121,15 +126,15 @@ class TrainTask(Task):
         self._max_iter = max_iter
         self._class_weight = "balanced" if balanced else None
 
-    def run(self, results: Dict[str, Any], resource: Resource):
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
         model = LogisticRegression(
             max_iter=self._max_iter, class_weight=self._class_weight)
-        stacked_vectors = np.hstack((results["tfidf_featurize"]["result"]["train"]["vectors"],
-                                     results["glove_featurize"]["result"]["train"]["vectors"]))
+        stacked_vectors = np.hstack((results["tfidf_featurized_dataset"]["train"]["vectors"],
+                                     results["glove_featurized_dataset"]["train"]["vectors"]))
         model.fit(stacked_vectors,
-                  results["dataset"]["result"]["train"]["labels"])
+                  results["raw_dataset"]["train"]["labels"])
         task_results = {
-            "model": model
+            "trained_model": model
         }
         return task_results
 
@@ -138,16 +143,17 @@ class EvaluateTask(Task):
     def __init__(self):
         super().__init__()
 
-    def run(self, results: Dict[str, Any], resource: Resource):
-        task_results = {}
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        evaluation_results = {}
         for split in ["train", "val", "test"]:
-            stacked_vectors = np.hstack((results["tfidf_featurize"]["result"][split]["vectors"],
-                                         results["glove_featurize"]["result"][split]["vectors"]))
-            predictions = results["train"]["result"]["model"].predict(
+            stacked_vectors = np.hstack((results["tfidf_featurized_dataset"][split]["vectors"],
+                                         results["glove_featurized_dataset"][split]["vectors"]))
+            predictions = results["trained_model"].predict(
                 stacked_vectors)
             report = classification_report(
-                results["dataset"]["result"][split]["labels"], predictions, output_dict=True)
-            task_results[split] = {"classification_report": report}
+                results["raw_dataset"][split]["labels"], predictions, output_dict=True)
+            evaluation_results[split] = {"classification_report": report}
+        task_results = {"evaluation_results": evaluation_results}
         return task_results
 
 
@@ -155,9 +161,9 @@ class ModelSelectionTask(Task):
     def __init__(self):
         super().__init__()
 
-    def run(self, results: Dict[str, Any], resource: Resource):
-        sorted_results = sorted(results["evaluate"], key=lambda model_result: model_result["result"]
-                                ["val"]["classification_report"]["macro avg"]["f1-score"], reverse=True)
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        sorted_results = sorted(results["reduced_results"], key=lambda model_result: model_result["result"]
+                                ["evaluation_results"]["val"]["classification_report"]["macro avg"]["f1-score"], reverse=True)
         task_results = {
             "best_config": sorted_results[0]["config"],
             "best_performance": sorted_results[0]["result"]
@@ -168,18 +174,18 @@ class ModelSelectionTask(Task):
 def main():
 
     # create all task specs
-    dataset_fetch_task = TaskSpec(task=DatasetFetchTask, name="dataset")
-    pre_process_task = GridTaskSpec(task=PreProcessTask, name="pre_process", gs_config={
+    dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
+    pre_process_task = GridTaskSpec(task=PreProcessTask, gs_config={
         "pre_processing_steps": ["lower_case", "remove_punct"]})
     featurize_task_1 = TaskSpec(
-        task=GloveFeaturizeTask, name="glove_featurize")
+        task=GloveFeaturizeTask)
     featurize_task_2 = GridTaskSpec(
-        task=TFIDFFeaturizeTask, name="tfidf_featurize", gs_config={"min_df": 5, "max_features": [1000, 2000]})
-    train_task = GridTaskSpec(task=TrainTask, name="train",
-                              gs_config={"max_iter": [50, 100], "balanced": [True, False]})
-    evaluate_task = TaskSpec(task=EvaluateTask, name="evaluate")
+        task=TFIDFFeaturizeTask, gs_config={"min_df": 5, "max_features": [1000, 2000]})
+    train_task = GridTaskSpec(task=TrainTask, gs_config={
+                              "max_iter": [50, 100], "balanced": [True, False]})
+    evaluate_task = TaskSpec(task=EvaluateTask)
     model_selection_task = TaskSpec(
-        task=ModelSelectionTask, name="model_select", reduce=True)
+        task=ModelSelectionTask, reduce=True)
 
     # dependencies between tasks
     pre_process_task.requires([dataset_fetch_task])
@@ -204,8 +210,8 @@ def main():
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
-    print(results["model_select"]["result"]["best_config"])
-    print(results["model_select"]["result"]["best_performance"])
+    print(results["ModelSelectionTask"]["result"]["best_config"])
+    print(results["ModelSelectionTask"]["result"]["best_performance"])
 
 
 if __name__ == "__main__":
