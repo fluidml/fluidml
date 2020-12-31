@@ -202,7 +202,7 @@ That's it! Internally, Flow would expand this task into 4 tasks with provided co
 
 ## Examples
 
-For a real machine learning example with complete grid search, check our [tutorial notebook](https://github.com/fluidml/fluidml/tree/main/examples/tutorial.ipynb)
+For a real machine learning example with complete grid search, check our [tutorial notebook](https://github.com/fluidml/fluidml/blob/main/examples/sklearn/tutorial.ipynb)
 
 ## Citation
 
