@@ -11,7 +11,7 @@ class LocalFileStore(ResultsStore):
     def __init__(self, base_dir: str):
         self.base_dir = base_dir
 
-    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:  # Optional[Tuple[Dict, str]]
+    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
         task_dir = os.path.join(self.base_dir, task_name)
 
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)

@@ -14,24 +14,25 @@ class Task(ABC, DependencyMixin):
     """Abstract class for task"""
 
     def __init__(self,
-                 name: str,
-                 id_: Optional[int] = None,
                  kwargs: Optional[Dict] = None):
         DependencyMixin.__init__(self)
-        self.name = name if name is not None else self.__class__.__name__
-        self.id_ = id_
+        self.name = None
+        self.id_ = None
         self.kwargs = kwargs
         self.unique_config: Optional[Dict] = None
         self.force: Optional[bool] = None
+        self.reduce = False
 
     @abstractmethod
     def run(self,
             results: Dict[str, Any],
+            task_config: Dict[str, Any],
             resource: Resource) -> Optional[Dict[str, Any]]:
         """Implementation of core logic of task
 
         Args:
             results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
+            task_config: unique config of the task/path in the graph (includes predecessor config)
             resource (Resource): resource to use (automatically passed by swarm)
 
         Returns:
