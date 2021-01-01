@@ -1,6 +1,7 @@
 from typing import Any, Dict, Callable, Union, Tuple, Optional
 
 from fluidml.common import Task, Resource
+from fluidml.storage import ResultsStore
 
 
 class MyTask(Task):
@@ -13,11 +14,11 @@ class MyTask(Task):
         self.task = task
         self.kwargs = kwargs
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Optional[Resource] = None):
+    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], results_store: ResultsStore, resource: Optional[Resource] = None):
         if resource is not None:
-            result = self.task(results, task_config, resource, **self.kwargs)
+            result = self.task(results, task_config, results_store, resource, **self.kwargs)
         else:
-            result = self.task(results, task_config, **self.kwargs)
+            result = self.task(results, task_config, results_store, **self.kwargs)
         return result
 
 
