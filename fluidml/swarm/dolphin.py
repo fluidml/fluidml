@@ -7,6 +7,7 @@ from fluidml.common.logging import Console
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
 from fluidml.storage.utils import pack_predecessor_results
+from fluidml.common.utils import MyTask
 
 
 class Dolphin(Whale):
@@ -44,6 +45,15 @@ class Dolphin(Whale):
             self.results_store, task_configs, task.reduce)
         return results
 
+    def _pack_and_run(self, task: Task, pred_results: Dict):
+        task.results_store = self.results_store
+        task.resource = self.resource
+        if isinstance(task, MyTask):
+            task.run(results=pred_results, results_store=task.results_store,
+                     resource=task.resource, task_config=task.unique_config)
+        else:
+            task.run(**pred_results)
+
     def _run_task(self, task: Task, pred_results: Dict):
         with self.lock:
             # try to get results from results store
@@ -53,8 +63,7 @@ class Dolphin(Whale):
         if results is None or task.force:
             Console.get_instance().log(
                 f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
-            results: Dict = task.run(
-                results=pred_results, task_config=task.unique_config, resource=self.resource)
+            self._pack_and_run(task, pred_results)
             Console.get_instance().log(
                 f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
