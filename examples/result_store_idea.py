@@ -160,3 +160,101 @@ class Evaluate(Task):
 
 
 train = TaskSpec(train_fn, publishes=["torch_model", "dataset"])
+
+############################################################
+############################################################
+class ModelHandler(Handler):
+    def load():
+        pass
+
+    def save(task_name, task_config, name, obj):
+        pass
+
+class ResultsStore:
+    def __init__(self, handler_mapping: Optional[Dict[str, Type[Handler]]]):
+        self._handler_mapping = handler_mapping
+
+        # Idea: add a mapping from None to InMemoryHandler
+
+    @abstractmethod
+    def load_handler_obj(self, task_name, unique_config, name) -> Handler:
+       # this is has to come from disk/db/pickle, and gives a saved handler instance
+       pass
+    
+    @abstractmethod
+    def save_handler_obj(self, task_name, unique_config, name, handler: Handler):
+        # he would save the meta data for loading back
+        pass
+
+    def get_results():
+        results = {}
+        for name in publishes:
+            # TBD: handle result not found
+            handler = self.load_handler(task_name, unique_config, item_name)
+            results[name] = handler.load()
+        return results
+
+    def save(task_name, task_config, name, obj, type="json", **kwargs):
+        handler = self._handler_mapping[type](kwargs)
+        handler.save(task_name, task_config, name, obj)
+        self.save_handler(task_name, task_config, handler)
+
+
+class InMemoryStore(ResultsStore):
+    def __init__(self):
+        self._memory_store = Manager().dict()
+
+    def load_handler(self, task_name, unique_config, name) -> Handler:
+       # this is has to come from disk/db/pickle, and gives a saved handler instance
+       pass
+
+    def save_handler(self, task_name, unique_config, handler: Handler):
+        # he would save the meta data for loading back
+        pass
+
+    def get_results(self, task_name: str, unique_config: Dict, publishes: List[str]) -> Optional[Dict]:
+        # if no store is used, default to get results from in-memory
+        if task_name not in self._memory_store:
+            return None
+
+        for task_sweep in self._memory_store[task_name]:
+            if task_sweep["config"] == unique_config:
+                results = {}
+                for item_name in publishes:
+                    try:
+                        results[item_name] = task_sweep['results'][item_name]
+                    except KeyError:
+                        raise KeyError(f'{item_name} not saved.')
+
+                return results
+
+    def save(self, name: str, obj: Any, task_name: str, unique_config: Dict):
+        """ In-memory save function.
+        Adds individual object to in-memory store (multiprocessing manager dict).
+        """
+        if task_name not in self._memory_store:
+            self._memory_store[task_name] = []
+
+        existing_task_results = self._memory_store[task_name]
+        sweep_exists = False
+        for task_sweep in existing_task_results:
+            if task_sweep['config'] == unique_config:
+                task_sweep['results'][name] = obj
+                sweep_exists = True
+                break
+
+        if not sweep_exists:
+            new_task_sweep = {'results': {name: obj},
+                              'config': unique_config}
+            existing_task_results.append(new_task_sweep)
+
+        self._memory_store[task_name] = existing_task_results
+
+###############################################################
+
+class Train(Task):
+
+    publishes = ["torch_model", "dataset"]
+    
+    def run():
+        results_store.save(task_name, config, "torch_model", model, "model")
