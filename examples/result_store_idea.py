@@ -591,3 +591,14 @@ class LocalFileStore(ResultsStore):
         new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir
+
+
+# 1. Simplify fluidml imports, add extra __init__ on top level for simle imports
+# 2. Instead of calling self.results_store.save(...), add save method directly to task as
+#    self.save = self.results_store.save
+# 3. Dynamically add task_name and task_unique_config to results_store as attributes
+#    self.results_store.unique_config = self.unique_config
+#    self.results_store.task_name = self.task_name
+#    -> self.results_store.save(obj, name, type, **kwargs) instead of
+#       self.results_store.save(obj, name, type, task_name, task_unique_config, **kwargs)
+

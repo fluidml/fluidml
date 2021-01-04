@@ -1,37 +1,47 @@
 from multiprocessing import Manager
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 from fluidml.storage import ResultsStore
 
 
 class InMemoryStore(ResultsStore):
-    """
-    This is an in-memory results store implemented using multiprocessing manager
-    """
+    """ This is an in-memory results store implemented using multiprocessing manager """
+
     def __init__(self, manager: Manager):
-        self._results_dict = manager.dict()
+        super().__init__()
+        self._memory_store = manager.dict()
 
-    def save_results(self, task_name: str, unique_config: Dict, results: Dict):
-        if task_name not in self._results_dict:
-            self._results_dict[task_name] = []
-
-        existing_results = self._results_dict[task_name]
-        existing_results.append({
-            "results": results,
-            "config": unique_config
-        })
-        self._results_dict[task_name] = existing_results
-
-    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
-        if task_name not in self._results_dict:
+    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Dict]:
+        if task_name not in self._memory_store:
             return None
 
-        for result in self._results_dict[task_name]:
-            if result["config"] == unique_config:
-                return result["results"]
+        for task_sweep in self._memory_store[task_name]:
+            if task_sweep["config"] == task_unique_config:
+                try:
+                    obj = task_sweep['results'][name]
+                except KeyError:
+                    raise KeyError(f'{name} not saved.')
 
-    def update_results(self, task_name: str, unique_config: Dict, results: Dict):
-        # not required to delete the results, since it is in-memory
-        # results will be cleared after each run and
-        # a task would not run more than once
-        self.save_results(task_name, unique_config, results)
+                return obj
+
+    def save(self, obj: Any, name: str, task_name: str, task_unique_config: Dict, **kwargs):
+        """ In-memory save function.
+        Adds individual object to in-memory store (multiprocessing manager dict).
+        """
+        if task_name not in self._memory_store:
+            self._memory_store[task_name] = []
+
+        existing_task_results = self._memory_store[task_name]
+        sweep_exists = False
+        for task_sweep in existing_task_results:
+            if task_sweep['config'] == task_unique_config:
+                task_sweep['results'][name] = obj
+                sweep_exists = True
+                break
+
+        if not sweep_exists:
+            new_task_sweep = {'results': {name: obj},
+                              'config': task_unique_config}
+            existing_task_results.append(new_task_sweep)
+
+        self._memory_store[task_name] = existing_task_results

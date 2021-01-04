@@ -1,9 +1,10 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict, List, Optional, Callable
 
 from fluidml.common import DependencyMixin
 from fluidml.storage import ResultsStore
+
 
 @dataclass
 class Resource:
@@ -16,14 +17,20 @@ class Task(ABC, DependencyMixin):
     def __init__(self,
                  kwargs: Optional[Dict] = None):
         DependencyMixin.__init__(self)
+        # set in Task_spec
         self.kwargs = kwargs
         self._name: Optional[str] = None
+        self._publishes: Optional[List[str]] = None
+
+        # set in Flow
         self._id: Optional[int] = None
         self._unique_config: Optional[Dict] = None
+        self._reduce = False
+        self._force: Optional[str] = None
+
+        # set in Dolphin
         self._results_store: Optional[ResultsStore] = None
         self._resource: Optional[Resource] = None
-        self._force: Optional[str] = None
-        self._reduce = False
 
     @property
     def name(self):
@@ -38,8 +45,8 @@ class Task(ABC, DependencyMixin):
         return self._id
 
     @id_.setter
-    def id_(self, id: int):
-        self._id = id
+    def id_(self, id_: int):
+        self._id = id_
 
     @property
     def unique_config(self):
@@ -54,7 +61,7 @@ class Task(ABC, DependencyMixin):
         return self._results_store
 
     @results_store.setter
-    def results_store(self, results_store: ResultStore):
+    def results_store(self, results_store: ResultsStore):
         self._results_store = results_store
 
     @property
@@ -72,6 +79,14 @@ class Task(ABC, DependencyMixin):
     @force.setter
     def force(self, force: str):
         self._force = force
+
+    @property
+    def publishes(self):
+        return self._publishes
+
+    @publishes.setter
+    def publishes(self, publishes: List[str]):
+        self._publishes = publishes
 
     @property
     def reduce(self):
