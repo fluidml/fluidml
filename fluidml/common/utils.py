@@ -1,7 +1,6 @@
-from typing import Any, Dict, Callable, Union, Tuple, Optional
+from typing import Any, Dict, Callable, Union, Tuple
 
-from fluidml.common import Task, Resource
-from fluidml.storage import ResultsStore
+from fluidml.common import Task
 
 
 class MyTask(Task):
@@ -14,12 +13,9 @@ class MyTask(Task):
         self.task = task
         self.kwargs = kwargs
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], results_store: ResultsStore, resource: Optional[Resource] = None):
-        if resource is not None:
-            result = self.task(results, task_config, results_store, resource, **self.kwargs)
-        else:
-            result = self.task(results, task_config, results_store, **self.kwargs)
-        return result
+    def run(self,
+            results: Dict[str, Any]):
+        self.task(**results, **self.kwargs, task=self)
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:

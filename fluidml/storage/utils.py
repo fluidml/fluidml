@@ -6,16 +6,16 @@ from fluidml.storage import ResultsStore
 
 
 def pack_results(results_store: ResultsStore,
-                 task_configs: List[Tuple[str, Dict]],
+                 task_configs: List[Tuple[str, Dict, List[str]]],
                  return_results: bool = True) -> Dict[str, Any]:
     results = defaultdict(list)
     if return_results:
-        for task_name, task_config in task_configs:
-            result = get_task_result(results_store, task_name, task_config)
+        for task_name, task_config, task_publishes in task_configs:
+            result = get_task_result(results_store, task_name, task_config, task_publishes)
             results[task_name].append({'result': result,
                                        'config': task_config})
     else:
-        for task_name, task_config in task_configs:
+        for task_name, task_config, _ in task_configs:
             results[task_name].append(task_config)
 
     return simplify_results(results=results)
@@ -23,8 +23,9 @@ def pack_results(results_store: ResultsStore,
 
 def get_task_result(results_store: ResultsStore,
                     task_name: str,
-                    task_config: Dict[str, Any]) -> Dict[str, Any]:
-    result = results_store.get_results(task_name, task_config)
+                    task_config: Dict[str, Any],
+                    task_publishes: List[str]) -> Dict[str, Any]:
+    result = results_store.get_results(task_name, task_config, task_publishes)
     if isinstance(result, dict):
         return result
     else:
@@ -32,20 +33,20 @@ def get_task_result(results_store: ResultsStore,
 
 
 def pack_predecessor_results(results_store: ResultsStore,
-                             task_configs: List[Tuple[str, Dict]],
+                             task_configs: List[Tuple[str, Dict, List[str]]],
                              reduce_task: bool) -> Dict[str, Any]:
     if reduce_task:
         all_results = []
-        for task_name, task_config in task_configs:
-            result = get_task_result(results_store, task_name, task_config)
+        for task_name, task_config, task_publishes in task_configs:
+            result = get_task_result(results_store, task_name, task_config, task_publishes)
             all_results.append({'result': result,
                                 'config': task_config})
         return {"reduced_results": all_results}
 
     else:
         results = {}
-        for task_name, task_config in task_configs:
-            result = get_task_result(results_store, task_name, task_config)
+        for task_name, task_config, task_publishes in task_configs:
+            result = get_task_result(results_store, task_name, task_config, task_publishes)
             for key, value in result.items():
                 if key in results.keys():
                     raise TaskResultKeyAlreadyExists(
