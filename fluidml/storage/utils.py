@@ -1,56 +1,43 @@
 from collections import defaultdict
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List
 
-from fluidml.common.exception import TaskResultTypeError, TaskResultKeyAlreadyExists
-from fluidml.storage import ResultsStore
+from fluidml.common import Task
+from fluidml.common.exception import TaskResultKeyAlreadyExists
 
 
-def pack_results(results_store: ResultsStore,
-                 task_configs: List[Tuple[str, Dict, List[str]]],
+def pack_results(all_tasks: List[Task],
                  return_results: bool = True) -> Dict[str, Any]:
     results = defaultdict(list)
     if return_results:
-        for task_name, task_config, task_publishes in task_configs:
-            result = get_task_result(results_store, task_name, task_config, task_publishes)
-            results[task_name].append({'result': result,
-                                       'config': task_config})
+        for task in all_tasks:
+            result = task.results_store.get_results()
+            results[task.name].append({'result': result,
+                                       'config': task.unique_config})
     else:
-        for task_name, task_config, _ in task_configs:
-            results[task_name].append(task_config)
+        for task in all_tasks:
+            results[task.name].append(task.unique_config)
 
     return simplify_results(results=results)
 
 
-def get_task_result(results_store: ResultsStore,
-                    task_name: str,
-                    task_config: Dict[str, Any],
-                    task_publishes: List[str]) -> Dict[str, Any]:
-    result = results_store.get_results(task_name, task_config, task_publishes)
-    if isinstance(result, dict):
-        return result
-    else:
-        raise TaskResultTypeError("Each task has to return a dict")
-
-
-def pack_predecessor_results(results_store: ResultsStore,
-                             task_configs: List[Tuple[str, Dict, List[str]]],
+def pack_predecessor_results(predecessor_tasks: List[Task],
                              reduce_task: bool) -> Dict[str, Any]:
     if reduce_task:
         all_results = []
-        for task_name, task_config, task_publishes in task_configs:
-            result = get_task_result(results_store, task_name, task_config, task_publishes)
+        for predecessor in predecessor_tasks:
+            result = predecessor.results_store.get_results()
             all_results.append({'result': result,
-                                'config': task_config})
+                                'config': predecessor.unique_config})
         return {"reduced_results": all_results}
 
     else:
         results = {}
-        for task_name, task_config, task_publishes in task_configs:
-            result = get_task_result(results_store, task_name, task_config, task_publishes)
+        for predecessor in predecessor_tasks:
+            result = predecessor.results_store.get_results()
             for key, value in result.items():
                 if key in results.keys():
                     raise TaskResultKeyAlreadyExists(
-                        f"{task_name}'s result dict has a key that already exists in another tasks's result")
+                        f"{predecessor.name} saves a key '{key}' that already exists in another tasks's result")
                 else:
                     results[key] = value
     return results
