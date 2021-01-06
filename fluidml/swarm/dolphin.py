@@ -1,4 +1,3 @@
-from copy import deepcopy
 from multiprocessing import Queue, Lock
 from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
@@ -40,21 +39,17 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        predecessor_tasks_with_store = []
-        for predecessor in task.predecessors:
-            predecessor.results_store = self.results_store
-            predecessor.results_store.task_name = predecessor.name
-            predecessor.results_store.task_unique_config = predecessor.unique_config
-            predecessor.results_store.task_publishes = predecessor.publishes
-            predecessor_tasks_with_store.append(deepcopy(predecessor))
-
-        results: Dict = pack_predecessor_results(predecessor_tasks_with_store, task.reduce)
+        results: Dict = pack_predecessor_results(
+            task.predecessors, self.results_store, task.reduce)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
         with self.lock:
             # try to get results from results store
-            results: Optional[Tuple[Dict, str]] = task.results_store.get_results()
+            results: Optional[Tuple[Dict, str]
+                              ] = self.results_store.get_results(task_name=task.name,
+                                                                 task_unique_config=task.unique_config,
+                                                                 task_publishes=task.publishes)
         # if results is none or force is set, run the task now
         if results is None or task.force:
             Console.get_instance().log(
@@ -73,9 +68,6 @@ class Dolphin(Whale):
 
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
-        task.results_store.task_name = task.name
-        task.results_store.task_unique_config = task.unique_config
-        task.results_store.task_publishes = task.publishes
         task.resource = self.resource
         return task
 

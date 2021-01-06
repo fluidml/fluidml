@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Dict
 
 import pytest
 
@@ -11,7 +10,7 @@ class DummyTask(Task):
         super().__init__()
 
     def run(self):
-        self.results_store.save(obj={'a': 1}, name='a', type_='json')
+        self.save(obj={'a': 1}, name='a', type_='json')
 
 
 @pytest.fixture

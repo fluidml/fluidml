@@ -3,14 +3,18 @@ from typing import Dict, Any, List
 
 from fluidml.common import Task
 from fluidml.common.exception import TaskResultKeyAlreadyExists
+from fluidml.storage import ResultsStore
 
 
 def pack_results(all_tasks: List[Task],
+                 results_store: ResultsStore,
                  return_results: bool = True) -> Dict[str, Any]:
     results = defaultdict(list)
     if return_results:
         for task in all_tasks:
-            result = task.results_store.get_results()
+            result = results_store.get_results(task_name=task.name,
+                                               task_unique_config=task.unique_config,
+                                               task_publishes=task.publishes)
             results[task.name].append({'result': result,
                                        'config': task.unique_config})
     else:
@@ -21,11 +25,14 @@ def pack_results(all_tasks: List[Task],
 
 
 def pack_predecessor_results(predecessor_tasks: List[Task],
+                             results_store: ResultsStore,
                              reduce_task: bool) -> Dict[str, Any]:
     if reduce_task:
         all_results = []
         for predecessor in predecessor_tasks:
-            result = predecessor.results_store.get_results()
+            result = results_store.get_results(task_name=predecessor.name,
+                                               task_unique_config=predecessor.unique_config,
+                                               task_publishes=predecessor.publishes)
             all_results.append({'result': result,
                                 'config': predecessor.unique_config})
         return {"reduced_results": all_results}
@@ -33,7 +40,9 @@ def pack_predecessor_results(predecessor_tasks: List[Task],
     else:
         results = {}
         for predecessor in predecessor_tasks:
-            result = predecessor.results_store.get_results()
+            result = results_store.get_results(task_name=predecessor.name,
+                                               task_unique_config=predecessor.unique_config,
+                                               task_publishes=predecessor.publishes)
             for key, value in result.items():
                 if key in results.keys():
                     raise TaskResultKeyAlreadyExists(

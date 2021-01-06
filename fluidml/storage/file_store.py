@@ -31,11 +31,12 @@ class LocalFileStore(ResultsStore):
     def _load_pickle(name: str, run_dir: str) -> Dict:
         return pickle.load(open(os.path.join(run_dir, f'{name}.p'), "rb"))
 
-    def save(self, obj: Any, name: str, type_: str, **kwargs):
-        task_dir = os.path.join(self.base_dir, self.task_name)
+    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+        task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=self.task_unique_config)
+        run_dir = LocalFileStore._get_run_dir(
+            task_dir=task_dir, task_config=task_unique_config)
 
         # create new run dir if run dir did not exist
         if run_dir is None:
@@ -50,19 +51,22 @@ class LocalFileStore(ResultsStore):
         # save load info
         load_info = {'kwargs': kwargs,
                      'load_fn': load_fn}
-        pickle.dump(load_info, open(os.path.join(run_dir, f'.{name}_load_info.p'), 'wb'))
+        pickle.dump(load_info, open(os.path.join(
+            run_dir, f'.{name}_load_info.p'), 'wb'))
 
-    def load(self, name: str) -> Optional[Any]:
-        task_dir = os.path.join(self.base_dir, self.task_name)
+    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
+        task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=self.task_unique_config)
+        run_dir = LocalFileStore._get_run_dir(
+            task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
 
         # get load information from run dir
         try:
-            load_info = pickle.load(open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
+            load_info = pickle.load(
+                open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
         except FileNotFoundError:
             raise FileNotFoundError(f'{name} not saved.')
 
@@ -87,7 +91,8 @@ class LocalFileStore(ResultsStore):
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         for exist_run_dir in exist_run_dirs:
             try:
-                exist_config = json.load(open(os.path.join(exist_run_dir, 'config.json'), 'r'))
+                exist_config = json.load(
+                    open(os.path.join(exist_run_dir, 'config.json'), 'r'))
             except FileNotFoundError:
                 continue
             if task_config == exist_config:
@@ -97,7 +102,8 @@ class LocalFileStore(ResultsStore):
     @staticmethod
     def _make_run_dir(task_dir: str) -> str:
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
-        new_id = max([int(os.path.split(d)[-1]) for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
+        new_id = max([int(os.path.split(d)[-1])
+                      for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
         new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir
