@@ -20,8 +20,8 @@ def test_flow_with_no_tasks(swarm):
 
 
 def test_flow_with_dummy(swarm, dummy_task):
-    task_spec_a = TaskSpec(name="a", task=dummy_task, task_kwargs={"x": 1})
-    task_spec_b = TaskSpec(name="b", task=dummy_task, task_kwargs={"x": 1})
+    task_spec_a = TaskSpec(name="a", task=dummy_task, task_kwargs={"x": 1}, publishes=['a'])
+    task_spec_b = TaskSpec(name="b", task=dummy_task, task_kwargs={"x": 1}, publishes=[])
     task_spec_b.requires([task_spec_a])
     flow = Flow(swarm)
     results = flow.run([task_spec_a, task_spec_b])

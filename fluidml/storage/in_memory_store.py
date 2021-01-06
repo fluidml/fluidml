@@ -11,12 +11,12 @@ class InMemoryStore(ResultsStore):
         super().__init__()
         self._memory_store = manager.dict()
 
-    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Dict]:
-        if task_name not in self._memory_store:
+    def load(self, name: str) -> Optional[Dict]:
+        if self.task_name not in self._memory_store:
             return None
 
-        for task_sweep in self._memory_store[task_name]:
-            if task_sweep["config"] == task_unique_config:
+        for task_sweep in self._memory_store[self.task_name]:
+            if task_sweep["config"] == self.task_unique_config:
                 try:
                     obj = task_sweep['results'][name]
                 except KeyError:
@@ -24,24 +24,24 @@ class InMemoryStore(ResultsStore):
 
                 return obj
 
-    def save(self, obj: Any, name: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def save(self, obj: Any, name: str, **kwargs):
         """ In-memory save function.
         Adds individual object to in-memory store (multiprocessing manager dict).
         """
-        if task_name not in self._memory_store:
-            self._memory_store[task_name] = []
+        if self.task_name not in self._memory_store:
+            self._memory_store[self.task_name] = []
 
-        existing_task_results = self._memory_store[task_name]
+        existing_task_results = self._memory_store[self.task_name]
         sweep_exists = False
         for task_sweep in existing_task_results:
-            if task_sweep['config'] == task_unique_config:
+            if task_sweep['config'] == self.task_unique_config:
                 task_sweep['results'][name] = obj
                 sweep_exists = True
                 break
 
         if not sweep_exists:
             new_task_sweep = {'results': {name: obj},
-                              'config': task_unique_config}
+                              'config': self.task_unique_config}
             existing_task_results.append(new_task_sweep)
 
-        self._memory_store[task_name] = existing_task_results
+        self._memory_store[self.task_name] = existing_task_results

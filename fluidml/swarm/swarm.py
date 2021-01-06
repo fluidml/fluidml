@@ -1,3 +1,4 @@
+from copy import deepcopy
 import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
@@ -84,11 +85,17 @@ class Swarm:
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
-        task_configs = [(task.name, task.unique_config, task.publishes)
-                        for task in self.tasks.values()]
-        results = pack_results(results_store=self.results_store,
-                               task_configs=task_configs,
+        all_tasks = []
+        for task in self.tasks.values():
+            task.results_store = self.results_store
+            task.results_store.task_name = task.name
+            task.results_store.task_unique_config = task.unique_config
+            task.results_store.task_publishes = task.publishes
+            all_tasks.append(deepcopy(task))
+
+        results = pack_results(all_tasks=all_tasks,
                                return_results=self.return_results)
+
         return results
 
     def work(self, tasks: List[Task]) -> Optional[Dict[str, Union[List[Dict], Dict]]]:

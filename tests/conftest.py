@@ -10,8 +10,8 @@ class DummyTask(Task):
     def __init__(self, x: int):
         super().__init__()
 
-    def run(self, results, task_config, resource) -> Dict:
-        return {}
+    def run(self):
+        self.results_store.save(obj={'a': 1}, name='a', type_='json')
 
 
 @pytest.fixture
