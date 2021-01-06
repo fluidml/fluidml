@@ -10,7 +10,7 @@ import yaml
 from fluidml import Flow, Swarm
 from fluidml.common import Resource, Task
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.storage import LocalFileStore, MongoDBStore
+from fluidml.storage import LocalFileStore
 
 
 def get_balanced_devices(count: Optional[int] = None,
@@ -27,33 +27,39 @@ def get_balanced_devices(count: Optional[int] = None,
 
 
 def parse(in_dir: str, task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res1', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res1', type_='pickle')
 
 
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res2', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res2', type_='pickle')
 
 
 def featurize_tokens(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res3', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res3', type_='pickle')
 
 
 def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res4', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res4', type_='pickle')
 
 
 def train(res3: Dict, res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res5', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res5', type_='pickle')
 
 
 def evaluate(reduced_results: Dict, metric: str, task: Task):
-    task.results_store.save(obj=task.unique_config, name='config', type_='json')
-    task.results_store.save(obj={}, name='res6', type_='pickle')
+    task.save(obj=task.unique_config,
+              name='config', type_='json')
+    task.save(obj={}, name='res6', type_='pickle')
 
 
 CURRENT_DIR = os.path.dirname(os.path.realpath(__file__))
@@ -125,12 +131,18 @@ def main():
     config = yaml.safe_load(open(args.config, 'r'))
 
     # create all task specs
-    parse_task = GridTaskSpec(task=parse, publishes=['res1'], gs_config=config['parse'])
-    preprocess_task = GridTaskSpec(task=preprocess, publishes=['res2'], gs_config=config['preprocess'])
-    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, publishes=['res3'], gs_config=config['featurize_tokens'])
-    featurize_cells_task = GridTaskSpec(task=featurize_cells, publishes=['res4'], gs_config=config['featurize_cells'])
-    train_task = GridTaskSpec(task=train, publishes=['res5'], gs_config=config['train'])
-    evaluate_task = TaskSpec(task=evaluate, publishes=[], task_kwargs=config['evaluate'], reduce=True)
+    parse_task = GridTaskSpec(task=parse, publishes=[
+                              'res1'], gs_config=config['parse'])
+    preprocess_task = GridTaskSpec(task=preprocess, publishes=[
+                                   'res2'], gs_config=config['preprocess'])
+    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, publishes=[
+                                         'res3'], gs_config=config['featurize_tokens'])
+    featurize_cells_task = GridTaskSpec(task=featurize_cells, publishes=[
+                                        'res4'], gs_config=config['featurize_cells'])
+    train_task = GridTaskSpec(task=train, publishes=[
+                              'res5'], gs_config=config['train'])
+    evaluate_task = TaskSpec(task=evaluate, publishes=[],
+                             task_kwargs=config['evaluate'], reduce=True)
 
     # register dependencies
     preprocess_task.requires([parse_task])
@@ -140,10 +152,12 @@ def main():
     evaluate_task.requires([train_task])
 
     # create list of task specs
-    tasks = [parse_task, preprocess_task, featurize_tokens_task, featurize_cells_task, train_task, evaluate_task]
+    tasks = [parse_task, preprocess_task, featurize_tokens_task,
+             featurize_cells_task, train_task, evaluate_task]
 
     # create list of resources
-    devices = get_balanced_devices(count=args.num_dolphins, use_cuda=args.use_cuda)
+    devices = get_balanced_devices(
+        count=args.num_dolphins, use_cuda=args.use_cuda)
     resources = [TaskResource(device=devices[i],
                               seed=args.seed) for i in range(args.num_dolphins)]
 

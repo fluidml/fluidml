@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Callable
+from typing import Dict, List, Optional, Callable, Any
 
 from fluidml.common import DependencyMixin
 from fluidml.storage import ResultsStore
@@ -105,3 +105,7 @@ class Task(ABC, DependencyMixin):
         """
 
         raise NotImplementedError
+
+    def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
+        self.results_store.save(obj=obj, name=name, type_=type_,
+                                task_name=self.name, task_unique_config=self.unique_config, **kwargs)
