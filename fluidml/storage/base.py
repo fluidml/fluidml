@@ -27,4 +27,5 @@ class ResultsStore(ABC):
 
             # store object in results
             results[item_name] = obj
+
         return results

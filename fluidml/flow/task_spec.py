@@ -12,12 +12,14 @@ class BaseTaskSpec(DependencyMixin, ABC):
                  task: Union[type, Callable],
                  name: Optional[str] = None,
                  reduce: Optional[bool] = None,
-                 publishes: Optional[List[str]] = None):
+                 publishes: Optional[List[str]] = None,
+                 expects: Optional[List[str]] = None):
         DependencyMixin.__init__(self)
         self.task = task
         self.name = name if name is not None else self.task.__name__
         self.reduce = reduce
         self.publishes = publishes
+        self.expects = expects
 
         self.force: Optional[str] = None
 
@@ -36,6 +38,9 @@ class BaseTaskSpec(DependencyMixin, ABC):
         if self.publishes is not None:
             task.publishes = self.publishes
         assert task.publishes is not None
+
+        if self.expects is not None:
+            task.expects = self.expects
 
         return task
 
@@ -64,8 +69,9 @@ class TaskSpec(BaseTaskSpec):
                  task_kwargs: Optional[Dict[str, Any]] = None,
                  name: Optional[str] = None,
                  reduce: Optional[bool] = None,
-                 publishes: Optional[List[str]] = None):
-        super().__init__(task=task, name=name, reduce=reduce, publishes=publishes)
+                 publishes: Optional[List[str]] = None,
+                 expects: Optional[List[str]] = None):
+        super().__init__(task=task, name=name, reduce=reduce, publishes=publishes, expects=expects)
         self.task_kwargs = task_kwargs if task_kwargs is not None else {}
 
     def build(self) -> List[Task]:
@@ -86,8 +92,9 @@ class GridTaskSpec(BaseTaskSpec):
                  task: Union[type, Callable],
                  gs_config: Dict[str, Any],
                  name: Optional[str] = None,
-                 publishes: Optional[List[str]] = None):
-        super().__init__(task=task, name=name, publishes=publishes)
+                 publishes: Optional[List[str]] = None,
+                 expects: Optional[List[str]] = None):
+        super().__init__(task=task, name=name, publishes=publishes, expects=expects)
         self.task_configs: List[Dict] = self._split_gs_config(config_grid_search=gs_config)
 
     def build(self) -> List[Task]:
