@@ -39,8 +39,10 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        results: Dict = pack_predecessor_results(
-            task.predecessors, self.results_store, task.expects, task.reduce)
+        results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
+                                                 results_store=self.results_store,
+                                                 reduce_task=task.reduce,
+                                                 task_expects=task.expects)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):

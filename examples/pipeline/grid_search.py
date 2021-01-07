@@ -10,7 +10,7 @@ import yaml
 from fluidml import Flow, Swarm
 from fluidml.common import Resource, Task
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.storage import LocalFileStore
+from fluidml.storage import LocalFileStore, MongoDBStore
 
 
 def get_balanced_devices(count: Optional[int] = None,
@@ -27,38 +27,26 @@ def get_balanced_devices(count: Optional[int] = None,
 
 
 def parse(in_dir: str, task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res1', type_='pickle')
 
 
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res2', type_='pickle')
 
 
 def featurize_tokens(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res3', type_='pickle')
 
 
 def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res4', type_='pickle')
 
 
 def train(res3: Dict, res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res5', type_='pickle')
 
 
 def evaluate(reduced_results: Dict, metric: str, task: Task):
-    task.save(obj=task.unique_config,
-              name='config', type_='json')
     task.save(obj={}, name='res6', type_='pickle')
 
 
@@ -127,22 +115,18 @@ def main():
     args = parse_args()
 
     # load pipeline and config (tasks are named equally)
-    pipeline = yaml.safe_load(open(args.pipeline, 'r'))
     config = yaml.safe_load(open(args.config, 'r'))
 
     # create all task specs
-    parse_task = GridTaskSpec(task=parse, publishes=[
-                              'res1'], gs_config=config['parse'])
-    preprocess_task = GridTaskSpec(task=preprocess, publishes=[
-                                   'res2'], gs_config=config['preprocess'])
-    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, publishes=[
-                                         'res3'], gs_config=config['featurize_tokens'])
-    featurize_cells_task = GridTaskSpec(task=featurize_cells, publishes=[
-                                        'res4'], gs_config=config['featurize_cells'])
-    train_task = GridTaskSpec(task=train, publishes=[
-                              'res5'], gs_config=config['train'])
-    evaluate_task = TaskSpec(task=evaluate, publishes=[],
-                             task_kwargs=config['evaluate'], reduce=True)
+    parse_task = GridTaskSpec(task=parse, publishes=['res1'], gs_config=config['parse'])
+    preprocess_task = GridTaskSpec(task=preprocess, publishes=['res2'], expects=['res1'],
+                                   gs_config=config['preprocess'])
+    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, publishes=['res3'], expects=['res2'],
+                                         gs_config=config['featurize_tokens'])
+    featurize_cells_task = GridTaskSpec(task=featurize_cells, publishes=['res4'], expects=['res2'],
+                                        gs_config=config['featurize_cells'])
+    train_task = GridTaskSpec(task=train, publishes=['res5'], expects=['res3', 'res4'], gs_config=config['train'])
+    evaluate_task = TaskSpec(task=evaluate, publishes=[], expects=['res5'], task_kwargs=config['evaluate'], reduce=True)
 
     # register dependencies
     preprocess_task.requires([parse_task])
@@ -163,12 +147,12 @@ def main():
 
     # create local file storage used for versioning
     results_store = LocalFileStore(base_dir=args.base_dir)
-    # results_store = MongoDBStore("test3")
+    # results_store = MongoDBStore("test2")
 
     # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
     with Swarm(n_dolphins=args.num_dolphins,
                resources=resources,
-               results_store=results_store) as swarm:
+               results_store=None) as swarm:
         flow = Flow(swarm=swarm, task_to_execute=args.task, force=args.force)
         results = flow.run(tasks)
         print(results)

@@ -7,32 +7,26 @@ from fluidml.swarm import Swarm
 
 
 def parse(in_dir: str, task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res1')
 
 
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res2', type_='pickle')
 
 
 def featurize_tokens(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res3', type_='pickle')
 
 
 def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res4', type_='pickle')
 
 
 def train(res3: Dict, res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res5', type_='pickle')
 
 
 def evaluate(reduced_results: Dict, metric: str, task: Task):
-    task.save(obj=task.unique_config, name='config', type_='json')
     task.save(obj={}, name='res6', type_='pickle')
 
 
@@ -56,19 +50,17 @@ def test_pipeline(dummy_resource):
     num_workers = 4
 
     # initialize all task specs
-    parse_task = GridTaskSpec(task=parse, gs_config={
-                              "in_dir": "/some/dir"}, publishes=['res1'])
-    preprocess_task = GridTaskSpec(task=preprocess, gs_config={
-                                   "pipeline": ['a', 'b'], "abc": 1}, publishes=['res2'])
-    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={
-                                         "type_": "flair", 'batch_size': [2, 3]}, publishes=['res3'])
-    featurize_cells_task = GridTaskSpec(task=featurize_cells, gs_config={
-                                        "type_": "glove", "batch_size": 4}, publishes=['res4'])
-    train_task = GridTaskSpec(task=train, gs_config={
-                              "model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
-                              publishes=['res5'])
-    evaluate_task = TaskSpec(task=evaluate, reduce=True,
-                             task_kwargs={"metric": "accuracy"}, publishes=['res6'])
+    parse_task = GridTaskSpec(task=parse, gs_config={"in_dir": "/some/dir"}, publishes=['res1'])
+    preprocess_task = GridTaskSpec(task=preprocess, gs_config={"pipeline": ['a', 'b'], "abc": 1},
+                                   publishes=['res2'], expects=['res1'])
+    featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={"type_": "flair", 'batch_size': [2, 3]},
+                                         publishes=['res3'], expects=['res2'])
+    featurize_cells_task = GridTaskSpec(task=featurize_cells, gs_config={"type_": "glove", "batch_size": 4},
+                                        publishes=['res4'], expects=['res2'])
+    train_task = GridTaskSpec(task=train, gs_config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
+                              publishes=['res5'], expects=['res3', 'res4'])
+    evaluate_task = TaskSpec(task=evaluate, reduce=True, task_kwargs={"metric": "accuracy"},
+                             publishes=[], expects=['res5'])
 
     # dependencies between tasks
     preprocess_task.requires([parse_task])

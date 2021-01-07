@@ -41,6 +41,7 @@ class LocalFileStore(ResultsStore):
         # create new run dir if run dir did not exist
         if run_dir is None:
             run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
+            json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), "w"))
 
         # get save function for type
         save_fn, _ = self._save_load_fn_from_type[type_]
