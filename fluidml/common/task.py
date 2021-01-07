@@ -21,6 +21,7 @@ class Task(ABC, DependencyMixin):
         self.kwargs = kwargs
         self._name: Optional[str] = None
         self._publishes: Optional[List[str]] = None
+        self._expects: Optional[List[str]] = None
 
         # set in Flow
         self._id: Optional[int] = None
@@ -87,6 +88,14 @@ class Task(ABC, DependencyMixin):
     @publishes.setter
     def publishes(self, publishes: List[str]):
         self._publishes = publishes
+
+    @property
+    def expects(self):
+        return self._expects
+
+    @expects.setter
+    def expects(self, expects: List[str]):
+        self._expects = expects
 
     @property
     def reduce(self):

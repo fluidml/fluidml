@@ -6,3 +6,8 @@ class NoTasksError(Exception):
 class TaskResultKeyAlreadyExists(Exception):
     """Exception raised when two tasks produce same key-ed result"""
     pass
+
+
+class TaskResultObjectMissing(Exception):
+    """Exception raised when one or more expected input results could not be retrieved from predecessor tasks"""
+    pass

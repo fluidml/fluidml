@@ -10,8 +10,8 @@ class LocalFileStore(ResultsStore):
     def __init__(self, base_dir: str):
         super().__init__()
         self.base_dir = base_dir
-        self._save_load_from_type = {'json': (self._save_json, self._load_json),
-                                     'pickle': (self._save_pickle, self._load_pickle)}
+        self._save_load_fn_from_type = {'json': (self._save_json, self._load_json),
+                                        'pickle': (self._save_pickle, self._load_pickle)}
 
     @staticmethod
     def _save_json(name: str, obj: Dict, run_dir: str):
@@ -42,15 +42,15 @@ class LocalFileStore(ResultsStore):
         if run_dir is None:
             run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
 
-        # get save and load function for type
-        save_fn, load_fn = self._save_load_from_type[type_]
+        # get save function for type
+        save_fn, _ = self._save_load_fn_from_type[type_]
 
         # save object
         save_fn(name=name, obj=obj, run_dir=run_dir, **kwargs)
 
         # save load info
         load_info = {'kwargs': kwargs,
-                     'load_fn': load_fn}
+                     'type_': type_}
         pickle.dump(load_info, open(os.path.join(
             run_dir, f'.{name}_load_info.p'), 'wb'))
 
@@ -71,8 +71,11 @@ class LocalFileStore(ResultsStore):
             raise FileNotFoundError(f'{name} not saved.')
 
         # unpack load info
-        load_fn = load_info['load_fn']
+        type_ = load_info['type_']
         kwargs = load_info['kwargs']
+
+        # get load function for type
+        _, load_fn = self._save_load_fn_from_type[type_]
 
         # load the saved object from run dir
         obj = load_fn(name=name, run_dir=run_dir, **kwargs)
