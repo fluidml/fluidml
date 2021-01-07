@@ -1,19 +1,31 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict
+from typing import Optional, List, Dict, Any
 
 
 class ResultsStore(ABC):
     @abstractmethod
-    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
-        """ Query method to get the results if they exist already """
+    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
+        """ Query method to load an object based on its name, task_name and task_config if it exists """
         raise NotImplementedError
 
     @abstractmethod
-    def save_results(self, task_name: str, unique_config: Dict, results: Dict):
-        """ Method to save new results """
+    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+        """ Method to save/update any artifact """
         raise NotImplementedError
 
-    @abstractmethod
-    def update_results(self, task_name: str, unique_config: Dict, results: Dict):
-        """ Method to overwrite and update existing results """
-        raise NotImplementedError
+    def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
+        # here we loop over individual item names and call user provided self.load() to get individual item data
+        results = {}
+        for item_name in task_publishes:
+            # load object
+            obj: Optional[Any] = self.load(
+                name=item_name, task_name=task_name, task_unique_config=task_unique_config)
+
+            # if at least one expected result object of the task cannot be loaded, return None and re-run the task.
+            if obj is None:
+                return None
+
+            # store object in results
+            results[item_name] = obj
+
+        return results

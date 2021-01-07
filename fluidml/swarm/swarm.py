@@ -84,10 +84,8 @@ class Swarm:
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
-        task_configs = [(task.name, task.unique_config)
-                        for task in self.tasks.values()]
-        results = pack_results(results_store=self.results_store,
-                               task_configs=task_configs,
+        results = pack_results(all_tasks=list(self.tasks.values()),
+                               results_store=self.results_store,
                                return_results=self.return_results)
         return results
 

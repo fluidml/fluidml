@@ -46,10 +46,9 @@ For real machine learning examples, check the "Examples" section.
 1. **Basic imports:** First we import fluidml
 
 ```Python
+from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
-from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.swarm import Swarm
 from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 ```
 
@@ -57,17 +56,17 @@ from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 
 ```Python
 class MyTask(Task):
-    def __init__(self, **kwargs: Dict):
-        ..
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
+    def __init__(self, kwarg1, kwarg2):
+        ...
+    def run(self, res1, res2, res3):
+        ...
 ```
 
 or
 
 ```Python
-def my_task(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource, **kwargs: Dict):
-    ..
+def my_task(self, res1, res2, res3, kwarg1, kwarg2, task: Task):
+    ...
 ```
 
 There are three arguments:
@@ -80,8 +79,10 @@ For example, we can define our typical machine learning tasks (using Task classe
 
 ```Python
 class DatasetFetchTask(Task):
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        return task_results
+    def run(self):
+        ...
+        self.save(obj=data_fetch_result, name='data_fetch_result')                # For InMemoryStore (default) no type_ is required
+        self.save(obj=data_fetch_result, name='data_fetch_result', type_='json')  # type_ is required for LocalFileStore, MongoDBStore
 
 
 class PreProcessTask(Task):
@@ -89,9 +90,9 @@ class PreProcessTask(Task):
         super().__init__()
         self._pre_processing_steps = pre_processing_steps
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
-        return task_results
+    def run(self, data_fetch_result):
+        ...
+        self.save(obj=pre_process_result, name='pre_process_result')
 
 
 class TFIDFFeaturizeTask(Task):
@@ -100,15 +101,15 @@ class TFIDFFeaturizeTask(Task):
         self._min_df = min_df
         self._max_features = max_features
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
-        return task_results
+    def run(self, pre_process_result):
+        ...
+        self.save(obj=tfidf_featurize_result, name='tfidf_featurize_result')
 
 
 class GloveFeaturizeTask(Task):
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
-        return task_results
+    def run(self, pre_process_result):
+        ...
+        self.save(obj=glove_featurize_result, name='glove_featurize_result')
 
 
 class TrainTask(Task):
@@ -117,27 +118,32 @@ class TrainTask(Task):
         self._max_iter = max_iter
         self._class_weight = "balanced" if balanced else None
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
-        return task_results
+    def run(self, tfidf_featurize_result, glove_featurize_result):
+        ...
+        self.save(obj=train_result, name='train_result')
 
 
 class EvaluateTask(Task):
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        ..
-        return task_results
+    def run(self, train_result):
+        ...
+        self.save(obj=evaluate_result, name='evaluate_result')
 ```
 
 3. **Task Specifications:** Next we can create the defined tasks with their specifications. We now only specify their specifications, later these are used to create real instances of tasks.
+For each Task specification we also add a list of result names that the corresponding task publishes. Each published result object will be considered when results are automatically collected for a successor task.
 
 ```Python
-dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
-pre_process_task = TaskSpec(task=PreProcessTask, task_kwargs={
-                                "pre_processing_steps": ["lower_case", "remove_punct"]})
-featurize_task_1 = TaskSpec(task=GloveFeaturizeTask)
-featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, task_kwargs={"min_df": 5, "max_features": 1000})
-train_task = TaskSpec(task=TrainTask, task_kwargs={"max_iter": 50, "balanced": True})
-evaluate_task = TaskSpec(task=EvaluateTask)
+dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
+pre_process_task = TaskSpec(task=PreProcessTask, 
+                            task_kwargs={
+                                "pre_processing_steps": ["lower_case", "remove_punct"]},
+                            publishes=['pre_process_result'])
+featurize_task_1 = TaskSpec(task=GloveFeaturizeTask, publishes=['glove_featurize_result'])
+featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, task_kwargs={"min_df": 5, "max_features": 1000},
+                            publishes=['tfidf_featurize_result'])
+train_task = TaskSpec(task=TrainTask, task_kwargs={"max_iter": 50, "balanced": True},
+                      publishes=['train_result'])
+evaluate_task = TaskSpec(task=EvaluateTask, publishes=['evaluate_result'])
 ```
 
 4. **Task Graphs:** Create the task graph by connecting the tasks together by specifying predecessors for a task.
@@ -152,7 +158,7 @@ evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, 
 
 5. **Run tasks using Flow:** Now that we have all the tasks, we can just run the task graph. For that we have to create an instance of Swarm class, by specifying number of workers (n_dolphins ;) ). Additionally, you can pass a list of resources which are made available to the tasks (eg. GPU IDs) after balancing them.
 
-Next, you can create an instance of the flow class and run the tasks. Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
+Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to Flow (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
 
 ```Python
 tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
@@ -161,7 +167,8 @@ tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
 with Swarm(n_dolphins=2,
            refresh_every=10,
            return_results=True) as swarm:
-    flow = Flow(swarm=swarm)
+    flow = Flow(swarm=swarm,
+                results_store=None)
     results = flow.run(tasks)
 ```
 
@@ -171,22 +178,16 @@ with Swarm(n_dolphins=2,
 
 By default, results of tasks are stored in an InMemoryStore, which might be impractical for large datasets/models. Also, the results are not persistent. To have persistent storage, FluidML provides two fully implemented `ResultsStore` namely `LocalFileStore` and `MongoDBStore`.
 
-Additionally, users can provide their own results store to `Swarm` by inheriting from `ResultsStore` class and implementing `get_results()` and `save_results()`. Note, these methods rely on task name and its config parameters, which act as key for results. In this way, tasks are skipped by FluidML when task results are already available for the given config. But users can override and force execute tasks by passing `force` parameter to the `Flow`.
+Additionally, users can provide their own results store to `Swarm` by inheriting from `ResultsStore` class and implementing `load()` and `save()`. Note, these methods rely on task name and its config parameters, which act as lookup-key for results. In this way, tasks are skipped by FluidML when task results are already available for the given config. But users can override and force execute tasks by passing `force` parameter to the `Flow`.
 
 ```Python
-class ResultsStore(ResultsStore):
-    def get_results(self, task_name: str, unique_config: Dict) -> Optional[Dict]:
+class MyResultsStore(ResultsStore):
+    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Dict]:
         """ Query method to get the results if they exist already """
         pass
 
-    @abstractmethod
-    def save_results(self, task_name: str, unique_config: Dict, results: Dict):
+    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """ Method to save new results """
-        pass
-
-    @abstractmethod
-    def update_results(self, task_name: str, unique_config: Dict, results: Dict):
-        """ Method to overwrite and update existing results """
         pass
 ```
 
@@ -196,10 +197,10 @@ Users can easily enable grid search for their tasks with just one line of code. 
 
 ```Python
 train_task = GridTaskSpec(task=TrainTask, gs_config={
-                              "max_iter": [50, 100], "balanced": [True, False]})
+                              "max_iter": [50, 100], "balanced": [True, False], "layers": [[50, 100, 50]]})
 ```
 
-That's it! Internally, Flow would expand this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Not only that, any successor tasks (for instance, evaluate task) in the task graph will also be automatically extended. Therefore, in our example, we would have 4 evaluate tasks each one corresponding to each one of 4 train tasks.
+That's it! Internally, Flow would expand this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically extended. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to one of the 4 train tasks.
 
 ## Examples
 
