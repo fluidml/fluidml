@@ -71,9 +71,11 @@ def pack_predecessor_results(predecessor_tasks: List[Task],
 
         # Assertion to check that all expected results are retrieved
         if task_expects is not None:
-            retrieved_inputs = {name for result in all_results for name in result['result'].keys()}
+            retrieved_inputs = {
+                name for result in all_results for name in result['result'].keys()}
             if retrieved_inputs != set(task_expects):
-                missing_input_results = list(set(task_expects).difference(retrieved_inputs))
+                missing_input_results = list(
+                    set(task_expects).difference(retrieved_inputs))
                 raise TaskResultObjectMissing(f'Result objects {missing_input_results} are required '
                                               f'but could not be collected from predecessor tasks.')
         return {"reduced_results": all_results}
@@ -96,7 +98,8 @@ def pack_predecessor_results(predecessor_tasks: List[Task],
         if task_expects is not None:
             retrieved_inputs = {name for name in results.keys()}
             if retrieved_inputs != set(task_expects):
-                missing_input_results = list(set(task_expects).difference(retrieved_inputs))
+                missing_input_results = list(
+                    set(task_expects).difference(retrieved_inputs))
                 raise TaskResultObjectMissing(f'Result objects {missing_input_results} are required '
                                               f'but could not be collected from predecessor tasks.')
     return results

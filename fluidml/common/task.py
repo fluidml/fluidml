@@ -116,5 +116,12 @@ class Task(ABC, DependencyMixin):
         raise NotImplementedError
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
+        """Saves the given object to the results store
+
+        Args:
+            obj (Any): any object that is to be saved
+            name (str): an unique name given to this object
+            type_ (Optional[str], optional): additional type specification (eg. json, which is to be passed to results store). Defaults to None.
+        """
         self.results_store.save(obj=obj, name=name, type_=type_,
                                 task_name=self.name, task_unique_config=self.unique_config, **kwargs)

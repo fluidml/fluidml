@@ -5,6 +5,7 @@ from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
 from fluidml.common import Task, DependencyMixin
 from fluidml.common.utils import MyTask
+from fluidml.common.exception import TaskPublishesSpecMissing
 
 
 class BaseTaskSpec(DependencyMixin, ABC):
@@ -35,13 +36,23 @@ class BaseTaskSpec(DependencyMixin, ABC):
             raise TypeError(f'{self.task} needs to be a Class object (type="type") or a Callable, e.g. a function.'
                             f'But it is of type "{type(self.task)}".')
         task.name = self.name
-        if self.publishes is not None:
-            task.publishes = self.publishes
-        assert task.publishes is not None
 
+        # override publishes from task spec
+        task = self._override_publishes(task)
+
+        # expects
         if self.expects is not None:
             task.expects = self.expects
 
+        return task
+
+    def _override_publishes(self, task: Task):
+        if self.publishes is not None:
+            task.publishes = self.publishes
+
+        if task.publishes is None:
+            raise TaskPublishesSpecMissing(
+                f"{self.task} needs publishes specification either in task definition or task specification")
         return task
 
     @abstractmethod
@@ -71,7 +82,8 @@ class TaskSpec(BaseTaskSpec):
                  reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None):
-        super().__init__(task=task, name=name, reduce=reduce, publishes=publishes, expects=expects)
+        super().__init__(task=task, name=name, reduce=reduce,
+                         publishes=publishes, expects=expects)
         self.task_kwargs = task_kwargs if task_kwargs is not None else {}
 
     def build(self) -> List[Task]:
@@ -95,10 +107,12 @@ class GridTaskSpec(BaseTaskSpec):
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None):
         super().__init__(task=task, name=name, publishes=publishes, expects=expects)
-        self.task_configs: List[Dict] = self._split_gs_config(config_grid_search=gs_config)
+        self.task_configs: List[Dict] = self._split_gs_config(
+            config_grid_search=gs_config)
 
     def build(self) -> List[Task]:
-        tasks = [self._create_task_object(task_kwargs=config) for config in self.task_configs]
+        tasks = [self._create_task_object(
+            task_kwargs=config) for config in self.task_configs]
         return tasks
 
     def _find_list_in_dict(self, obj: Dict, param_grid: List) -> List:
@@ -117,7 +131,8 @@ class GridTaskSpec(BaseTaskSpec):
                 obj_copy[key_copy] = comb[len(counter)]
                 counter.append(1)
             elif isinstance(obj[key], dict):
-                self._replace_list_in_dict(obj[key], obj_copy[key_copy], comb, counter)
+                self._replace_list_in_dict(
+                    obj[key], obj_copy[key_copy], comb, counter)
             else:
                 continue
         return obj_copy, counter
@@ -129,7 +144,8 @@ class GridTaskSpec(BaseTaskSpec):
         individual_configs = []
         for comb in product(*param_grid):
             counter = []
-            individual_config = self._replace_list_in_dict(config_grid_search, config_copy, comb, counter)[0]
+            individual_config = self._replace_list_in_dict(
+                config_grid_search, config_copy, comb, counter)[0]
             individual_config = deepcopy(individual_config)
             individual_configs.append(individual_config)
         return individual_configs
