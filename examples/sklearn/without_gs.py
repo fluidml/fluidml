@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Tuple, List
 
 from datasets import load_dataset
 from flair.data import Sentence
@@ -11,7 +11,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 from rich import print
 
-from fluidml.common import Task, Resource
+from fluidml.common import Task
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow, TaskSpec
 
@@ -19,6 +19,9 @@ from fluidml.flow import Flow, TaskSpec
 class DatasetFetchTask(Task):
     def __init__(self):
         super().__init__()
+
+        # task publishes
+        self.publishes = ["raw_dataset"]
 
     def _get_split(self, dataset, split):
         if split == "test":
@@ -36,7 +39,7 @@ class DatasetFetchTask(Task):
             labels.append(item["label-coarse"])
         return sentences, labels
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+    def run(self):
         dataset = load_dataset("trec")
         splits = ["train", "val", "test"]
         dataset_splits = {}
@@ -48,8 +51,7 @@ class DatasetFetchTask(Task):
                 "labels": labels
             }
             dataset_splits[split] = split_results
-        task_results = {"raw_dataset": dataset_splits}
-        return task_results
+        self.save(dataset_splits, "raw_dataset")
 
 
 class PreProcessTask(Task):
@@ -57,7 +59,10 @@ class PreProcessTask(Task):
         super().__init__()
         self._pre_processing_steps = pre_processing_steps
 
-    def _pre_process(self, text: str) -> str:
+        # task publishes
+        self.publishes = ["pre_processed_dataset"]
+
+    def _pre_process(self, text: Dict) -> str:
         pre_processed_text = text
         for step in self._pre_processing_steps:
             if step == "lower_case":
@@ -70,15 +75,14 @@ class PreProcessTask(Task):
                     r"\d+", "<num>", pre_processed_text)
         return pre_processed_text
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+    def run(self, raw_dataset: Dict):
         pre_processed_splits = {}
         for split in ["train", "val", "test"]:
             pre_processed_sentences = [
-                self._pre_process(sentence) for sentence in results["raw_dataset"][split]["sentences"]]
+                self._pre_process(sentence) for sentence in raw_dataset[split]["sentences"]]
             pre_processed_splits[split] = {
                 "sentences": pre_processed_sentences}
-        task_results = {"pre_processed_dataset": pre_processed_splits}
-        return task_results
+        self.save(pre_processed_splits, "pre_processed_dataset")
 
 
 class TFIDFFeaturizeTask(Task):
@@ -87,28 +91,33 @@ class TFIDFFeaturizeTask(Task):
         self._min_df = min_df
         self._max_features = max_features
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        # task publishes
+        self.publishes = ["tfidf_featurized_dataset"]
+
+    def run(self, pre_processed_dataset: Dict):
         tfidf_model = TfidfVectorizer(
             min_df=self._min_df, max_features=self._max_features)
-        tfidf_model.fit(results["pre_processed_dataset"]["train"]["sentences"])
+        tfidf_model.fit(pre_processed_dataset["train"]["sentences"])
         featurized_splits = {}
         for split in ["train", "val", "test"]:
             tfidf_vectors = tfidf_model.transform(
-                results["pre_processed_dataset"][split]["sentences"]).toarray()
+                pre_processed_dataset[split]["sentences"]).toarray()
             featurized_splits[split] = {"vectors": tfidf_vectors}
-        task_results = {"tfidf_featurized_dataset": featurized_splits}
-        return task_results
+        self.save(featurized_splits, "tfidf_featurized_dataset")
 
 
 class GloveFeaturizeTask(Task):
     def __init__(self):
         super().__init__()
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        # task publishes
+        self.publishes = ["glove_featurized_dataset"]
+
+    def run(self, pre_processed_dataset: Dict):
         featurized_splits = {}
         for split in ["train", "val", "test"]:
             sentences = [Sentence(sent)
-                         for sent in results["pre_processed_dataset"][split]["sentences"]]
+                         for sent in pre_processed_dataset[split]["sentences"]]
             embedder = DocumentPoolEmbeddings([WordEmbeddings("glove")])
             embedder.embed(sentences)
             glove_vectors = [sent.embedding.cpu().numpy()
@@ -116,8 +125,7 @@ class GloveFeaturizeTask(Task):
             glove_vectors = np.array(glove_vectors).reshape(
                 len(glove_vectors), -1)
             featurized_splits[split] = {"vectors": glove_vectors}
-        task_results = {"glove_featurized_dataset": featurized_splits}
-        return task_results
+        self.save(featurized_splits, "glove_featurized_dataset")
 
 
 class TrainTask(Task):
@@ -126,34 +134,37 @@ class TrainTask(Task):
         self._max_iter = max_iter
         self._class_weight = "balanced" if balanced else None
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
+        # task publishes
+        self.publishes = ["trained_model"]
+
+    def run(self, raw_dataset: Dict, tfidf_featurized_dataset: Dict, glove_featurized_dataset: Dict):
         model = LogisticRegression(
             max_iter=self._max_iter, class_weight=self._class_weight)
-        stacked_vectors = np.hstack((results["tfidf_featurized_dataset"]["train"]["vectors"],
-                                     results["glove_featurized_dataset"]["train"]["vectors"]))
-        model.fit(stacked_vectors,
-                  results["raw_dataset"]["train"]["labels"])
-        task_results = {
-            "trained_model": model
-        }
-        return task_results
+        stacked_vectors = np.hstack((tfidf_featurized_dataset["train"]["vectors"],
+                                     glove_featurized_dataset["train"]["vectors"]))
+        model.fit(stacked_vectors, raw_dataset["train"]["labels"])
+        self.save(model, "trained_model")
 
 
 class EvaluateTask(Task):
     def __init__(self):
         super().__init__()
 
-    def run(self, results: Dict[str, Any], task_config: Dict[str, Any], resource: Resource):
-        task_results = {}
+        # task publishes
+        self.publishes = ["evaluation_results"]
+
+    def run(self, raw_dataset: Dict, tfidf_featurized_dataset: Dict, glove_featurized_dataset: Dict,
+            trained_model: LogisticRegression):
+        evaluation_results = {}
         for split in ["train", "val", "test"]:
-            stacked_vectors = np.hstack((results["tfidf_featurized_dataset"][split]["vectors"],
-                                         results["glove_featurized_dataset"][split]["vectors"]))
-            predictions = results["trained_model"].predict(
+            stacked_vectors = np.hstack((tfidf_featurized_dataset[split]["vectors"],
+                                         glove_featurized_dataset[split]["vectors"]))
+            predictions = trained_model.predict(
                 stacked_vectors)
             report = classification_report(
-                results["raw_dataset"][split]["labels"], predictions, output_dict=True)
-            task_results[split] = {"classification_report": report}
-        return task_results
+                raw_dataset[split]["labels"], predictions, output_dict=True)
+            evaluation_results[split] = {"classification_report": report}
+        self.save(evaluation_results, "evaluation_results")
 
 
 def main():
