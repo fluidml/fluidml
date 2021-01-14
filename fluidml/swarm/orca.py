@@ -21,11 +21,13 @@ class Orca(Whale):
 
     def _work(self):
         while len(self.done_queue) < len(self.tasks) and not self.exception:
-            # sleep for a while
-            time.sleep(self.refresh_every)
 
-            with Progress('[progress.description]{task.description}', BarColumn(),
-                          '[progress.percentage]{task.percentage:>3.0f}%',) as progress:
+            if self.refresh_every is not None:
+                # sleep for a while
+                time.sleep(self.refresh_every)
 
-                task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
-                progress.update(task, advance=len(self.done_queue))
+                with Progress('[progress.description]{task.description}', BarColumn(),
+                              '[progress.percentage]{task.percentage:>3.0f}%',) as progress:
+
+                    task = progress.add_task('[red]Task Progress...', total=len(self.tasks))
+                    progress.update(task, advance=len(self.done_queue))

@@ -16,6 +16,7 @@ setup(name="fluidml",
                                    "sklearn",
                                    "spacy",
                                    "torchtext",
-                                   "torch"],
+                                   "torch",
+                                   "tqdm"],
                       'mongo-store': ['mongoengine']},
       tests_require=['pytest'])

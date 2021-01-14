@@ -47,13 +47,17 @@ class Dolphin(Whale):
 
     def _run_task(self, task: Task, pred_results: Dict):
         with self.lock:
-            # try to get results from results store
-            results: Optional[Tuple[Dict, str]
-                              ] = self.results_store.get_results(task_name=task.name,
-                                                                 task_unique_config=task.unique_config,
-                                                                 task_publishes=task.publishes)
-        # if results is none or force is set, run the task now
-        if results is None or task.force:
+            # if force is set to false, try to get task results, else set results to none
+            if task.force:
+                results = None
+            else:
+                # try to get results from results store
+                results: Optional[Tuple[Dict, str]
+                                  ] = self.results_store.get_results(task_name=task.name,
+                                                                     task_unique_config=task.unique_config,
+                                                                     task_publishes=task.publishes)
+        # if results is none, run the task now
+        if results is None:
             Console.get_instance().log(
                 f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             if isinstance(task, MyTask):
