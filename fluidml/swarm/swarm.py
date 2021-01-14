@@ -18,7 +18,7 @@ class Swarm:
                  resources: Optional[List[Resource]] = None,
                  results_store: Optional[ResultsStore] = None,
                  start_method: str = 'spawn',
-                 refresh_every: int = 1,
+                 refresh_every: Optional[int] = None,
                  exit_on_error: bool = True,
                  return_results: bool = False):
         set_start_method(start_method, force=True)

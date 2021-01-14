@@ -99,7 +99,8 @@ class LocalFileStore(ResultsStore):
                     open(os.path.join(exist_run_dir, 'config.json'), 'r'))
             except FileNotFoundError:
                 continue
-            if task_config == exist_config:
+            # if task_config == exist_config:
+            if exist_config.items() <= task_config.items():
                 return exist_run_dir
         return None
 
