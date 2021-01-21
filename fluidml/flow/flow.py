@@ -139,7 +139,7 @@ class Flow:
             merged_config: Dict = update_merge(merged_config, config)
 
         if task_configs:
-            # get all task names that where specified as GridTaskSpec
+            # get all task names that were specified as GridTaskSpec
             grid_task_names = [spec.name for spec in task_specs if isinstance(spec, GridTaskSpec)]
 
             # split merged_config in grid_task_config and normal_task_config
@@ -149,7 +149,7 @@ class Flow:
             # reformat only grid_task_config (replace tuples by lists)
             grid_task_config: Dict = reformat_config(grid_task_config)
 
-            # merge back the unformated normal_task_config with the formated grid_task_config
+            # merge back the normal_task_config with the formatted grid_task_config
             merged_config = {**normal_task_config, **grid_task_config}
         return merged_config
 
