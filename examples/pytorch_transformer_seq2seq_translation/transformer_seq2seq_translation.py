@@ -242,7 +242,7 @@ class Training(Task):
         self.valid_batch_size = valid_batch_size
         self.num_epochs = num_epochs
 
-    def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int, device: torch.device):
+    def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int):
         """ Initialize all training components.
         """
 
@@ -253,7 +253,7 @@ class Training(Task):
                       self.enc_heads,
                       self.enc_pf_dim,
                       self.enc_dropout,
-                      device)
+                      self.resource.device)
 
         dec = Decoder(output_dim,
                       self.hid_dim,
@@ -261,10 +261,10 @@ class Training(Task):
                       self.dec_heads,
                       self.dec_pf_dim,
                       self.dec_dropout,
-                      device)
+                      self.resource.device)
 
         # initialize the full transformer sequence to sequence model
-        model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, device).to(device)
+        model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
 
         # initialize the optimizer
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)
@@ -360,8 +360,8 @@ class Training(Task):
                                        device=self.resource.device)
 
         # instantiate train and validation datasets using a pytorch's Dataset class
-        train_dataset = TranslationDataset(data=train_encoded[:100])
-        valid_dataset = TranslationDataset(data=valid_encoded[:100])
+        train_dataset = TranslationDataset(data=train_encoded)
+        valid_dataset = TranslationDataset(data=valid_encoded)
 
         # instantiate train and validation dataloader
         train_iterator = DataLoader(train_dataset, batch_size=self.train_batch_size, shuffle=True,
@@ -378,8 +378,7 @@ class Training(Task):
         model, optimizer, criterion = self._init_training(input_dim=input_dim,
                                                           output_dim=output_dim,
                                                           src_pad_idx=src_pad_idx,
-                                                          trg_pad_idx=trg_pad_idx,
-                                                          device=self.resource.device)
+                                                          trg_pad_idx=trg_pad_idx)
 
         # train the model on the training set and evaluate after every epoch on the validation set
         self._train(model=model,
@@ -387,6 +386,29 @@ class Training(Task):
                     valid_iterator=valid_iterator,
                     optimizer=optimizer,
                     criterion=criterion)
+
+
+class ModelSelection(Task):
+    def __init__(self):
+        super().__init__()
+
+    @staticmethod
+    def _select_best_model_from_sweeps(training_results: List[Dict]) -> Dict:
+        config = None
+        best_valid_loss = float('inf')
+        for sweep in training_results:
+            if sweep['result']['best_model_metric']['valid_loss'] <= best_valid_loss:
+                best_valid_loss = sweep['result']['best_model_metric']['valid_loss']
+                config = sweep['config']
+        return config
+
+    def run(self, reduced_results: List[Dict]):
+
+        # select the best run config by comparing model performances from different parameter sweeps
+        # on the validation set
+        best_run_config = self._select_best_model_from_sweeps(training_results=reduced_results)
+
+        self.save(obj=best_run_config, name='best_run_config', type_='json')
 
 
 class Evaluation(Task):
@@ -397,6 +419,9 @@ class Evaluation(Task):
 
     def _init_model(self, train_config: Dict, input_dim: int, output_dim: int,
                     src_pad_idx: int, trg_pad_idx: int) -> nn.Module:
+        """ Initialize the model and its components.
+        """
+
         enc = Encoder(input_dim,
                       train_config['hid_dim'],
                       train_config['enc_layers'],
@@ -416,17 +441,10 @@ class Evaluation(Task):
         model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
         return model
 
-    @staticmethod
-    def _select_best_model_from_sweeps(training_results: List[Dict]) -> Dict:
-        config = None
-        best_valid_loss = float('inf')
-        for sweep in training_results:
-            if sweep['result']['best_model_metric']['valid_loss'] <= best_valid_loss:
-                best_valid_loss = sweep['result']['best_model_metric']['valid_loss']
-                config = sweep['config']
-        return config
-
     def translate_sentence(self, src_encoded, bos_idx, eos_idx, model, max_len=50):
+        """ Translate an encoded sentence.
+        """
+
         model.eval()
 
         src_tensor = torch.LongTensor(src_encoded).unsqueeze(0).to(self.resource.device)
@@ -446,9 +464,12 @@ class Evaluation(Task):
             if pred_token == eos_idx:
                 break
 
-        return trg_indices[1:], attention
+        return trg_indices[1:]
 
     def calculate_bleu(self, data_encoded, en_tokenizer, model, max_len=50):
+        """ Calculate the bleu score on the test set.
+        """
+
         trgs = []
         pred_trgs = []
         bos_idx = en_tokenizer.token_to_id('<bos>')
@@ -456,7 +477,7 @@ class Evaluation(Task):
 
         for src, trg in tqdm(data_encoded):
 
-            pred_trg, _ = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
+            pred_trg = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
 
             # cut off <eos> token
             pred_trg = pred_trg[:-1]
@@ -469,22 +490,24 @@ class Evaluation(Task):
 
         return bleu_score(pred_trgs, trgs)
 
-    def run(self, reduced_results: List[Dict]):
+    def run(self, best_run_config: Dict):
         set_seed(self.resource.seed)
 
-        config = self._select_best_model_from_sweeps(training_results=reduced_results)
+        # load the best model, test-data and the tokenizers based on the previously selected best run config
+        model_state_dict = self.load(name='best_model', task_name='Training', task_unique_config=best_run_config)
+        test_encoded = self.load(name='test_encoded', task_name='DatasetEncoding', task_unique_config=best_run_config)
+        de_tokenizer = self.load(name='de_tokenizer', task_name='TokenizerTraining', task_unique_config=best_run_config)
+        en_tokenizer = self.load(name='en_tokenizer', task_name='TokenizerTraining', task_unique_config=best_run_config)
 
-        model_state_dict = self.load(name='best_model', task_name='Training', task_unique_config=config)
-        test_encoded = self.load(name='test_encoded', task_name='DatasetEncoding', task_unique_config=config)
-        de_tokenizer = self.load(name='de_tokenizer', task_name='TokenizerTraining', task_unique_config=config)
-        en_tokenizer = self.load(name='en_tokenizer', task_name='TokenizerTraining', task_unique_config=config)
-
+        # instantiate the batch collator
         batch_collator = BatchCollator(de_pad_idx=de_tokenizer.token_to_id('<pad>'),
                                        en_pad_idx=en_tokenizer.token_to_id('<pad>'),
                                        device=self.resource.device)
 
+        # instantiate the test dataset
         test_dataset = TranslationDataset(data=test_encoded)
 
+        # instantiate the test dataloader
         test_iterator = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, collate_fn=batch_collator)
 
         input_dim = de_tokenizer.get_vocab_size()
@@ -492,26 +515,28 @@ class Evaluation(Task):
         src_pad_idx = de_tokenizer.token_to_id('<pad>')
         trg_pad_idx = en_tokenizer.token_to_id('<pad>')
 
-        model = self._init_model(train_config=config['Training'],
+        # instantiate the transformer model
+        model = self._init_model(train_config=best_run_config['Training'],
                                  input_dim=input_dim,
                                  output_dim=output_dim,
                                  src_pad_idx=src_pad_idx,
                                  trg_pad_idx=src_pad_idx)
         model.load_state_dict(model_state_dict)
 
+        # instantiate the loss criterion
         criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
 
+        # evaluate the model on the test set -> calculate the test set loss and perplexity
         test_loss = Training.validate_epoch(model=model, iterator=test_iterator, criterion=criterion)
         print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
 
-        bleu = self.calculate_bleu(test_encoded[:50], en_tokenizer, model)
+        # calculate the model's bleu score on the test set
+        bleu = self.calculate_bleu(test_encoded, en_tokenizer, model)
         print(f'BLEU score = {bleu * 100:.2f}')
-
-        self.save(obj=config, name='best_model_config', type_='json')
 
 
 def main():
-    current_dir = os.path.dirname(os.path.realpath(__file__))
+    current_dir = os.path.abspath('')
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
     num_workers = 1
@@ -540,9 +565,9 @@ def main():
                        'dec_dropout': 0.1,
                        'learning_rate': 0.0005,
                        'clip_grad': 1.,
-                       'train_batch_size': 64,
-                       'valid_batch_size': 64,
-                       'num_epochs': 1}  # 10
+                       'train_batch_size': 128,
+                       'valid_batch_size': 128,
+                       'num_epochs': 10}
 
     evaluation_params = {'test_batch_size': 128}
 
@@ -558,18 +583,21 @@ def main():
     train_task = GridTaskSpec(task=Training, gs_config=training_params,
                               expects=['train_encoded', 'valid_encoded', 'de_tokenizer', 'en_tokenizer'],
                               publishes=['best_model', 'best_model_metric'])
-    evaluate_task = TaskSpec(task=Evaluation, reduce=True, task_kwargs=evaluation_params,
-                             expects=['best_model_metric'],
-                             publishes=['best_model_config'])
+    model_selection_task = TaskSpec(task=ModelSelection, reduce=True, expects=['best_model_metric'],
+                                    publishes=['best_run_config'])
+    evaluate_task = TaskSpec(task=Evaluation, reduce=False, task_kwargs=evaluation_params,
+                             expects=['best_run_config'], publishes=[])
 
     # dependencies between tasks
     tokenizer_training_task.requires([dataset_loading_task])
     dataset_encoding_task.requires([tokenizer_training_task, dataset_loading_task])
     train_task.requires([dataset_encoding_task, tokenizer_training_task])
-    evaluate_task.requires([train_task])
+    model_selection_task.requires([train_task])
+    evaluate_task.requires([model_selection_task])
 
     # all tasks
-    tasks = [dataset_loading_task, tokenizer_training_task, dataset_encoding_task, train_task, evaluate_task]
+    tasks = [dataset_loading_task, tokenizer_training_task, dataset_encoding_task,
+             train_task, model_selection_task, evaluate_task]
 
     # create list of resources
     devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda)

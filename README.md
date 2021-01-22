@@ -69,13 +69,12 @@ def my_task(self, res1, res2, res3, kwarg1, kwarg2, task: Task):
     ...
 ```
 
-There are three arguments:
+The user defined input arguments will be automatically provided to the task by FluidML.
+In the case of defining the task as callable an extra task object is provided to the task, 
+which makes important internal attributes and functions like `task.save()` and `task.resource` available to the user. 
+When defining the task as class, these internal attributes and functions can be accessed via `self.save()`, etc.
 
-- results: contains task inputs generated from predecessor tasks
-- task_config: contains config of the task in the graph (including its predecessors)
-- resource: contains global resources like devices, seeds, etc.
-
-For example, we can define our typical machine learning tasks (using Task classes)
+Below, we define individual machine learning tasks (using Task classes).
 
 ```Python
 class DatasetFetchTask(Task):
@@ -129,7 +128,7 @@ class EvaluateTask(Task):
         self.save(obj=evaluate_result, name='evaluate_result')
 ```
 
-3. **Task Specifications:** Next we can create the defined tasks with their specifications. We now only specify their specifications, later these are used to create real instances of tasks.
+3. **Task Specifications:** Next, we can create the defined tasks with their specifications. We now only specify their specifications, later these are used to create real instances of tasks.
 For each Task specification we also add a list of result names that the corresponding task publishes. Each published result object will be considered when results are automatically collected for a successor task.
 
 ```Python
@@ -137,13 +136,18 @@ dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_resu
 pre_process_task = TaskSpec(task=PreProcessTask, 
                             task_kwargs={
                                 "pre_processing_steps": ["lower_case", "remove_punct"]},
+                            expects=['data_fetch_result'],
                             publishes=['pre_process_result'])
-featurize_task_1 = TaskSpec(task=GloveFeaturizeTask, publishes=['glove_featurize_result'])
+featurize_task_1 = TaskSpec(task=GloveFeaturizeTask, 
+                            expects=['pre_process_result'],
+                            publishes=['glove_featurize_result'])
 featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, task_kwargs={"min_df": 5, "max_features": 1000},
+                            expects=['pre_process_result'],
                             publishes=['tfidf_featurize_result'])
 train_task = TaskSpec(task=TrainTask, task_kwargs={"max_iter": 50, "balanced": True},
+                      expects=['glove_featurize_result', 'tfidf_featurize_result'], 
                       publishes=['train_result'])
-evaluate_task = TaskSpec(task=EvaluateTask, publishes=['evaluate_result'])
+evaluate_task = TaskSpec(task=EvaluateTask, expects=['train_result'], publishes=['evaluate_result'])
 ```
 
 4. **Task Graphs:** Create the task graph by connecting the tasks together by specifying predecessors for a task.
@@ -204,7 +208,11 @@ That's it! Internally, Flow would expand this task into 4 tasks with provided co
 
 ## Examples
 
-For a real machine learning example with complete grid search, check our [tutorial notebook](https://github.com/fluidml/fluidml/blob/main/examples/sklearn/tutorial.ipynb)
+For real machine learning pipelines including grid search implemented with FluidML, check our 
+Jupyter Notebook tutorials:
+
+- [Transformer based Sequence to Sequence Translation (PyTorch)](https://github.com/fluidml/fluidml/blob/main/examples/pytorch_transformer_seq2seq_translation/transformer_seq2seq_translation.ipynb)
+- [Multi-class Text Classification (Sklearn)](https://github.com/fluidml/fluidml/blob/main/examples/sklearn_text_classification/sklearn_text_classification.ipynb)
 
 ## Citation
 
