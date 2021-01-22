@@ -1,15 +1,15 @@
+import re
+import string
 from typing import Dict, Tuple, List
 
 from datasets import load_dataset
 from flair.data import Sentence
 from flair.embeddings import WordEmbeddings, DocumentPoolEmbeddings
 import numpy as np
-import string
-import re
+from rich import print
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
-from rich import print
 
 from fluidml.common import Task
 from fluidml.swarm import Swarm
