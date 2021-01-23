@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Callable, Any
+from logging import Logger
+from typing import Dict, List, Optional, Any
 
 from fluidml.common import DependencyMixin
 from fluidml.storage import ResultsStore
@@ -32,6 +33,7 @@ class Task(ABC, DependencyMixin):
         # set in Dolphin
         self._results_store: Optional[ResultsStore] = None
         self._resource: Optional[Resource] = None
+        self._logger: Optional[Logger] = None
 
     @property
     def name(self):
@@ -105,6 +107,14 @@ class Task(ABC, DependencyMixin):
     def reduce(self, reduce: bool):
         self._reduce = reduce
 
+    @property
+    def logger(self):
+        return self._logger
+
+    @logger.setter
+    def logger(self, logger: str):
+        self._logger = logger
+
     @abstractmethod
     def run(self, **results):
         """Implementation of core logic of task
@@ -139,3 +149,6 @@ class Task(ABC, DependencyMixin):
         else:
             obj = self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
         return obj
+
+    def info(self, message: str):
+        return self.logger.info(message)
