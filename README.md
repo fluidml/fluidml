@@ -5,7 +5,7 @@ _Develop ML models fluently with no boilerplate code. Focus only on your models 
 
 </div>
 
-[![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=svg)](https://circleci.com/gh/fluidml/fluidml/tree/main)
+[![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=shield)](https://circleci.com/gh/fluidml/fluidml/tree/main)
 
 ---
 
