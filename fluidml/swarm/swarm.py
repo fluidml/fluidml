@@ -26,7 +26,8 @@ class Swarm:
                  return_results: bool = False,
                  logging_handler: Optional[RichHandler] = None):
         set_start_method(start_method, force=True)
-        self.logging_handler = logging_handler if logging_handler is not None else RichHandler()
+        self.logging_handler = logging_handler if logging_handler is not None else RichHandler(rich_tracebacks=True,
+                                                                                               markup=True)
         self._configure_logging()
 
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
