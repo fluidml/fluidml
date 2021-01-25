@@ -1,8 +1,9 @@
 from collections import defaultdict
+import logging
 from itertools import product
 from typing import List, Any, Dict, Optional
 
-from networkx import DiGraph, shortest_path_length
+from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
@@ -10,6 +11,9 @@ from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError
 from fluidml.flow import BaseTaskSpec, GridTaskSpec
 from fluidml.swarm import Swarm
+
+
+logger = logging.getLogger(__name__)
 
 
 class Flow:
@@ -58,18 +62,6 @@ class Flow:
         # topological ordering of tasks in graph
         # if a specific task to execute is provided, remove non dependent tasks from graph
         if self._task_to_execute:
-            # Using shortest_path_length might yield wrong order when 2 equally short paths exist,
-            # e.g. A ------ C ----- D ----- E
-            #        \- B -/-------/
-            # If E is the target: E -> D -> C -> A = 3 Edges
-            #                     E -> D -> B -> A = 3 Edges
-            # Correct order would be A, B, C, D, E because C depends on B, but only checking the shortest path
-            # sometimes yields A, C, B, D, E as result. A 50/50 decision is made randomly.
-            # -> Topological sort does not have this issue!
-
-            # sorted_names = list(shortest_path_length(
-            #     task_spec_graph, target=self._task_to_execute).keys())[::-1]
-
             sorted_names = list(topological_sort(task_spec_graph))
             target_idx = sorted_names.index(self._task_to_execute)
             sorted_names = sorted_names[:target_idx + 1]

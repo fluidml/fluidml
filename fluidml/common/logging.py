@@ -1,21 +1,23 @@
-from rich import console
+import logging
+import logging.handlers
+from multiprocessing import Queue
+from threading import Thread
 
 
-class Console:
-    __instance = None
+class LoggingListener(Thread):
+    """ Listens and handles child process log messages
+    This class, when instantiated, listens to the logging queue to receive log messages from child processes
+    and handles these messages using the configured root logger in the main process.
+    """
+    def __init__(self, logging_queue: Queue):
+        super().__init__(target=self.work,
+                         args=())
+        self.logging_queue = logging_queue
 
-    @staticmethod
-    def get_instance():
-        """Static access method."""
-
-        if Console.__instance is None:
-            Console()
-        return Console.__instance
-
-    def __init__(self):
-        """Virtually private constructor."""
-
-        if Console.__instance is not None:
-            raise Exception('Use Console.get_instance()!')
-        else:
-            Console.__instance = console.Console()
+    def work(self):
+        while True:
+            record = self.logging_queue.get()
+            if record is None:
+                break
+            logger = logging.getLogger(record.name)
+            logger.handle(record)

@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Callable, Any
+from typing import Dict, List, Optional, Any
 
 from fluidml.common import DependencyMixin
 from fluidml.storage import ResultsStore
@@ -121,7 +121,8 @@ class Task(ABC, DependencyMixin):
         Args:
             obj (Any): any object that is to be saved
             name (str): an unique name given to this object
-            type_ (Optional[str], optional): additional type specification (eg. json, which is to be passed to results store). Defaults to None.
+            type_ (Optional[str], optional): additional type specification
+                                             (eg. json, which is to be passed to results store). Defaults to None.
         """
         self.results_store.save(obj=obj, name=name, type_=type_,
                                 task_name=self.name, task_unique_config=self.unique_config, **kwargs)
