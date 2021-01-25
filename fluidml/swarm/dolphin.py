@@ -4,7 +4,6 @@ from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 from fluidml.common import Task, Resource
-# from fluidml.common.logging import Console
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
 from fluidml.storage.utils import pack_predecessor_results
@@ -63,24 +62,20 @@ class Dolphin(Whale):
                                                                      task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
-            # Console.get_instance().log(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             logger.info(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
             if isinstance(task, MyTask):
                 task.run(results=pred_results)
             else:
                 task.run(**pred_results)
-            # Console.get_instance().log(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
             logger.info(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
         # take results from results store and continue
         else:
-            # Console.get_instance().log(f'Task {task.name}-{task.id_} already executed.')
             logger.info(f'Task {task.name}-{task.id_} already executed.')
 
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
         task.resource = self.resource
-        task.logger = logger
         return task
 
     def _execute_task(self, task: Task):
@@ -98,6 +93,8 @@ class Dolphin(Whale):
         with self.lock:
             # put task in done_queue
             self.done_queue.append(task.id_)
+            logger.info(f'Finished {len(self.done_queue)} from {len(self.tasks)} tasks '
+                        f'({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
 
     def _fetch_next_task(self) -> Union[int, None]:
         task_id = None
@@ -105,14 +102,12 @@ class Dolphin(Whale):
             task_id = self.scheduled_queue.get(block=False, timeout=0.5)
         except Empty:
             pass
-            # Console.get_instance().log(f'Dolphin {self.id_}: waiting for tasks.')
         return task_id
 
     def _done(self) -> bool:
         return self.exception or (len(self.done_queue) == len(self.tasks))
 
     def _work(self):
-        # self.logger = logging.getLogger(__name__)
         while not self._done():
             # fetch next task to run
             task_id = self._fetch_next_task()
@@ -128,8 +123,6 @@ class Dolphin(Whale):
                     # run task only if it has not been executed already
                     if task_id in self.done_queue or task_id in self.running_queue:
                         logger.info(f'Task {task.name}-{task_id} is currently running or already finished.')
-                        # Console.get_instance().log(
-                        #     f'Task {task.name}-{task_id} is currently running or already finished.')
                         continue
 
                 # all good to execute the task
@@ -143,17 +136,11 @@ class Dolphin(Whale):
         for successor in task.successors:
             # run task only if all dependencies are satisfied
             if not self._is_task_ready(task=self.tasks[successor.id_]):
-                # Console.get_instance().log(
-                #     f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
-                #     f'task {successor.name}-{successor.id_}')
                 logger.info(f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
-                                 f'task {successor.name}-{successor.id_}')
+                            f'task {successor.name}-{successor.id_}')
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                # Console.get_instance().log(f'Task {successor.name}-{successor.id_} '
-                #                            f'is currently running or already finished.')
                 logger.info(f'Task {successor.name}-{successor.id_} '
-                                 f'is currently running or already finished.')
+                            f'is currently running or already finished.')
             else:
-                # Console.get_instance().log(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 logger.info(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
