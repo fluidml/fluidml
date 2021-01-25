@@ -1,13 +1,15 @@
 <div align="center">
 <img src="logo/fluid_ml_logo.png" width="400px">
 
-_Develop ML models fluently with no boilerplate code. Focus only on your models and not the boilerplate!_
+_Develop ML pipelines fluently with no boilerplate code. Focus only on your tasks and not the boilerplate!_
 
-</div>
+---
 
-[![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=shield)](https://circleci.com/gh/fluidml/fluidml/tree/main)
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/python-370/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=shield)](https://circleci.com/gh/fluidml/fluidml/tree/main)
+[![codecov](https://codecov.io/gh/fluidml/fluidml/branch/main/graph/badge.svg?token=XG4UDWF8RE)](https://codecov.io/gh/fluidml/fluidml)
+</div>
 
 ---
 
