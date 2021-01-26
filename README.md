@@ -224,35 +224,34 @@ and pass it in the next step to `Swarm` to enable persistent results storing.
 
 #### 7. [optional] Configure Logging
 
-FluidML has in-build multiprocessing capable logging functionality utilizing the [rich]() library.
+FluidML has in-built, multiprocessing capable logging functionality utilizing the [rich](https://github.com/willmcgugan/rich) library which enhances console logging layout.
+
+Additionally, users can customize logging by providing a callable to `Swarm` which configures logging handlers and formatters. For instance, to use a stream handler or a specific formatter
+
 ```python
-class LoggingConfigurator:
-    def __init__(self, logging_path: str):
-        self.logging_path = logging_path
+import logging
+from logging import StreamHandler
 
-    def __call__(self):
-        root = logging.getLogger()
-        rich_formatter = logging.Formatter('%(processName)-10s\n%(message)s')
-        rich_handler = RichHandler(rich_tracebacks=True, markup=True)
-        rich_handler.setLevel(logging.DEBUG)
-        rich_handler.setFormatter(rich_formatter)
+def configure_logging():
+    root = logging.getLogger()
+    formatter = logging.Formatter('%(processName)-10s\n%(message)s')
+    stream_handler = StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+    root.setLevel(logging.DEBUG)
+```
 
-        file_formatter = logging.Formatter('%(asctime)s %(filename)-15s %(levelname)-8s %(processName)-10s %(message)s')
-        file_handler = FileHandler(self.logging_path)
-        file_handler.setLevel(logging.DEBUG)
-        file_handler.setFormatter(file_formatter)
-
-        root.addHandler(rich_handler)
-        root.addHandler(file_handler)
-        root.setLevel(logging.DEBUG)
-        
+**Note**: Optionally, the user can turn off the internal FluidML logs by executing
+```python
 logging.getLogger('fluidml').propagate = False
 ```
 
+User specified logs (eg. within task definitions) are still handled.
 
-#### 7. Run tasks using Flow and Swarm
+#### 8. Run tasks using Flow and Swarm
 
-Now that we have all the tasks specified, we can just run the task graph. For that we have to create an instance of Swarm class, by specifying number of workers (`n_dolphins` :wink: ), resources and results store.
+Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of `Swarm` class, by specifying number of workers (`n_dolphins` :wink:)
 
 Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to `Swarm` (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
 
@@ -261,19 +260,17 @@ tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
          featurize_task_2, train_task, evaluate_task]
 
 with Swarm(n_dolphins=2,
-           resources=resources,
-           return_results=True,
-           results_store=results_store,  
-           verbose=True,
-           configure_logging=logging_configurator) as swarm:
+           resources=resources,                 # optional
+           return_results=True,                 # optional
+           results_store=results_store,         # optional  
+           verbose=True,                        # optional
+           configure_logging=configure_logging  # optional
+           ) as swarm:
     flow = Flow(swarm=swarm)
     results = flow.run(tasks)
 ```
 
 **Note**: If the `InMemoryStore` is used, results of all the tasks are always returned by `flow.run()`, so that the user can store them manually. For the other shipped storages the user has the option to return or not return results (`return_results=True/False`). Task results can beaccessed via task names, e.g. `results["EvaluationTask"]`. Our shipped result stores can be utilized to fetch specific task results from the returned result dictionary at any point via `results_store.load()`.
-
----
-
 
 ### Grid Search
 
@@ -288,6 +285,8 @@ train_task = GridTaskSpec(task=TrainTask,
 
 That's it! Internally, Flow would expand this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
 
+---
+
 ## Examples
 
 For real machine learning pipelines including grid search implemented with FluidML, check our
@@ -295,6 +294,8 @@ Jupyter Notebook tutorials:
 
 - [Transformer based Sequence to Sequence Translation (PyTorch)](https://github.com/fluidml/fluidml/blob/main/examples/pytorch_transformer_seq2seq_translation/transformer_seq2seq_translation.ipynb)
 - [Multi-class Text Classification (Sklearn)](https://github.com/fluidml/fluidml/blob/main/examples/sklearn_text_classification/sklearn_text_classification.ipynb)
+
+---
 
 ## Citation
 
