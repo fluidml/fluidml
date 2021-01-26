@@ -217,7 +217,7 @@ def main():
              model_selection_task]
 
     with Swarm(n_dolphins=2,
-               refresh_every=10,
+               verbose=True,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
