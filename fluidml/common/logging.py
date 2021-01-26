@@ -1,9 +1,10 @@
 import logging
 import logging.handlers
 from multiprocessing import Queue
-from rich.logging import RichHandler
 from threading import Thread
 import threading
+
+from rich.logging import RichHandler
 
 
 class LoggingListener(Thread):
@@ -15,12 +16,12 @@ class LoggingListener(Thread):
     def __init__(self, logging_queue: Queue):
         super().__init__(target=self.work,
                          args=())
-        self.logging_queue = logging_queue
+        self._logging_queue = logging_queue
         self._stop_event = threading.Event()
 
     def work(self):
         while True:
-            record = self.logging_queue.get()
+            record = self._logging_queue.get()
             if record is None:
                 break
             logger = logging.getLogger(record.name)
