@@ -52,7 +52,9 @@ FluidML provides following functionalities out-of-the-box:
 This minimal toy example showcases how to get started with FluidML.
 For real machine learning examples, check the "Examples" section below.
 
-1. **Basic imports:** First we import necessary classes from FluidML
+#### 1. Basic imports
+
+First we import necessary classes from FluidML
 
 ```Python
 from fluidml import Flow, Swarm
@@ -61,7 +63,9 @@ from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 ```
 
-2. **Define Tasks:** Next, we define some toy machine learning tasks. A Task can be implemented as a function or as a class inheriting from Task class.
+#### 2. Define Tasks
+
+Next, we define some toy machine learning tasks. A Task can be implemented as a function or as a class inheriting from Task class.
 
 In case of the class approach, each task should implement `run()` method which takes some inputs and performs the desired functionality. These inputs are actually the results from predecessor tasks and are automatically forwarded by FluidML based on registered task dependencies. If the task has any hyperparameters, they can be defiend as arguments in the constructor. Additionally, within each task, users have access to methods and attributes like `self.save()` and `self.resource` to save its result and access task resources (more on that later).
 
@@ -141,7 +145,9 @@ class EvaluateTask(Task):
         self.save(obj=evaluate_result, name='evaluate_result')
 ```
 
-3. **Task Specifications:** Next, we can create the defined tasks with their specifications. We now only write their specifications, later these are used to create real instances of tasks by FluidML.
+#### 3. Task Specifications
+
+Next, we can create the defined tasks with their specifications. We now only write their specifications, later these are used to create real instances of tasks by FluidML.
    For each Task specification, we also add a list of result names that the corresponding task _publishes_ and _expects_. Each published result object will be considered when results are automatically collected for a successor task.
 
 ```Python
@@ -163,7 +169,9 @@ train_task = TaskSpec(task=TrainTask, task_kwargs={"max_iter": 50, "balanced": T
 evaluate_task = TaskSpec(task=EvaluateTask, expects=['train_result'], publishes=['evaluate_result'])
 ```
 
-4. **Registering task dependencies:** Here we create the task graph by connecting the tasks together by specifying predecessors for a task. For each task spec, you can specify a list of predecessors using `requires()` method.
+#### 4. Registering task dependencies
+
+Here we create the task graph by connecting the tasks together by specifying predecessors for a task. For each task spec, you can specify a list of predecessors using `requires()` method.
 
 ```Python
 pre_process_task.requires([dataset_fetch_task])
@@ -173,27 +181,25 @@ train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
 evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
 ```
 
-5. **Run tasks using Flow:** Now that we have all the tasks specified, we can just run the task graph. For that we have to create an instance of Swarm class, by specifying number of workers (`n_dolphins :wink: ). Additionally, you can pass a list of resources which are made available to the tasks (eg. GPU IDs) after balancing them.
+#### 5. [optional] Define and instantiate Resources to share across all Tasks
 
-Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to Flow (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
+Additionally, you can pass a list of resources which are made available to the workers (eg. GPU devices) which forward them to the corresponding tasks.
+You just have to create your own Resource dataclass, which inherits from our `Resource` interface. In this dataclass you can define all resources, e.g. seed, and the cuda device, which automatically is made available to all tasks through the `self.resource` or `task.resource` attribute.
 
-```Python
-tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
-         featurize_task_2, train_task, evaluate_task]
-
-with Swarm(n_dolphins=2,
-           return_results=True,
-           verbose=True) as swarm:
-    flow = Flow(swarm=swarm,
-                results_store=None)
-    results = flow.run(tasks)
+```python
+@dataclass
+class TaskResource(Resource):
+    device: str
+    seed: int
+```
+Let's assume our resources comprise of a `seed` and a list of cuda device ids, e.g. `['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
+Then we can create our list of resources objects with a simple list comprehension:
+```python
+# create list of resources
+resources = [TaskResource(device=devices[i], seed=seed) for i in range(num_workers)]
 ```
 
-6. **Task Results:** Results of all the tasks are returned by `flow.run()`. Users can access it via task names, for e.g. `results["EvaluationTask"]`.
-
----
-
-### Results Store/Caching
+#### 6. [optional] Results Store/Caching
 
 By default, results of tasks are stored in an `InMemoryStore`, which might be impractical for large datasets/models. Also, the results are not persistent. To have persistent storage, FluidML provides two fully implemented `ResultsStore` namely `LocalFileStore` and `MongoDBStore`.
 
@@ -205,11 +211,66 @@ class MyResultsStore(ResultsStore):
         """ Query method to load an object based on its name, task_name and task_config if it exists """
         raise NotImplementedError
 
-    @abstractmethod
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """ Method to save/update any artifact """
         raise NotImplementedError
 ```
+We can instantiate for example a `LocalFileStore` object
+```python
+results_store = LocalFileStore(base_dir='/some/dir')
+```
+and pass it in the next step to `Swarm` to enable persistent results storing.
+
+
+#### 7. [optional] Configure Logging
+
+FluidML has in-built, multiprocessing capable logging functionality utilizing the [rich](https://github.com/willmcgugan/rich) library which enhances console logging layout.
+
+Additionally, users can customize logging by providing a callable to `Swarm` which configures logging handlers and formatters. For instance, to use a stream handler or a specific formatter
+
+```python
+import logging
+from logging import StreamHandler
+
+def configure_logging():
+    root = logging.getLogger()
+    formatter = logging.Formatter('%(processName)-10s\n%(message)s')
+    stream_handler = StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
+    root.setLevel(logging.DEBUG)
+```
+
+**Note**: Optionally, the user can turn off the internal FluidML logs by executing
+```python
+logging.getLogger('fluidml').propagate = False
+```
+
+User specified logs (eg. within task definitions) are still handled.
+
+#### 8. Run tasks using Flow and Swarm
+
+Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of `Swarm` class, by specifying number of workers (`n_dolphins` :wink:)
+
+Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to `Swarm` (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
+
+```Python
+tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
+         featurize_task_2, train_task, evaluate_task]
+
+with Swarm(n_dolphins=2,
+           resources=resources,                 # optional
+           return_results=True,                 # optional
+           results_store=results_store,         # optional  
+           verbose=True,                        # optional
+           configure_logging=configure_logging  # optional
+           ) as swarm:
+    flow = Flow(swarm=swarm)
+    results = flow.run(tasks)
+```
+
+**Note**: If the `InMemoryStore` is used, results of all the tasks are always returned by `flow.run()`, so that the user can store them manually. For the other shipped storages the user has the option to return or not return results (`return_results=True/False`). Task results can beaccessed via task names, e.g. `results["EvaluationTask"]`. Our shipped result stores can be utilized to fetch specific task results from the returned result dictionary at any point via `results_store.load()`.
 
 ### Grid Search
 
@@ -224,6 +285,8 @@ train_task = GridTaskSpec(task=TrainTask,
 
 That's it! Internally, Flow would expand this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
 
+---
+
 ## Examples
 
 For real machine learning pipelines including grid search implemented with FluidML, check our
@@ -231,6 +294,8 @@ Jupyter Notebook tutorials:
 
 - [Transformer based Sequence to Sequence Translation (PyTorch)](https://github.com/fluidml/fluidml/blob/main/examples/pytorch_transformer_seq2seq_translation/transformer_seq2seq_translation.ipynb)
 - [Multi-class Text Classification (Sklearn)](https://github.com/fluidml/fluidml/blob/main/examples/sklearn_text_classification/sklearn_text_classification.ipynb)
+
+---
 
 ## Citation
 
