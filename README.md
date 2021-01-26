@@ -45,7 +45,7 @@ FluidML provides following functionalities out-of-the-box:
 2. Navigate into the cloned directory (contains the setup.py file),
 3. Execute `$ pip install .`
 
-**Note:** To run demo examples, execute `$ pip install .["examples"]` to install the additional requirements.
+**Note:** To run demo examples, execute `$ pip install .[examples,rich-logging]` to install the additional requirements.
 
 ### Minimal Example
 
@@ -215,7 +215,7 @@ class MyResultsStore(ResultsStore):
         """ Method to save/update any artifact """
         raise NotImplementedError
 ```
-We can instantiate for example a `LocalFileStore` object
+We can instantiate for example a `LocalFileStore`
 ```python
 results_store = LocalFileStore(base_dir='/some/dir')
 ```
@@ -224,30 +224,21 @@ and pass it in the next step to `Swarm` to enable persistent results storing.
 
 #### 7. [optional] Configure Logging
 
-FluidML has in-built, multiprocessing capable logging functionality utilizing the [rich](https://github.com/willmcgugan/rich) library which enhances console logging layout.
-
-Additionally, users can customize logging by providing a callable to `Swarm` which configures logging handlers and formatters. For instance, to use a stream handler or a specific formatter
+FluidML internally utilizes Python's `logging` library. However, we refrain from configuring a logger object with handlers
+and formatters since each user has different logging needs and preferences. Hence, if you want to use FluidML's logging 
+capability, you just have to do the configuration yourself. For convenience, we provide a simple utility function which 
+configures a visually appealing logger (using a specific handler from the [rich](https://github.com/willmcgugan/rich) library).
 
 ```python
-import logging
-from logging import StreamHandler
-
-def configure_logging():
-    root = logging.getLogger()
-    formatter = logging.Formatter('%(processName)-10s\n%(message)s')
-    stream_handler = StreamHandler()
-    stream_handler.setLevel(logging.DEBUG)
-    stream_handler.setFormatter(formatter)
-    root.addHandler(stream_handler)
-    root.setLevel(logging.DEBUG)
+from fluidml.common.logging import configure_logging
+configure_logging()
 ```
 
-**Note**: Optionally, the user can turn off the internal FluidML logs by executing
+**Note**: If you want to use logging in your application (e.g. within FluidML Tasks) but want to disable all FluidML internal logging messages you can
+simply call
 ```python
 logging.getLogger('fluidml').propagate = False
 ```
-
-User specified logs (eg. within task definitions) are still handled.
 
 #### 8. Run tasks using Flow and Swarm
 
@@ -259,12 +250,10 @@ Next, you can create an instance of the flow class and run the tasks utilizing o
 tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
          featurize_task_2, train_task, evaluate_task]
 
-with Swarm(n_dolphins=2,
+with Swarm(n_dolphins=2,                        # optional (defaults to number of CPU's)
            resources=resources,                 # optional
            return_results=True,                 # optional
-           results_store=results_store,         # optional  
-           verbose=True,                        # optional
-           configure_logging=configure_logging  # optional
+           results_store=results_store,         # optional
            ) as swarm:
     flow = Flow(swarm=swarm)
     results = flow.run(tasks)
