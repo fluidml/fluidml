@@ -27,6 +27,23 @@ class Swarm:
                  return_results: bool = False,
                  configure_logging: Optional[Callable] = None,
                  verbose: bool = True):
+        """
+
+        Configure workers, resources, results_store which are used to run the tasks
+
+        Args:
+            n_dolphins (Optional[int], optional): number of parallel workers. Defaults to None.
+            resources (Optional[List[Resource]], optional): a list of resources that are assigned to workers.
+                    If len(resources) < n_dolphins, resources are assigned randomly to workers
+            results_store (Optional[ResultsStore], optional): an instance of results store for results management
+                    If nothing is provided, a non-persistent InMemoryStore store is used
+            start_method (str, optional): start method for multiprocessing. Defaults to 'spawn'.
+            exit_on_error (bool, optional): whether to exit when an error happens. Defaults to True.
+            return_results (bool, optional): return results dictionary after run(). Defaults to False.
+            configure_logging (Optional[Callable], optional): a callable that configures logging
+                    If not provided, it uses default logging formatters and handles that writes to console
+            verbose (bool, optional): whether to enable logging while running tasks. Defaults to True.
+        """
         set_start_method(start_method, force=True)
 
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
@@ -39,12 +56,15 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.logging_queue = Queue()
 
-        self.results_store = results_store if results_store is not None else InMemoryStore(self.manager, self.lock)
+        self.results_store = results_store if results_store is not None else InMemoryStore(
+            self.manager, self.lock)
         self.exception = self.manager.dict()
-        self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
+        self.return_results = True if isinstance(
+            self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
-        self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
+        self.logging_listener = LoggingListener(
+            logging_queue=self.logging_queue)
 
         # dolphin workers for task execution
         self.dolphins = [Dolphin(id_=i,

@@ -67,14 +67,6 @@ class BaseTaskSpec(DependencyMixin, ABC):
 
 
 class TaskSpec(BaseTaskSpec):
-    """A class to hold specification of a plain task
-
-    Args:
-        task (type): a task class to instantiate
-        task_kwargs (Dict[str, Any]): task arguments used while instantiating
-        name (Optional[str], optional): Defaults to None
-    """
-
     def __init__(self,
                  task: Union[type, Callable],
                  task_kwargs: Optional[Dict[str, Any]] = None,
@@ -82,6 +74,19 @@ class TaskSpec(BaseTaskSpec):
                  reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None):
+        """
+        A class to hold specification of a plain task
+
+        Args:
+            task (Union[type, Callable]): task class
+            task_kwargs (Optional[Dict[str, Any]], optional): task arguments that are used while instantiating.
+                                                              Defaults to None.
+            name (Optional[str], optional): an unique name of the class. Defaults to None.
+            reduce (Optional[bool], optional): a boolean indicating whether this is a reduce task. Defaults to None.
+            publishes (Optional[List[str]], optional): a list of result names that this task publishes. 
+                                                    Defaults to None.
+            expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
+        """
         super().__init__(task=task, name=name, reduce=reduce,
                          publishes=publishes, expects=expects)
         self.task_kwargs = task_kwargs if task_kwargs is not None else {}
@@ -106,6 +111,16 @@ class GridTaskSpec(BaseTaskSpec):
                  name: Optional[str] = None,
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None):
+        """
+        A class to hold specification of a grid searcheable task
+
+        Args:
+            task (Union[type, Callable]): task class
+            gs_config (Dict[str, Any]): a grid search config that will be expanded
+            name (Optional[str], optional): an unique name of the class. Defaults to None.
+           publishes (Optional[List[str]], optional): a list of result names that this task publishes. Defaults to None.
+            expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
+        """
         super().__init__(task=task, name=name, publishes=publishes, expects=expects)
         self.task_configs: List[Dict] = self._split_gs_config(
             config_grid_search=gs_config)
