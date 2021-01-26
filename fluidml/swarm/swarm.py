@@ -3,9 +3,8 @@ import multiprocessing
 from multiprocessing import Manager, set_start_method, Queue, Lock
 import random
 from types import TracebackType
-from typing import Optional, Type, List, Dict, Union, Any, Callable
+from typing import Optional, Type, List, Dict, Union, Any
 
-from rich.logging import RichHandler
 
 from fluidml.common.logging import LoggingListener
 from fluidml.common import Task, Resource
@@ -24,9 +23,7 @@ class Swarm:
                  results_store: Optional[ResultsStore] = None,
                  start_method: str = 'spawn',
                  exit_on_error: bool = True,
-                 return_results: bool = False,
-                 configure_logging: Optional[Callable] = None,
-                 verbose: bool = True):
+                 return_results: bool = False):
         """
 
         Configure workers, resources, results_store which are used to run the tasks
@@ -40,9 +37,6 @@ class Swarm:
             start_method (str, optional): start method for multiprocessing. Defaults to 'spawn'.
             exit_on_error (bool, optional): whether to exit when an error happens. Defaults to True.
             return_results (bool, optional): return results dictionary after run(). Defaults to False.
-            configure_logging (Optional[Callable], optional): a callable that configures logging
-                    If not provided, it uses default logging formatters and handles that writes to console
-            verbose (bool, optional): whether to enable logging while running tasks. Defaults to True.
         """
         set_start_method(start_method, force=True)
 
@@ -79,9 +73,6 @@ class Swarm:
                                  exit_on_error=exit_on_error,
                                  results_store=self.results_store) for i in range(self.n_dolphins)]
 
-        if verbose:
-            configure_logging() if configure_logging is not None else Swarm._configure_logging()
-
     def __enter__(self):
         return self
 
@@ -90,16 +81,6 @@ class Swarm:
                  exc_val: Optional[BaseException],
                  exc_tb: Optional[TracebackType]):
         self.close()
-
-    @staticmethod
-    def _configure_logging():
-        root = logging.getLogger()
-        rich_formatter = logging.Formatter('%(processName)-10s\n%(message)s')
-        rich_handler = RichHandler(rich_tracebacks=True, markup=True)
-        rich_handler.setLevel(logging.DEBUG)
-        rich_handler.setFormatter(rich_formatter)
-        root.addHandler(rich_handler)
-        root.setLevel(logging.INFO)
 
     @staticmethod
     def _allocate_resources(n_dolphins: int, resources: List[Resource]) -> List[Resource]:
@@ -167,7 +148,8 @@ class Swarm:
         return self._collect_results()
 
     def close(self):
-        self.tasks = self.manager.dict()
+        self.tasks = {}
         self.done_queue = self.manager.dict()
         for dolphin in self.dolphins:
             dolphin.close()
+        self.logging_listener.stop()
