@@ -28,6 +28,15 @@ class Flow:
                  swarm: Swarm,
                  task_to_execute: Optional[str] = None,
                  force: Optional[str] = None):
+        """
+        Args:
+            swarm (Swarm): an instance of the swarm
+            task_to_execute (Optional[str], optional): a list of task names only those tasks which needs to be run 
+            force (Optional[str], optional): forcefully re-run tasks
+                Possible options are:
+                    "selected" - Only specified tasks in task_to_execture are re-run
+                    "all" - All the tasks are re-run
+        """
         self._swarm = swarm
         self._task_to_execute = task_to_execute
         self._force = force
@@ -132,11 +141,14 @@ class Flow:
 
         if task_configs:
             # get all task names that were specified as GridTaskSpec
-            grid_task_names = [spec.name for spec in task_specs if isinstance(spec, GridTaskSpec)]
+            grid_task_names = [
+                spec.name for spec in task_specs if isinstance(spec, GridTaskSpec)]
 
             # split merged_config in grid_task_config and normal_task_config
-            grid_task_config = {key: value for key, value in merged_config.items() if key in grid_task_names}
-            normal_task_config = {key: value for key, value in merged_config.items() if key not in grid_task_names}
+            grid_task_config = {
+                key: value for key, value in merged_config.items() if key in grid_task_names}
+            normal_task_config = {
+                key: value for key, value in merged_config.items() if key not in grid_task_names}
 
             # reformat only grid_task_config (replace tuples by lists)
             grid_task_config: Dict = reformat_config(grid_task_config)
