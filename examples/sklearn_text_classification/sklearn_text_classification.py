@@ -14,6 +14,10 @@ from sklearn.metrics import classification_report
 from fluidml.common import Task
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow, GridTaskSpec, TaskSpec
+from fluidml.common.logging import configure_logging
+
+
+configure_logging()
 
 
 class DatasetFetchTask(Task):
@@ -217,7 +221,6 @@ def main():
              model_selection_task]
 
     with Swarm(n_dolphins=2,
-               verbose=True,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
