@@ -198,8 +198,7 @@ def main():
              evaluate_task]
 
     with Swarm(n_dolphins=1,
-               refresh_every=10,
-               return_results=True) as swarm:
+               return_results=True, verbose=True) as swarm:
         flow = Flow(swarm=swarm)
         results = flow.run(tasks)
     print(results["EvaluateTask"])
