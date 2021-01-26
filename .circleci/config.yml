@@ -19,7 +19,7 @@ jobs:
             pip install pytest
             pip install coverage
             pip install codecov
-            pip install .[mongo-store]
+            pip install .[mongo-store,rich-logging]
     
       - run:
           name: run unit tests

@@ -24,6 +24,10 @@ from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import LocalFileStore
+from fluidml.common.logging import configure_logging
+
+
+configure_logging()
 
 
 def get_balanced_devices(count: Optional[int] = None,
