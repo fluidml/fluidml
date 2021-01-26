@@ -173,7 +173,7 @@ train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
 evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
 ```
 
-5. **Run tasks using Flow:** Now that we have all the tasks specified, we can just run the task graph. For that we have to create an instance of Swarm class, by specifying number of workers (`n_dolphins :wink: ). Additionally, you can pass a list of resources which are made available to the tasks (eg. GPU IDs) after balancing them.
+5. **Run tasks using Flow:** Now that we have all the tasks specified, we can just run the task graph. For that we have to create an instance of Swarm class, by specifying number of workers (`n_dolphins` :wink: ). Additionally, you can pass a list of resources which are made available to the tasks (eg. GPU IDs) after balancing them.
 
 Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to Flow (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
 
