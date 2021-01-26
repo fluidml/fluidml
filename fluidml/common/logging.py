@@ -5,7 +5,7 @@ from threading import Thread
 
 
 class LoggingListener(Thread):
-    """ Listens and handles child process log messages
+    """ Listens to and handles child process log messages
     This class, when instantiated, listens to the logging queue to receive log messages from child processes
     and handles these messages using the configured root logger in the main process.
     """
