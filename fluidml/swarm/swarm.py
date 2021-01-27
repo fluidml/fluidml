@@ -109,7 +109,6 @@ class Swarm:
         return results
 
     def work(self, tasks: List[Task]) -> Optional[Dict[str, Union[List[Dict], Dict]]]:
-        # logger = logging.getLogger(__name__)
 
         # get entry point task ids
         entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import datetime
 import gzip
+import logging
 import math
 import multiprocessing
 import os
@@ -24,10 +25,9 @@ from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import LocalFileStore
-from fluidml.common.logging import configure_logging
 
 
-configure_logging()
+logger = logging.getLogger(__name__)
 
 
 def get_balanced_devices(count: Optional[int] = None,
@@ -548,6 +548,8 @@ def main():
     task_to_execute = None
     use_cuda = True
     seed = 1234
+
+    configure_logging()
 
     dataset_loading_params = {'base_url': 'https://raw.githubusercontent.com/multi30k/dataset/'
                                           'master/data/task1/raw/',
