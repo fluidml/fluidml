@@ -80,7 +80,7 @@ class MyTask(Task):
 or
 
 ```Python
-def my_task(self, result_1, result_2, kwarg_1, kwarg_2, task: Task):
+def my_task(result_1, result_2, kwarg_1, kwarg_2, task: Task):
     ...
 ```
 

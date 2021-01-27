@@ -38,4 +38,4 @@ def configure_logging():
     rich_handler.setLevel(logging.DEBUG)
     rich_handler.setFormatter(rich_formatter)
     root.addHandler(rich_handler)
-    root.setLevel(logging.INFO)
+    root.setLevel(logging.DEBUG)
