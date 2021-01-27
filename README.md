@@ -90,8 +90,8 @@ which makes important internal attributes and functions like `task.save()` and `
 Below, we define standard machine learning tasks such as dataset preparation, pre-processing, featurization and model training using Task classes.
 Notice that:
 
-- Each task is implemented individually and its clear what the inputs are (check arguments of `run()` method)
-- Each task saves its result using `self.save(...)` by providing the object to be saved and an unique name for it. This unique name corresponds to input names in successor task definitions.
+- Each task is implemented individually and it's clear what the inputs are (check arguments of `run()` method)
+- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. This unique name corresponds to input names in successor task definitions.
 
 ```Python
 class DatasetFetchTask(Task):
@@ -171,7 +171,7 @@ evaluate_task = TaskSpec(task=EvaluateTask, expects=['train_result'], publishes=
 
 #### 4. Registering task dependencies
 
-Here we create the task graph by connecting the tasks together by specifying predecessors for a task. For each task spec, you can specify a list of predecessors using `requires()` method.
+Here we create the task graph by registering dependencies between the tasks. In particular, for each task specifier, you can register a list of predecessor tasks using the `requires()` method.
 
 ```Python
 pre_process_task.requires([dataset_fetch_task])
@@ -183,7 +183,7 @@ evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, 
 
 #### 5. [optional] Define and instantiate Resources to share across all Tasks
 
-Additionally, you can pass a list of resources which are made available to the workers (eg. GPU devices) which forward them to the corresponding tasks.
+Additionally, you can pass a list of resources (eg. seed and GPU devices) that are made available to the workers, which forward them to the corresponding tasks.
 You just have to create your own Resource dataclass, which inherits from our `Resource` interface. In this dataclass you can define all resources, e.g. seed, and the cuda device, which automatically is made available to all tasks through the `self.resource` or `task.resource` attribute.
 
 ```python
@@ -192,8 +192,8 @@ class TaskResource(Resource):
     device: str
     seed: int
 ```
-Let's assume our resources comprise of a `seed` and a list of cuda device ids, e.g. `['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
-Then we can create our list of resources objects with a simple list comprehension:
+Let's assume our resources consist of a `seed` and a list of cuda device ids, e.g. `['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
+Then we can create our list of resources object with a simple list comprehension:
 ```python
 # create list of resources
 resources = [TaskResource(device=devices[i], seed=seed) for i in range(num_workers)]
@@ -242,9 +242,10 @@ logging.getLogger('fluidml').propagate = False
 
 #### 8. Run tasks using Flow and Swarm
 
-Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of `Swarm` class, by specifying number of workers (`n_dolphins` :wink:)
+Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of the`Swarm` class, by specifying a number of workers (`n_dolphins` :wink:). 
+If `n_dolphin` is not set, it defaults internally to the number of CPU's available to the machine.
 
-Next, you can create an instance of the flow class and run the tasks utilizing one of our persistent ResultsStores, which defaults to InMemoryStore if no store is provided to `Swarm` (see below for details). Flow under the hood, constructs a task graph and executes them using provided resources in swarm.
+Next, you can create an instance of the `Flow` class and run the tasks utilizing one of our persistent result stores (defaults to `InMemoryStore` if no store is provided). `Flow` under the hood constructs a task graph and `Swarm` executes the graph in parallel while considering the registered dependencies.
 
 ```Python
 tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
@@ -259,7 +260,7 @@ with Swarm(n_dolphins=2,                        # optional (defaults to number o
     results = flow.run(tasks)
 ```
 
-**Note**: If the `InMemoryStore` is used, results of all the tasks are always returned by `flow.run()`, so that the user can store them manually. For the other shipped storages the user has the option to return or not return results (`return_results=True/False`). Task results can beaccessed via task names, e.g. `results["EvaluationTask"]`. Our shipped result stores can be utilized to fetch specific task results from the returned result dictionary at any point via `results_store.load()`.
+**Note**: If the `InMemoryStore` is used, results of all the tasks are always returned by `flow.run()`, so that the user can store them manually. For the other shipped storages the user has the option to return or not return results (`return_results=True/False`). Task results can be accessed via task names, e.g. `results["EvaluationTask"]`. Our shipped result stores can be utilized to fetch specific task results from the returned result dictionary at any point via `results_store.load()`.
 
 ### Grid Search
 
