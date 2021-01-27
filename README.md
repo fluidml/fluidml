@@ -54,7 +54,7 @@ For real machine learning examples, check the "Examples" section below.
 
 #### 1. Basic imports
 
-First we import necessary classes from FluidML
+First we import necessary classes from FluidML.
 
 ```Python
 from fluidml import Flow, Swarm
@@ -65,9 +65,9 @@ from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 
 #### 2. Define Tasks
 
-Next, we define some toy machine learning tasks. A Task can be implemented as a function or as a class inheriting from Task class.
+Next, we define some toy machine learning tasks. A Task can be implemented as a function or as a class inheriting from our `Task` class.
 
-In case of the class approach, each task should implement `run()` method which takes some inputs and performs the desired functionality. These inputs are actually the results from predecessor tasks and are automatically forwarded by FluidML based on registered task dependencies. If the task has any hyperparameters, they can be defiend as arguments in the constructor. Additionally, within each task, users have access to methods and attributes like `self.save()` and `self.resource` to save its result and access task resources (more on that later).
+In case of the class approach, each task should implement the `run()` method, which takes some inputs and performs the desired functionality. These inputs are actually the results from predecessor tasks and are automatically forwarded by FluidML based on registered task dependencies. If the task has any hyper-parameters, they can be defined as arguments in the constructor. Additionally, within each task, users have access to methods and attributes like `self.save()` and `self.resource` to save its result and access task resources (more on that later).
 
 ```Python
 class MyTask(Task):
@@ -245,7 +245,7 @@ logging.getLogger('fluidml').propagate = False
 Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of the`Swarm` class, by specifying a number of workers (`n_dolphins` :wink:). 
 If `n_dolphin` is not set, it defaults internally to the number of CPU's available to the machine.
 
-Next, you can create an instance of the `Flow` class and run the tasks utilizing one of our persistent result stores (defaults to `InMemoryStore` if no store is provided). `Flow` under the hood constructs a task graph and `Swarm` executes the graph in parallel while considering the registered dependencies.
+Next, you can create an instance of the `Flow` class and run the tasks utilizing one of our persistent result stores (defaults to `InMemoryStore` if no store is provided). `Flow` under the hood constructs the task graph and `Swarm` executes the graph in parallel while considering the registered dependencies.
 
 ```Python
 tasks = [dataset_fetch_task, pre_process_task, featurize_task_1,
