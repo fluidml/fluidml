@@ -122,8 +122,6 @@ class Swarm:
 
         # schedule entry point tasks
         for task_id, task_name in entry_point_tasks.items():
-            # Console.get_instance().log(
-            #     f'Swarm scheduling task {task_name}-{task_id}.')
             logger.info(f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
