@@ -14,6 +14,12 @@ class ResultsStore(ABC):
         raise NotImplementedError
 
     def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
+        # currently if a task publishes no results, we always execute the task
+        # TODO: Does it make sense in this case to only execute it again
+        #       if the unique_config is not found in the task dir?
+        if not task_publishes:
+            return None
+
         # here we loop over individual item names and call user provided self.load() to get individual item data
         results = {}
         for item_name in task_publishes:

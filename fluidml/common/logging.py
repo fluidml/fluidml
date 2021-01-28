@@ -34,7 +34,7 @@ class LoggingListener(Thread):
 def configure_logging():
     root = logging.getLogger()
     rich_formatter = logging.Formatter('%(processName)-10s\n%(message)s')
-    rich_handler = RichHandler(rich_tracebacks=True, markup=True)
+    rich_handler = RichHandler()
     rich_handler.setLevel(logging.DEBUG)
     rich_handler.setFormatter(rich_formatter)
     root.addHandler(rich_handler)
