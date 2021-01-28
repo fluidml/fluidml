@@ -1,4 +1,6 @@
 version: 2
+orbs:
+  codecov: codecov/codecov@1.0.2jobs
 jobs:
   build:
     docker:
@@ -16,7 +18,8 @@ jobs:
             . venv/bin/activate
             pip install pytest
             pip install coverage
-            pip install .[mongo-store]
+            pip install codecov
+            pip install .[mongo-store,rich-logging]
     
       - run:
           name: run unit tests
@@ -26,6 +29,9 @@ jobs:
             coverage run --source=./fluidml -m pytest --junitxml=test-reports/results.xml tests/unit
             coverage report
             coverage html --directory=test-reports
+            coverage xml
+            mv coverage.xml test-reports
+            codecov -f test-reports/coverage.xml
 
       - run:
           name: run integration tests

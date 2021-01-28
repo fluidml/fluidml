@@ -11,3 +11,8 @@ class TaskResultKeyAlreadyExists(Exception):
 class TaskResultObjectMissing(Exception):
     """Exception raised when one or more expected input results could not be retrieved from predecessor tasks"""
     pass
+
+
+class TaskPublishesSpecMissing(Exception):
+    """Exception raised when `publishes` specification is missing in both task specification or task definition"""
+    pass

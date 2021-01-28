@@ -1,15 +1,19 @@
 from collections import defaultdict
+import logging
 from itertools import product
 from typing import List, Any, Dict, Optional
 
-from networkx import DiGraph, shortest_path_length
+from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common import Task
 from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError
-from fluidml.flow import BaseTaskSpec
+from fluidml.flow import BaseTaskSpec, GridTaskSpec
 from fluidml.swarm import Swarm
+
+
+logger = logging.getLogger(__name__)
 
 
 class Flow:
@@ -24,6 +28,15 @@ class Flow:
                  swarm: Swarm,
                  task_to_execute: Optional[str] = None,
                  force: Optional[str] = None):
+        """
+        Args:
+            swarm (Swarm): an instance of the swarm
+            task_to_execute (Optional[str], optional): a list of task names only those tasks which needs to be run 
+            force (Optional[str], optional): forcefully re-run tasks
+                Possible options are:
+                    "selected" - Only specified tasks in task_to_execture are re-run
+                    "all" - All the tasks are re-run
+        """
         self._swarm = swarm
         self._task_to_execute = task_to_execute
         self._force = force
@@ -58,8 +71,9 @@ class Flow:
         # topological ordering of tasks in graph
         # if a specific task to execute is provided, remove non dependent tasks from graph
         if self._task_to_execute:
-            sorted_names = list(shortest_path_length(
-                task_spec_graph, target=self._task_to_execute).keys())[::-1]
+            sorted_names = list(topological_sort(task_spec_graph))
+            target_idx = sorted_names.index(self._task_to_execute)
+            sorted_names = sorted_names[:target_idx + 1]
         else:
             sorted_names = list(topological_sort(task_spec_graph))
 
@@ -118,14 +132,29 @@ class Flow:
         return config
 
     @staticmethod
-    def _merge_task_combination_configs(task_combinations: List[List[Task]]):
+    def _merge_task_combination_configs(task_combinations: List[List[Task]], task_specs: List[BaseTaskSpec]) -> Dict:
         task_configs = [
             task.unique_config for combination in task_combinations for task in combination]
         merged_config = task_configs.pop(0)
         for config in task_configs:
             merged_config: Dict = update_merge(merged_config, config)
 
-        merged_config: Dict = reformat_config(merged_config)
+        if task_configs:
+            # get all task names that were specified as GridTaskSpec
+            grid_task_names = [
+                spec.name for spec in task_specs if isinstance(spec, GridTaskSpec)]
+
+            # split merged_config in grid_task_config and normal_task_config
+            grid_task_config = {
+                key: value for key, value in merged_config.items() if key in grid_task_names}
+            normal_task_config = {
+                key: value for key, value in merged_config.items() if key not in grid_task_names}
+
+            # reformat only grid_task_config (replace tuples by lists)
+            grid_task_config: Dict = reformat_config(grid_task_config)
+
+            # merge back the normal_task_config with the formatted grid_task_config
+            merged_config = {**normal_task_config, **grid_task_config}
         return merged_config
 
     @staticmethod
@@ -148,7 +177,7 @@ class Flow:
                 for task in tasks:
                     # predecessor config
                     predecessor_config = Flow._merge_task_combination_configs(
-                        task_combinations)
+                        task_combinations, task_specs)
 
                     # add dependencies
                     for task_combination in task_combinations:
