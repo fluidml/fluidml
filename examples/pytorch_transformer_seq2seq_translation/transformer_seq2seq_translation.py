@@ -23,6 +23,7 @@ from tqdm import tqdm
 from transformer_model import Seq2SeqTransformer, Encoder, Decoder
 from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
+from fluidml.common.logging import configure_logging
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import LocalFileStore
 
@@ -345,9 +346,9 @@ class Training(Task):
                 self.save(obj={'epoch': epoch,
                                'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
 
-            print(f'Epoch: {epoch + 1:02} | Time: {end_time - start_time}')
-            print(f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}')
-            print(f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+            logger.info(f'Epoch: {epoch + 1:02} | Time: {end_time - start_time}'
+                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}'
+                        f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
         assert best_model is not None
         return best_model, best_valid_loss
 
@@ -490,7 +491,7 @@ class Evaluation(Task):
             pred_trgs.append(pred_trg_decoded.split())
 
             trg_decoded = en_tokenizer.decode(trg)
-            trgs.append(trg_decoded.split())
+            trgs.append([trg_decoded.split()])
 
         return bleu_score(pred_trgs, trgs)
 
@@ -532,11 +533,11 @@ class Evaluation(Task):
 
         # evaluate the model on the test set -> calculate the test set loss and perplexity
         test_loss = Training.validate_epoch(model=model, iterator=test_iterator, criterion=criterion)
-        print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+        logger.info(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
 
         # calculate the model's bleu score on the test set
         bleu = self.calculate_bleu(test_encoded, en_tokenizer, model)
-        print(f'BLEU score = {bleu * 100:.2f}')
+        logger.info(f'BLEU score = {bleu * 100:.2f}')
 
 
 def main():
@@ -569,9 +570,9 @@ def main():
                        'dec_pf_dim': 512,
                        'enc_dropout': 0.1,
                        'dec_dropout': 0.1,
-                       'learning_rate': 0.0005,
+                       'learning_rate': [0.0005, 0.001],
                        'clip_grad': 1.,
-                       'train_batch_size': 128,
+                       'train_batch_size': [64, 128],
                        'valid_batch_size': 128,
                        'num_epochs': 10}
 
