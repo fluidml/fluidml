@@ -5,11 +5,19 @@ _Develop ML pipelines fluently with no boilerplate code. Focus only on your task
 
 ---
 
+<p align="center">
+  <a href="#key-features">Key Features</a> •
+  <a href="#getting-started">Getting Started</a> •
+  <a href="#examples">Examples</a> •
+  <a href="#citation">Citation</a>
+</p>
+
 [![Python 3.7](https://img.shields.io/badge/python-3.7+-blue.svg)](https://www.python.org/downloads/release/python-370/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=shield)](https://circleci.com/gh/fluidml/fluidml/tree/main)
 [![codecov](https://codecov.io/gh/fluidml/fluidml/branch/main/graph/badge.svg?token=XG4UDWF8RE)](https://codecov.io/gh/fluidml/fluidml)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](https://github.com/fluidml/fluidml/blob/main/CODE_OF_CONDUCT.md)
+
 </div>
 
 ---
@@ -34,6 +42,7 @@ FluidML provides following functionalities out-of-the-box:
 - **Parallel Processing** - Execute the task graph parallely with multi-processing
 - **Grid Search** - Extend the task graph by enabling grid search on tasks with just one line of code
 - **Result Caching** - Task results are cached in a results store (eg: Local File Store or a MongoDB Store) and made available for subsequent runs without executing the tasks again and again
+- **Flexibility** - Provides full control on your task implementations. You are free to choose any framework of your choice (Sklearn, TensorFlow, Pytorch, Keras, or any of your favorite library)
 
 ---
 
@@ -148,7 +157,7 @@ class EvaluateTask(Task):
 #### 3. Task Specifications
 
 Next, we can create the defined tasks with their specifications. We now only write their specifications, later these are used to create real instances of tasks by FluidML.
-   For each Task specification, we also add a list of result names that the corresponding task _publishes_ and _expects_. Each published result object will be considered when results are automatically collected for a successor task.
+For each Task specification, we also add a list of result names that the corresponding task _publishes_ and _expects_. Each published result object will be considered when results are automatically collected for a successor task.
 
 ```Python
 dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
@@ -192,8 +201,10 @@ class TaskResource(Resource):
     device: str
     seed: int
 ```
+
 Let's assume our resources consist of a `seed` and a list of cuda device ids, e.g. `['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
 Then we can create our list of resources object with a simple list comprehension:
+
 ```python
 # create list of resources
 resources = [TaskResource(device=devices[i], seed=seed) for i in range(num_workers)]
@@ -215,18 +226,20 @@ class MyResultsStore(ResultsStore):
         """ Method to save/update any artifact """
         raise NotImplementedError
 ```
+
 We can instantiate for example a `LocalFileStore`
+
 ```python
 results_store = LocalFileStore(base_dir='/some/dir')
 ```
-and pass it in the next step to `Swarm` to enable persistent results storing.
 
+and pass it in the next step to `Swarm` to enable persistent results storing.
 
 #### 7. [optional] Configure Logging
 
 FluidML internally utilizes Python's `logging` library. However, we refrain from configuring a logger object with handlers
-and formatters since each user has different logging needs and preferences. Hence, if you want to use FluidML's logging 
-capability, you just have to do the configuration yourself. For convenience, we provide a simple utility function which 
+and formatters since each user has different logging needs and preferences. Hence, if you want to use FluidML's logging
+capability, you just have to do the configuration yourself. For convenience, we provide a simple utility function which
 configures a visually appealing logger (using a specific handler from the [rich](https://github.com/willmcgugan/rich) library).
 
 ```python
@@ -236,13 +249,14 @@ configure_logging()
 
 **Note**: If you want to use logging in your application (e.g. within FluidML Tasks) but want to disable all FluidML internal logging messages you can
 simply call
+
 ```python
 logging.getLogger('fluidml').propagate = False
 ```
 
 #### 8. Run tasks using Flow and Swarm
 
-Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of the`Swarm` class, by specifying a number of workers (`n_dolphins` :wink:). 
+Now that we have all the tasks specified, we can just run the task graph. For that, we have to create an instance of the`Swarm` class, by specifying a number of workers (`n_dolphins` :wink:).
 If `n_dolphin` is not set, it defaults internally to the number of CPU's available to the machine.
 
 Next, you can create an instance of the `Flow` class and run the tasks utilizing one of our persistent result stores (defaults to `InMemoryStore` if no store is provided). `Flow` under the hood constructs the task graph and `Swarm` executes the graph in parallel while considering the registered dependencies.
@@ -267,9 +281,9 @@ with Swarm(n_dolphins=2,                        # optional (defaults to number o
 Users can easily enable grid search for their tasks with just one line of code. To enable grid search on a particular task, we just have to wrap it with `GridTaskSpec` instead of `TaskSpec`.
 
 ```Python
-train_task = GridTaskSpec(task=TrainTask, 
-                          gs_config={"max_iter": [50, 100], 
-                                     "balanced": [True, False], 
+train_task = GridTaskSpec(task=TrainTask,
+                          gs_config={"max_iter": [50, 100],
+                                     "balanced": [True, False],
                                      "layers": [[50, 100, 50]]})
 ```
 
