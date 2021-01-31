@@ -1,13 +1,12 @@
 import pytest
-from multiprocessing import Manager, set_start_method, Queue, Lock
+from multiprocessing import Manager
 from fluidml.storage import InMemoryStore, ResultsStore
 
 
 @pytest.fixture
 def in_memory_store():
-    lock = Lock()
     with Manager() as manager:
-        store = InMemoryStore(manager, lock)
+        store = InMemoryStore(manager)
         yield store
 
 
@@ -25,13 +24,13 @@ def test_save_load(in_memory_store: ResultsStore):
 
     # first save and load
     in_memory_store.save(test_obj_1, test_item_name,
-                         type, test_task_name, test_config)
+                         'type', test_task_name, test_config)
     loaded_json_obj = in_memory_store.load(
         test_item_name, test_task_name, test_config)
 
     # replace and load
     in_memory_store.save(test_obj_2, test_item_name,
-                         type, test_task_name, test_config)
+                         'type', test_task_name, test_config)
 
     loaded_json_obj = in_memory_store.load(
         test_item_name, test_task_name, test_config)
