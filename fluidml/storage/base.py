@@ -4,6 +4,13 @@ from typing import Optional, List, Dict, Any
 
 class ResultsStore(ABC):
     @abstractmethod
+    def get_context(self, task_name: str, task_unique_config: Dict):
+        """ Method to get the current task's storage context.
+        E.g. the current run directory in case of LocalFileStore.
+        """
+        raise NotImplementedError
+
+    @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
         """ Query method to load an object based on its name, task_name and task_config if it exists """
         raise NotImplementedError
@@ -14,9 +21,7 @@ class ResultsStore(ABC):
         raise NotImplementedError
 
     def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
-        # currently if a task publishes no results, we always execute the task
-        # TODO: Does it make sense in this case to only execute it again
-        #       if the unique_config is not found in the task dir?
+        # if a task publishes no results, we always execute the task
         if not task_publishes:
             return None
 

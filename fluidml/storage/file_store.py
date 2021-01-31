@@ -1,4 +1,5 @@
 import json
+from multiprocessing import Lock
 import os
 import pickle
 from typing import List, Dict, Optional, Any
@@ -12,10 +13,10 @@ class LocalFileStore(ResultsStore):
         self.base_dir = base_dir
         self._save_load_fn_from_type = {'json': (self._save_json, self._load_json),
                                         'pickle': (self._save_pickle, self._load_pickle)}
+        self._lock = Lock()
 
     @staticmethod
     def _save_json(name: str, obj: Dict, run_dir: str):
-        # save dict
         json.dump(obj, open(os.path.join(run_dir, f'{name}.json'), "w"))
 
     @staticmethod
@@ -23,25 +24,16 @@ class LocalFileStore(ResultsStore):
         return json.load(open(os.path.join(run_dir, f'{name}.json'), "r"))
 
     @staticmethod
-    def _save_pickle(name: str, obj: Dict, run_dir: str):
-        # save dict
+    def _save_pickle(name: str, obj: Any, run_dir: str):
         pickle.dump(obj, open(os.path.join(run_dir, f'{name}.p'), "wb"))
 
     @staticmethod
-    def _load_pickle(name: str, run_dir: str) -> Dict:
+    def _load_pickle(name: str, run_dir: str) -> Any:
         return pickle.load(open(os.path.join(run_dir, f'{name}.p'), "rb"))
 
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
-        task_dir = os.path.join(self.base_dir, task_name)
 
-        # try to get existing run dir
-        run_dir = LocalFileStore._get_run_dir(
-            task_dir=task_dir, task_config=task_unique_config)
-
-        # create new run dir if run dir did not exist
-        if run_dir is None:
-            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
-            json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), "w"))
+        run_dir = self.get_context(task_name=task_name, task_unique_config=task_unique_config)
 
         # get save function for type
         save_fn, _ = self._save_load_fn_from_type[type_]
@@ -59,7 +51,7 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = LocalFileStore._get_run_dir(
+        run_dir = self._get_run_dir(
             task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
@@ -82,6 +74,19 @@ class LocalFileStore(ResultsStore):
         obj = load_fn(name=name, run_dir=run_dir, **kwargs)
         return obj
 
+    def get_context(self, task_name: str, task_unique_config: Dict):
+        task_dir = os.path.join(self.base_dir, task_name)
+
+        # try to get existing run dir
+        run_dir = self._get_run_dir(
+            task_dir=task_dir, task_config=task_unique_config)
+
+        # create new run dir if run dir did not exist
+        if run_dir is None:
+            run_dir = self._make_run_dir(task_dir=task_dir)
+            json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), "w"))
+        return run_dir
+
     @staticmethod
     def _scan_task_dir(task_dir: str) -> List[str]:
         os.makedirs(task_dir, exist_ok=True)
@@ -90,25 +95,25 @@ class LocalFileStore(ResultsStore):
                           if d.is_dir() and d.name.isdigit()]
         return exist_run_dirs
 
-    @staticmethod
-    def _get_run_dir(task_dir: str, task_config: Dict) -> Optional[str]:
-        exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
-        for exist_run_dir in exist_run_dirs:
-            try:
-                exist_config = json.load(
-                    open(os.path.join(exist_run_dir, 'config.json'), 'r'))
-            except FileNotFoundError:
-                continue
-            # if task_config == exist_config:
-            if exist_config.items() <= task_config.items():
-                return exist_run_dir
+    def _get_run_dir(self, task_dir: str, task_config: Dict) -> Optional[str]:
+        with self._lock:
+            exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
+            for exist_run_dir in exist_run_dirs:
+                try:
+                    exist_config = json.load(
+                        open(os.path.join(exist_run_dir, 'config.json'), 'r'))
+                except FileNotFoundError:
+                    continue
+
+                if exist_config.items() <= task_config.items():
+                    return exist_run_dir
         return None
 
-    @staticmethod
-    def _make_run_dir(task_dir: str) -> str:
-        exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
-        new_id = max([int(os.path.split(d)[-1])
-                      for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
-        new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
-        os.makedirs(new_run_dir, exist_ok=True)
+    def _make_run_dir(self, task_dir: str) -> str:
+        with self._lock:
+            exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
+            new_id = max([int(os.path.split(d)[-1])
+                          for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
+            new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
+            os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir

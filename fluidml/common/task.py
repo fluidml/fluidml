@@ -140,3 +140,6 @@ class Task(ABC, DependencyMixin):
         else:
             obj = self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
         return obj
+
+    def get_store_context(self):
+        return self._results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)

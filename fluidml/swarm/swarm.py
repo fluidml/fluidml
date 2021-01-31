@@ -50,8 +50,7 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.logging_queue = Queue()
 
-        self.results_store = results_store if results_store is not None else InMemoryStore(
-            self.manager, self.lock)
+        self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
         self.exception = self.manager.dict()
         self.return_results = True if isinstance(
             self.results_store, InMemoryStore) else return_results
