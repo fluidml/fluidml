@@ -107,8 +107,7 @@ class DatasetFetchTask(Task):
     def run(self):
         ...
         # For InMemoryStore (default) and MongoDBStore type_ is NOT required
-        # For LocalFileStore type_ IS required
-        self.save(obj=data_fetch_result, name='data_fetch_result')                
+        # For LocalFileStore type_ IS required               
         self.save(obj=data_fetch_result, name='data_fetch_result', type_='json')
 
 

@@ -50,9 +50,6 @@ class Dolphin(Whale):
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
-        # TODO: We probably don't need a lock here (only file reads which get handled by the results_store)
-        # with self.lock:
-
         # if force is set to false, try to get task results, else set results to none
         if task.force:
             results = None
