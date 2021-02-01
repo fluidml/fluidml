@@ -75,6 +75,9 @@ class LocalFileStore(ResultsStore):
         return obj
 
     def get_context(self, task_name: str, task_unique_config: Dict):
+        """ Method to get the current task's storage context.
+        E.g. the current run directory in case of LocalFileStore.
+        """
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir

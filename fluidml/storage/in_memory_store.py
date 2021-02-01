@@ -47,6 +47,3 @@ class InMemoryStore(ResultsStore):
                 existing_task_results.append(new_task_sweep)
 
             self._memory_store[task_name] = existing_task_results
-
-    def get_context(self, task_name: str, task_unique_config: Dict):
-        pass

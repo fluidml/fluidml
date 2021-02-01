@@ -3,12 +3,6 @@ from typing import Optional, List, Dict, Any
 
 
 class ResultsStore(ABC):
-    @abstractmethod
-    def get_context(self, task_name: str, task_unique_config: Dict):
-        """ Method to get the current task's storage context.
-        E.g. the current run directory in case of LocalFileStore.
-        """
-        raise NotImplementedError
 
     @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:

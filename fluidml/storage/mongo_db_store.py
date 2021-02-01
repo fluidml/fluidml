@@ -32,9 +32,6 @@ class MongoDBStore(ResultsStore):
         self._db = db
         self._collection_name = collection_name
 
-    def get_context(self, task_name: str, task_unique_config: Dict):
-        pass
-
     @connection
     def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
         """ Query method to load an object based on its name, task_name and task_config if it exists """
