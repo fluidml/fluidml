@@ -63,7 +63,7 @@ For real machine learning examples, check the "Examples" section below.
 
 #### 1. Basic imports
 
-First we import necessary classes from FluidML.
+First, we import necessary classes from FluidML.
 
 ```Python
 from fluidml import Flow, Swarm
@@ -106,8 +106,9 @@ Notice that:
 class DatasetFetchTask(Task):
     def run(self):
         ...
-        self.save(obj=data_fetch_result, name='data_fetch_result')                # For InMemoryStore (default) no type_ is required
-        self.save(obj=data_fetch_result, name='data_fetch_result', type_='json')  # type_ is required for LocalFileStore, MongoDBStore
+        # For InMemoryStore (default) and MongoDBStore type_ is NOT required
+        # For LocalFileStore type_ IS required               
+        self.save(obj=data_fetch_result, name='data_fetch_result', type_='json')
 
 
 class PreProcessTask(Task):
@@ -287,7 +288,7 @@ train_task = GridTaskSpec(task=TrainTask,
                                      "layers": [[50, 100, 50]]})
 ```
 
-That's it! Internally, Flow would expand this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
+That's it! Internally, Flow expands this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
 
 ---
 

@@ -7,10 +7,10 @@ from fluidml.storage import ResultsStore
 class InMemoryStore(ResultsStore):
     """ This is an in-memory results store implemented using multiprocessing manager """
 
-    def __init__(self, manager: Manager, lock: Lock):
+    def __init__(self, manager: Manager):
         super().__init__()
         self._memory_store = manager.dict()
-        self._lock = lock
+        self._lock = Lock()
 
     def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
         if task_name not in self._memory_store:
