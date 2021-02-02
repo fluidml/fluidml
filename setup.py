@@ -1,15 +1,22 @@
 from setuptools import setup, find_packages
 
+from fluidml import __version__, __author__, __author_email__, __license__, __copyright__, __homepage__, __docs__
+
 with open('README.md', 'r') as fh:
     long_description = fh.read()
 
 setup(name='fluidml',
-      version='0.1.0',
-      description='A minimal framework for parallelizing machine learning tasks in python.',
+      version=__version__,
+      description=__docs__,
       long_description=long_description,
       long_description_content_type='text/markdown',
-      author='Rajkumar Ramamurthy, Lars Hillebrand',
-      author_email='raj1514@gmail.com',
+      author=__author__,
+      author_email=__author_email__,
+      url=__homepage__,
+      download_url=__homepage__,
+      license=__license__,
+      copyright=__copyright__,
+      keywords=['pipelines', 'machine-learning', 'parallel', 'deep-learning'],
       packages=find_packages(),
       python_requires='>=3.7',
       install_requires=['networkx'],
