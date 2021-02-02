@@ -1,12 +1,17 @@
 import logging
 import time
 
-from .flow import Flow
-from .swarm import Swarm
+try:
+    # This variable is injected in the __builtins__ by the build
+    # process. It used to enable importing subpackages of skimage when
+    # the binaries are not built
+    _ = None if __FLUIDML_SETUP__ else None
+except NameError:
+    __FLUIDML_SETUP__: bool = False
 
-
-logging.getLogger(__name__).addHandler(logging.NullHandler())
-
+if not __FLUIDML_SETUP__:
+    from .flow import Flow
+    from .swarm import Swarm
 
 _this_year = time.strftime("%Y")
 __version__ = '0.1.0'
@@ -19,3 +24,5 @@ __docs__ = (
     "FluidML is a lightweight framework for developing machine learning pipelines."
     " Focus only on your tasks and not the boilerplate!"
 )
+
+logging.getLogger(__name__).addHandler(logging.NullHandler())
