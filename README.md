@@ -50,11 +50,18 @@ FluidML provides following functionalities out-of-the-box:
 
 ### Installation
 
+#### 1. From Pip
+Simply execute:  
+```bash
+$ pip install fluidml
+```
+
+#### 2. From Source
 1. Clone the repository,
 2. Navigate into the cloned directory (contains the setup.py file),
 3. Execute `$ pip install .`
 
-**Note:** To run demo examples, execute `$ pip install .[examples,rich-logging]` to install the additional requirements.
+**Note:** To run demo examples, execute `$ pip install fluidml[examples,rich-logging]` (Pip) or `$ pip install .[examples,rich-logging]` (Source) to install the additional requirements.
 
 ### Minimal Example
 
