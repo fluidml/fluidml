@@ -1,5 +1,14 @@
 from setuptools import setup, find_packages
 
+try:
+    import builtins
+except ImportError:
+    import __builtin__ as builtins
+
+# https://packaging.python.org/guides/single-sourcing-package-version/
+# http://blog.ionelmc.ro/2014/05/25/python-packaging/
+builtins.__FLUIDML_SETUP__ = True
+
 from fluidml import __version__, __author__, __author_email__, __license__, __copyright__, __homepage__, __docs__
 
 with open('README.md', 'r') as fh:
