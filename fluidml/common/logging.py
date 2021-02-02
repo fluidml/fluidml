@@ -4,8 +4,6 @@ from multiprocessing import Queue
 from threading import Thread
 import threading
 
-from rich.logging import RichHandler
-
 
 class LoggingListener(Thread):
     """ Listens to and handles child process log messages
@@ -32,10 +30,14 @@ class LoggingListener(Thread):
 
 
 def configure_logging():
+    try:
+        from rich.logging import RichHandler as StreamHandler
+    except ImportError:
+        from logging import StreamHandler
     root = logging.getLogger()
-    rich_formatter = logging.Formatter('%(processName)-10s\n%(message)s')
-    rich_handler = RichHandler()
-    rich_handler.setLevel(logging.DEBUG)
-    rich_handler.setFormatter(rich_formatter)
-    root.addHandler(rich_handler)
+    formatter = logging.Formatter('%(processName)-10s\n%(message)s')
+    stream_handler = StreamHandler()
+    stream_handler.setLevel(logging.DEBUG)
+    stream_handler.setFormatter(formatter)
+    root.addHandler(stream_handler)
     root.setLevel(logging.DEBUG)

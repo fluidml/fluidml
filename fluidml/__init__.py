@@ -14,7 +14,7 @@ if not __FLUIDML_SETUP__:
     from .swarm import Swarm
 
 _this_year = time.strftime("%Y")
-__version__ = '0.1.0'
+__version__ = '0.1.1'
 __author__ = 'Rajkumar Ramamurthy, Lars Hillebrand'
 __author_email__ = 'raj1514@gmail.com'
 __license__ = 'Apache-2.0'
