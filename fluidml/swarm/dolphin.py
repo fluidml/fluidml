@@ -26,7 +26,9 @@ class Dolphin(Whale):
                  exception: Dict[str, Exception],
                  exit_on_error: bool,
                  results_store: Optional[ResultsStore] = None):
-        super().__init__(exception=exception, exit_on_error=exit_on_error, logging_queue=logging_queue)
+        super().__init__(exception=exception,
+                         exit_on_error=exit_on_error,
+                         logging_queue=logging_queue)
         self.id_ = id_
         self.resource = resource
         self.scheduled_queue = scheduled_queue
@@ -99,7 +101,7 @@ class Dolphin(Whale):
     def _fetch_next_task(self) -> Union[int, None]:
         task_id = None
         try:
-            task_id = self.scheduled_queue.get(block=False, timeout=0.5)
+            task_id = self.scheduled_queue.get(block=False)
         except Empty:
             pass
         return task_id

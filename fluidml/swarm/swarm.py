@@ -57,8 +57,7 @@ class Swarm:
             self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
-        self.logging_listener = LoggingListener(
-            logging_queue=self.logging_queue)
+        self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
 
         # dolphin workers for task execution
         self.dolphins = [Dolphin(id_=i,

@@ -1,8 +1,10 @@
 from abc import abstractmethod
 import logging
-import logging.handlers
 from multiprocessing import Process, Queue
+import sys
 from typing import Dict
+
+from fluidml.common.logging import QueueHandler, StdoutHandler, StderrHandler
 
 
 class Whale(Process):
@@ -17,10 +19,14 @@ class Whale(Process):
         self.logging_queue = logging_queue
 
     def _configure_logging(self):
-        h = logging.handlers.QueueHandler(self.logging_queue)
+        h = QueueHandler(self.logging_queue)
         root = logging.getLogger()
         root.addHandler(h)
         root.setLevel(logging.DEBUG)
+
+    def _redirect_stdout_stderr(self):
+        sys.stdout = StdoutHandler(self.logging_queue)
+        sys.stderr = StderrHandler(self.logging_queue)
 
     @abstractmethod
     def _work(self):
@@ -29,6 +35,7 @@ class Whale(Process):
     def work(self):
         try:
             self._configure_logging()
+            self._redirect_stdout_stderr()
             self._work()
         except Exception as e:
             if self.exit_on_error:
