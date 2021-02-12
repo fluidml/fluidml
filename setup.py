@@ -11,7 +11,7 @@ builtins.__FLUIDML_SETUP__ = True
 
 from fluidml import __version__, __author__, __author_email__, __license__, __copyright__, __homepage__, __docs__
 
-with open('README.md', 'r') as fh:
+with open('README.md', 'r', encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(name='fluidml',
@@ -27,8 +27,11 @@ setup(name='fluidml',
       copyright=__copyright__,
       keywords=['pipelines', 'machine-learning', 'parallel', 'deep-learning'],
       packages=find_packages(),
-      python_requires='>=3.7',
-      install_requires=['networkx'],
+      python_requires='>=3.6',
+      install_requires=[
+          'networkx',
+          'dataclasses; python_version == ">=3.6, <3.7"',
+      ],
       extras_require={'examples': ['datasets',
                                    'flair',
                                    'jupyterlab',
