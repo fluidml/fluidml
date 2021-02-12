@@ -139,6 +139,9 @@ class LoggingListener(Thread):
 
     def work(self):
         while True:
+            # Using queue.get(block=False) is necessary for python 3.6. queue.get() sometimes
+            # leads to weird deadlocks when waiting for logging messages from child processes.
+
             # record = self._logging_queue.get()
             try:
                 record = self._logging_queue.get(block=False)

@@ -148,6 +148,7 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.running_queue = self.manager.list()
         for dolphin in self.dolphins:
+            # dolphin.terminate() is the backup for python 3.6 where .close() is not available
             try:
                 dolphin.close()
             except AttributeError:
