@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 
 class Dolphin(Whale):
     def __init__(self,
-                 id_: int,
                  resource: Resource,
                  scheduled_queue: Queue,
                  running_queue: List[int],
@@ -29,7 +28,6 @@ class Dolphin(Whale):
         super().__init__(exception=exception,
                          exit_on_error=exit_on_error,
                          logging_queue=logging_queue)
-        self.id_ = id_
         self.resource = resource
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
@@ -63,16 +61,21 @@ class Dolphin(Whale):
                                                                  task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
-            logger.info(f'Dolphin {self.id_} started running task {task.name}-{task.id_}.')
+            logger.debug(f'Started running task {task.name}-{task.id_}.')
             if isinstance(task, MyTask):
                 task.run(results=pred_results)
             else:
                 task.run(**pred_results)
-            logger.info(f'Dolphin {self.id_} completed running task {task.name}-{task.id_}.')
 
-        # take results from results store and continue
+        # put task in done_queue
+        self.done_queue.append(task.id_)
+
+        # Log task completion
+        if results is None:
+            msg = f'Completed running task {task.name}-{task.id_}'
         else:
-            logger.info(f'Task {task.name}-{task.id_} already executed.')
+            msg = f'Task {task.name}-{task.id_} already executed.'
+        logger.info(f'{msg} ({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
 
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
@@ -81,9 +84,7 @@ class Dolphin(Whale):
 
     def _execute_task(self, task: Task):
         # extract predecessor results
-        with self.lock:
-            pred_results = self._extract_results_from_predecessors(task)
-            self.running_queue.append(task.id_)
+        pred_results = self._extract_results_from_predecessors(task)
 
         # pack the task
         task = self._pack_task(task)
@@ -91,18 +92,11 @@ class Dolphin(Whale):
         # run the task
         self._run_task(task, pred_results)
 
-        with self.lock:
-            # put task in done_queue
-            self.done_queue.append(task.id_)
-            logger.info(f'Finished {len(self.done_queue)} from {len(self.tasks)} tasks '
-                        f'({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
-
     def _fetch_next_task(self) -> Union[int, None]:
-        task_id = None
         try:
-            task_id = self.scheduled_queue.get(block=False)
+            task_id = self.scheduled_queue.get(timeout=0.5)
         except Empty:
-            pass
+            task_id = None
         return task_id
 
     def _done(self) -> bool:
@@ -119,29 +113,36 @@ class Dolphin(Whale):
                 # get current task from task_id
                 task = self.tasks[task_id]
 
-                # TODO: Do we need a lock here? -> Yes, without I saw how 2 workers executed same task.
-                with self.lock:
-                    # run task only if it has not been executed already
-                    if task_id in self.done_queue or task_id in self.running_queue:
-                        logger.info(f'Task {task.name}-{task_id} is currently running or already finished.')
-                        continue
-
-                # all good to execute the task
+                # execute the task
                 self._execute_task(task)
 
-                # schedule the task's successors
-                self._schedule_successors(task)
+                with self.lock:
+                    # schedule the task's successors
+                    self._schedule_successors(task)
 
     def _schedule_successors(self, task: Task):
         # get successor tasks and put them in task queue for processing
         for successor in task.successors:
             # run task only if all dependencies are satisfied
             if not self._is_task_ready(task=self.tasks[successor.id_]):
-                logger.info(f'Dolphin {self.id_}: Dependencies are not satisfied yet for '
-                            f'task {successor.name}-{successor.id_}')
+                logger.debug(f'Dependencies are not satisfied yet for '
+                             f'task {successor.name}-{successor.id_}')
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                logger.info(f'Task {successor.name}-{successor.id_} '
-                            f'is currently running or already finished.')
+                logger.debug(f'Task {successor.name}-{successor.id_} '
+                             f'is currently running or already finished.')
             else:
-                logger.info(f'Dolphin {self.id_} is now scheduling {successor.name}-{successor.id_}.')
+                logger.debug(f'Is now scheduling {successor.name}-{successor.id_}.')
                 self.scheduled_queue.put(successor.id_)
+                # We have to add the successor id to the running queue here already
+                # Assume, 2 workers execute a task each in parallel, finish at the same time
+                # and both tasks have the same successor task.
+                # Due to the lock only 1 worker enters this fn and puts his task's successor ids
+                # in the scheduled queue. Once the worker leaves this fn the lock gets released
+                # and the second worker adds his task's successors to the queue.
+                # Now, if the shared successor id hasn't been picked up yet by another worker
+                # which previously put the id in the running queue, the second worker puts
+                # the successor id again in the schedule queue.
+                # That leads to the task being executed more than once.
+                # Hence, we have to add the successor ids to the running queue in the moment they are
+                # added to the schedule queue.
+                self.running_queue.append(successor.id_)

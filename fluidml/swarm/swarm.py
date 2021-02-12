@@ -5,7 +5,6 @@ import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
 
-
 from fluidml.common.logging import LoggingListener
 from fluidml.common import Task, Resource
 from fluidml.swarm import Dolphin
@@ -56,11 +55,13 @@ class Swarm:
             self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
-        self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
+        self.logging_listener = LoggingListener(logging_queue=self.logging_queue,
+                                                done_queue=self.done_queue,
+                                                tasks=self.tasks
+                                                )
 
         # dolphin workers for task execution
-        self.dolphins = [Dolphin(id_=i,
-                                 resource=self.resources[i],
+        self.dolphins = [Dolphin(resource=self.resources[i],
                                  scheduled_queue=self.scheduled_queue,
                                  running_queue=self.running_queue,
                                  done_queue=self.done_queue,
@@ -120,7 +121,7 @@ class Swarm:
 
         # schedule entry point tasks
         for task_id, task_name in entry_point_tasks.items():
-            logger.info(f'Swarm scheduling task {task_name}-{task_id}.')
+            logger.debug(f'Swarm scheduling task {task_name}-{task_id}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers
