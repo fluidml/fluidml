@@ -1,6 +1,7 @@
 import copy
 import logging
 from multiprocessing import Queue
+from queue import Empty
 import sys
 from threading import Thread
 import threading
@@ -138,7 +139,12 @@ class LoggingListener(Thread):
 
     def work(self):
         while True:
-            record = self._logging_queue.get()
+            # record = self._logging_queue.get()
+            try:
+                record = self._logging_queue.get(block=False)
+            except Empty:
+                continue
+
             if record is None:
                 break
             record_type, record = record

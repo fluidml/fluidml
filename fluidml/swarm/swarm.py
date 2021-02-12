@@ -145,7 +145,11 @@ class Swarm:
 
     def close(self):
         self.tasks = {}
-        self.done_queue = self.manager.dict()
+        self.done_queue = self.manager.list()
+        self.running_queue = self.manager.list()
         for dolphin in self.dolphins:
-            dolphin.close()
+            try:
+                dolphin.close()
+            except AttributeError:
+                dolphin.terminate()
         self.logging_listener.stop()

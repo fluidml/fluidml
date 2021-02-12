@@ -94,7 +94,7 @@ class Dolphin(Whale):
 
     def _fetch_next_task(self) -> Union[int, None]:
         try:
-            task_id = self.scheduled_queue.get(timeout=0.5)
+            task_id = self.scheduled_queue.get(block=False, timeout=0.5)
         except Empty:
             task_id = None
         return task_id
