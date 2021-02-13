@@ -7,6 +7,8 @@ from threading import Thread
 import threading
 from typing import List, Dict
 
+from rich.logging import RichHandler
+
 # import multiprocessing
 # from rich.progress import Progress
 # from tqdm import tqdm
@@ -142,9 +144,8 @@ class LoggingListener(Thread):
             # Using queue.get(block=False) is necessary for python 3.6. queue.get() sometimes
             # leads to weird deadlocks when waiting for logging messages from child processes.
 
-            # record = self._logging_queue.get()
             try:
-                record = self._logging_queue.get(block=False)
+                record = self._logging_queue.get(block=False, timeout=0.01)
             except Empty:
                 continue
 
@@ -187,19 +188,9 @@ class LoggingListener(Thread):
 
 
 def configure_logging():
-    try:
-        from rich.logging import RichHandler as StreamHandler
-        rich_logging = True
-    except ImportError:
-        from logging import StreamHandler
-        rich_logging = False
     root = logging.getLogger()
-
-    if rich_logging:
-        formatter = logging.Formatter('%(processName)-13s%(message)s')
-    else:
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(processName)s - %(message)s - %(filename)s')
-    stream_handler = StreamHandler()
+    formatter = logging.Formatter('%(processName)-13s%(message)s')
+    stream_handler = RichHandler(show_path=False, rich_tracebacks=True)
     stream_handler.setLevel(logging.INFO)
     stream_handler.setFormatter(formatter)
     root.addHandler(stream_handler)

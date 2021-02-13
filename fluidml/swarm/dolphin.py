@@ -27,7 +27,8 @@ class Dolphin(Whale):
                  results_store: Optional[ResultsStore] = None):
         super().__init__(exception=exception,
                          exit_on_error=exit_on_error,
-                         logging_queue=logging_queue)
+                         logging_queue=logging_queue,
+                         lock=lock)
         self.resource = resource
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
@@ -61,21 +62,22 @@ class Dolphin(Whale):
                                                                  task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
-            logger.debug(f'Started running task {task.name}-{task.id_}.')
+            logger.debug(f'Started task {task.name}-{task.id_}.')
             if isinstance(task, MyTask):
                 task.run(results=pred_results)
             else:
                 task.run(**pred_results)
 
-        # put task in done_queue
-        self.done_queue.append(task.id_)
+        with self.lock:
+            # put task in done_queue
+            self.done_queue.append(task.id_)
 
-        # Log task completion
-        if results is None:
-            msg = f'Completed running task {task.name}-{task.id_}'
-        else:
-            msg = f'Task {task.name}-{task.id_} already executed.'
-        logger.info(f'{msg} ({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
+            # Log task completion
+            if results is None:
+                msg = f'Finished task {task.name}-{task.id_}'
+            else:
+                msg = f'Task {task.name}-{task.id_} already executed.'
+            logger.info(f'{msg} ({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
 
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
@@ -127,6 +129,9 @@ class Dolphin(Whale):
             if not self._is_task_ready(task=self.tasks[successor.id_]):
                 logger.debug(f'Dependencies are not satisfied yet for '
                              f'task {successor.name}-{successor.id_}')
+            # the done_queue check should not be necessary because tasks don't leave the running queue once they're
+            # finished. we use the done_queue for progress measuring and running_queue to avoid tasks being executed
+            # twice.
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
                 logger.debug(f'Task {successor.name}-{successor.id_} '
                              f'is currently running or already finished.')

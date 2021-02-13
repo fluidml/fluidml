@@ -138,9 +138,9 @@ class Swarm:
 
         # if an exception was raised by a child process, re-raise it again in the parent.
         if self.exception:
-            raise self.exception['message']
+            raise ChildProcessError
 
-        # return results
+        # return all results
         return self._collect_results()
 
     def close(self):
