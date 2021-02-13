@@ -44,22 +44,19 @@ class LocalFileStore(ResultsStore):
         # save load info
         load_info = {'kwargs': kwargs,
                      'type_': type_}
-        pickle.dump(load_info, open(os.path.join(
-            run_dir, f'.{name}_load_info.p'), 'wb'))
+        pickle.dump(load_info, open(os.path.join(run_dir, f'.{name}_load_info.p'), 'wb'))
 
     def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(
-            task_dir=task_dir, task_config=task_unique_config)
+        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
 
         # get load information from run dir
         try:
-            load_info = pickle.load(
-                open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
+            load_info = pickle.load(open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
         except FileNotFoundError:
             raise FileNotFoundError(f'{name} not saved.')
 
@@ -81,13 +78,13 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(
-            task_dir=task_dir, task_config=task_unique_config)
+        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
 
         # create new run dir if run dir did not exist
         if run_dir is None:
-            run_dir = self._make_run_dir(task_dir=task_dir)
-            json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), "w"))
+            with self._lock:
+                run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
+                json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), 'w'))
         return run_dir
 
     @staticmethod
@@ -99,24 +96,28 @@ class LocalFileStore(ResultsStore):
         return exist_run_dirs
 
     def _get_run_dir(self, task_dir: str, task_config: Dict) -> Optional[str]:
+        # TODO: This lock causes issues in python 3.6 and 3.7 in jupyter only.
+        # TODO: It works for 3.6, 3.7, 3.8 as a script and works for 3.8 in jupyter.
+        # TODO: When this lock is commented out, the jupyter example works mostly.
+        # TODO: It appears the error only occurs when a lock is acquired and a second process is waiting
         with self._lock:
             exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
             for exist_run_dir in exist_run_dirs:
                 try:
-                    exist_config = json.load(
-                        open(os.path.join(exist_run_dir, 'config.json'), 'r'))
+                    exist_config = json.load(open(os.path.join(exist_run_dir, 'config.json'), 'r'))
                 except FileNotFoundError:
                     continue
 
                 if exist_config.items() <= task_config.items():
                     return exist_run_dir
+
         return None
 
-    def _make_run_dir(self, task_dir: str) -> str:
-        with self._lock:
-            exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
-            new_id = max([int(os.path.split(d)[-1])
-                          for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
-            new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
-            os.makedirs(new_run_dir, exist_ok=True)
+    @staticmethod
+    def _make_run_dir(task_dir: str) -> str:
+        exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
+        new_id = max([int(os.path.split(d)[-1])
+                      for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
+        new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
+        os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir
