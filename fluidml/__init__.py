@@ -25,4 +25,4 @@ __docs__ = (
     " Focus only on your tasks and not the boilerplate!"
 )
 
-logging.getLogger(__name__).addHandler(logging.NullHandler())
+logging.getLogger(__name__)

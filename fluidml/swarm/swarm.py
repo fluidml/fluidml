@@ -11,6 +11,9 @@ from fluidml.swarm import Dolphin
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.utils import pack_results
 
+from rich.traceback import install
+install(extra_lines=2)
+
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +139,7 @@ class Swarm:
         self.logging_queue.put(None)
         self.logging_listener.join()
 
-        # if an exception was raised by a child process, re-raise it again in the parent.
+        # if an exception was raised by a child process, exit the parent process.
         if self.exception:
             raise ChildProcessError
 

@@ -31,7 +31,6 @@ setup(name='fluidml',
       install_requires=[
           'dataclasses;python_version<"3.7"',  # backport for python versions without dataclasses
           'networkx',                          # creation of task graph
-          'rich',                              # beautiful error traceback printing and logging
       ],
       extras_require={'examples': ['datasets',
                                    'flair',
@@ -44,5 +43,8 @@ setup(name='fluidml',
                                    'torchtext',
                                    'torch',
                                    'tqdm'],
-                      'mongo-store': ['mongoengine']},
+                      'mongo-store': ['mongoengine'],
+                      'rich-logging': ['rich',  # beautiful error traceback printing and logging
+                                       'tblib', # enables sending tracebacks through multiprocessing queue
+                                       ]},
       tests_require=['pytest'])

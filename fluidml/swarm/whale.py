@@ -2,16 +2,13 @@ from abc import abstractmethod
 import logging
 import multiprocessing
 from multiprocessing import Process, Queue, Lock
+import os
 import sys
-# import traceback
 from typing import Dict
-
-from rich.console import Console
 
 from fluidml.common.logging import QueueHandler, StdoutHandler, StderrHandler
 
 logger = logging.getLogger(__name__)
-console = Console()
 
 
 class Whale(Process):
@@ -23,35 +20,39 @@ class Whale(Process):
         super().__init__(target=self.work,
                          args=())
         self.exception = exception
-        self.exit_on_error = exit_on_error
-        self.logging_queue = logging_queue
-        self.lock = lock
+        self._exit_on_error = exit_on_error
+        self._logging_queue = logging_queue
+        self._lock = lock
 
     def _configure_logging(self):
-        h = QueueHandler(self.logging_queue)
+        h = QueueHandler(self._logging_queue)
         root = logging.getLogger()
         root.addHandler(h)
         root.setLevel(logging.DEBUG)
 
     def _redirect_stdout_stderr(self):
-        sys.stdout = StdoutHandler(self.logging_queue)
-        sys.stderr = StderrHandler(self.logging_queue)
+        sys.stdout = StdoutHandler(self._logging_queue)
+        sys.stderr = StderrHandler(self._logging_queue)
 
     @abstractmethod
     def _work(self):
         raise NotImplementedError
 
     def work(self):
-        self._configure_logging()
-        self._redirect_stdout_stderr()
         try:
+            self._configure_logging()
+            self._redirect_stdout_stderr()
             self._work()
         except Exception as e:
-            if self.exit_on_error:
-                # exc_type, exc_value, exc_traceback = sys.exc_info()
-                # traceback.print_exception(exc_type, exc_value, exc_traceback)
-                with self.lock:
+            if self._exit_on_error:
+                with self._lock:
+                    # worker_name = multiprocessing.current_process().name
+                    # logger.exception(f'{worker_name:13}{e}')
                     logger.exception(e)
-                    console.print_exception(extra_lines=2)
                     self.exception['value'] = e
             raise
+        finally:
+            # sys.stdout = sys.__stdout__
+            # sys.stderr = sys.__stderr__
+            sys.stdout = open(os.devnull, 'w')
+            sys.stderr = open(os.devnull, 'w')
