@@ -59,8 +59,8 @@ class Swarm:
         self.tasks: Dict[int, Task] = {}
 
         self.logging_listener = LoggingListener(logging_queue=self.logging_queue,
-                                                done_queue=self.done_queue,
-                                                tasks=self.tasks
+                                                # done_queue=self.done_queue,
+                                                # tasks=self.tasks
                                                 )
 
         # dolphin workers for task execution
