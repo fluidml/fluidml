@@ -567,8 +567,8 @@ def main():
     current_dir = os.path.abspath('')
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
-    num_workers = 1
-    force = None  # choices [selected, all, None]
+    num_workers = 4
+    force = 'all'  # choices [selected, all, None]
     task_to_execute = None
     use_cuda = True
     seed = 1234

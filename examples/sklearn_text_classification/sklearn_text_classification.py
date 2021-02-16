@@ -17,9 +17,6 @@ from fluidml.flow import Flow, GridTaskSpec, TaskSpec
 from fluidml.common.logging import configure_logging
 
 
-configure_logging()
-
-
 class DatasetFetchTask(Task):
     def __init__(self):
         super().__init__()
@@ -187,6 +184,7 @@ class ModelSelectionTask(Task):
 
 
 def main():
+    configure_logging()
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
