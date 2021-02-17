@@ -11,8 +11,11 @@ from fluidml.swarm import Dolphin
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.utils import pack_results
 
-from rich.traceback import install
-install(extra_lines=2)
+try:
+    from rich.traceback import install
+    install(extra_lines=2)
+except ImportError:
+    pass
 
 
 logger = logging.getLogger(__name__)
@@ -58,10 +61,7 @@ class Swarm:
             self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
 
-        self.logging_listener = LoggingListener(logging_queue=self.logging_queue,
-                                                # done_queue=self.done_queue,
-                                                # tasks=self.tasks
-                                                )
+        self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
 
         # dolphin workers for task execution
         self.dolphins = [Dolphin(resource=self.resources[i],

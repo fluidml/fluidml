@@ -24,7 +24,8 @@ class DatasetFetchTask(Task):
         # task publishes
         self.publishes = ["raw_dataset"]
 
-    def _get_split(self, dataset, split):
+    @staticmethod
+    def _get_split(dataset, split):
         if split == "test":
             return dataset[split]
         elif split in ["train", "val"]:
@@ -32,7 +33,8 @@ class DatasetFetchTask(Task):
             split_index = int(0.7 * len(splitted))
             return splitted[:split_index] if split == "train" else splitted[split_index:]
 
-    def _get_sentences_and_labels(self, dataset) -> Tuple[List[str], List[str]]:
+    @staticmethod
+    def _get_sentences_and_labels(dataset) -> Tuple[List[str], List[str]]:
         sentences = []
         labels = []
         for item in dataset:
@@ -45,8 +47,8 @@ class DatasetFetchTask(Task):
         splits = ["train", "val", "test"]
         dataset_splits = {}
         for split in splits:
-            dataset_split = self._get_split(dataset, split)
-            sentences, labels = self._get_sentences_and_labels(dataset_split)
+            dataset_split = DatasetFetchTask._get_split(dataset, split)
+            sentences, labels = DatasetFetchTask._get_sentences_and_labels(dataset_split)
             split_results = {
                 "sentences": sentences,
                 "labels": labels

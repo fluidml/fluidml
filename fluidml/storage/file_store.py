@@ -1,10 +1,14 @@
 import json
+import logging
 from multiprocessing import Lock
 import os
 import pickle
 from typing import List, Dict, Optional, Any
 
 from fluidml.storage import ResultsStore
+
+
+logger = logging.getLogger(__name__)
 
 
 class LocalFileStore(ResultsStore):
@@ -68,7 +72,8 @@ class LocalFileStore(ResultsStore):
         try:
             load_info = pickle.load(open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
         except FileNotFoundError:
-            raise FileNotFoundError(f'{name} not saved.')
+            logger.warning(f'"{name}" could not be found in store. Task will be executed again.')
+            return None
 
         # unpack load info
         type_ = load_info['type_']

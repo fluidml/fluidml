@@ -364,8 +364,8 @@ class Training(Task):
                 self.save(obj={'epoch': epoch,
                                'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
 
-            logger.info(f'Epoch: {epoch + 1:02} | Time: {end_time - start_time}'
-                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}'
+            logger.info(f'\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n'
+                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n'
                         f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
 
         assert best_model is not None
@@ -574,7 +574,7 @@ def main():
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
     num_workers = 4
-    force = 'all'  # choices [selected, all, None]
+    force = None  # choices [selected, all, None]
     task_to_execute = None
     use_cuda = True
     seed = 1234
