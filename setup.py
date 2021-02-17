@@ -11,7 +11,7 @@ builtins.__FLUIDML_SETUP__ = True
 
 from fluidml import __version__, __author__, __author_email__, __license__, __copyright__, __homepage__, __docs__
 
-with open('README.md', 'r') as fh:
+with open('README.md', 'r', encoding='utf-8') as fh:
     long_description = fh.read()
 
 setup(name='fluidml',
@@ -27,8 +27,11 @@ setup(name='fluidml',
       copyright=__copyright__,
       keywords=['pipelines', 'machine-learning', 'parallel', 'deep-learning'],
       packages=find_packages(),
-      python_requires='>=3.7',
-      install_requires=['networkx'],
+      python_requires='>=3.6',
+      install_requires=[
+          'dataclasses;python_version<"3.7"',  # backport for python versions without dataclasses
+          'networkx',                          # creation of task graph
+      ],
       extras_require={'examples': ['datasets',
                                    'flair',
                                    'jupyterlab',
@@ -36,10 +39,12 @@ setup(name='fluidml',
                                    'pyyaml',
                                    'requests',
                                    'sklearn',
-                                   'tokenizers',
+                                   'tokenizers>=0.10.1',
                                    'torchtext',
                                    'torch',
                                    'tqdm'],
                       'mongo-store': ['mongoengine'],
-                      'rich-logging': ['rich']},
+                      'rich-logging': ['rich',  # beautiful error traceback printing and logging
+                                       'tblib', # enables sending tracebacks through multiprocessing queue
+                                       ]},
       tests_require=['pytest'])

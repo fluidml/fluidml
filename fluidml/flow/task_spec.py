@@ -52,7 +52,7 @@ class BaseTaskSpec(DependencyMixin, ABC):
 
         if task.publishes is None:
             raise TaskPublishesSpecMissing(
-                f"{self.task} needs publishes specification either in task definition or task specification")
+                f'{self.task} needs "publishes" specification either in task definition or task specification')
         return task
 
     @abstractmethod

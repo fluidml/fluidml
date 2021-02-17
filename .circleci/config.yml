@@ -4,7 +4,7 @@ orbs:
 jobs:
   build:
     docker:
-      - image: circleci/python:3.7
+      - image: circleci/python:3.6
 
     working_directory: ~/repo
 
@@ -45,5 +45,3 @@ jobs:
       - store_artifacts:
           path: test-reports
           destination: test-reports
-  
-

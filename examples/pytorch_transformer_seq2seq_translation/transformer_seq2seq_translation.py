@@ -60,11 +60,14 @@ class MyLocalFileStore(LocalFileStore):
 
     @staticmethod
     def _save_torch(name: str, obj: Any, run_dir: str):
-        torch.save(obj, f=os.path.join(run_dir, f'{name}.pt'))
+        model_dir = os.path.join(run_dir, 'models')
+        os.makedirs(model_dir, exist_ok=True)
+        torch.save(obj, f=os.path.join(model_dir, f'{name}.pt'))
 
     @staticmethod
     def _load_torch(name: str, run_dir: str) -> Any:
-        return torch.load(os.path.join(run_dir, f'{name}.pt'))
+        model_dir = os.path.join(run_dir, 'models')
+        return torch.load(os.path.join(model_dir, f'{name}.pt'))
 
     @staticmethod
     def _save_tokenizer(name: str, obj: Tokenizer, run_dir: str):
@@ -100,6 +103,10 @@ class DatasetLoading(Task):
         return data
 
     def run(self):
+        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+        logger.info(f'Download and save raw dataset to "{task_dir}".')
+
         for split_name, files in self.data_split_names.items():
             dataset = {}
             for file_name in files:
@@ -140,6 +147,9 @@ class TokenizerTraining(Task):
         return tokenizer
 
     def run(self, train_data: Dict[str, List[str]]):
+        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+
         # train german tokenizer
         de_tokenizer = self.train_tokenizer(data=train_data['de'])
 
@@ -147,6 +157,7 @@ class TokenizerTraining(Task):
         en_tokenizer = self.train_tokenizer(data=train_data['en'])
 
         # save tokenizers
+        logger.info(f'Save trained tokenizers to "{task_dir}".')
         self.save(obj=de_tokenizer, name='de_tokenizer', type_='tokenizer')
         self.save(obj=en_tokenizer, name='en_tokenizer', type_='tokenizer')
 
@@ -170,11 +181,14 @@ class DatasetEncoding(Task):
             test_data: Dict[str, List[str]],
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
+        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
         valid_encoded = DatasetEncoding.encode_data(valid_data, de_tokenizer, en_tokenizer)
         test_encoded = DatasetEncoding.encode_data(test_data, de_tokenizer, en_tokenizer)
 
+        logger.info(f'Save encoded dataset to "{task_dir}".')
         self.save(obj=train_encoded, name='train_encoded', type_='json')
         self.save(obj=valid_encoded, name='valid_encoded', type_='json')
         self.save(obj=test_encoded, name='test_encoded', type_='json')
@@ -326,11 +340,15 @@ class Training(Task):
     def _train(self, model, train_iterator, valid_iterator, optimizer, criterion):
         """ Train loop.
         """
+        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+        model_dir = os.path.join(task_dir, 'models')
+        logger.info(f'Save model checkpoints to "{model_dir}".')
 
         best_valid_loss = float('inf')
         best_model = None
 
-        for epoch in tqdm(range(self.num_epochs)):
+        for epoch in range(self.num_epochs):
 
             start_time = datetime.now()
             train_loss = self._train_epoch(model, train_iterator, optimizer, criterion)
@@ -346,9 +364,10 @@ class Training(Task):
                 self.save(obj={'epoch': epoch,
                                'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
 
-            logger.info(f'Epoch: {epoch + 1:02} | Time: {end_time - start_time}'
-                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}'
+            logger.info(f'\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n'
+                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n'
                         f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+
         assert best_model is not None
         return best_model, best_valid_loss
 
@@ -408,11 +427,14 @@ class ModelSelection(Task):
         return config
 
     def run(self, reduced_results: List[Dict]):
+        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # select the best run config by comparing model performances from different parameter sweeps
         # on the validation set
         best_run_config = self._select_best_model_from_sweeps(training_results=reduced_results)
 
+        logger.info(f'Save best run config to "{task_dir}".')
         self.save(obj=best_run_config, name='best_run_config', type_='json')
 
 
@@ -480,18 +502,25 @@ class Evaluation(Task):
         bos_idx = en_tokenizer.token_to_id('<bos>')
         eos_idx = en_tokenizer.token_to_id('<eos>')
 
-        for src, trg in tqdm(data_encoded):
+        worker_name = multiprocessing.current_process().name
+        with tqdm(desc=f'{worker_name} - Calculating BLEU',
+                  total=len(data_encoded),
+                  unit='sample',
+                  ascii=False,
+                  ) as progress_bar:
+            for src, trg in data_encoded:
 
-            pred_trg = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
+                pred_trg = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
 
-            # cut off <eos> token
-            pred_trg = pred_trg[:-1]
+                # cut off <eos> token
+                pred_trg = pred_trg[:-1]
 
-            pred_trg_decoded = en_tokenizer.decode(pred_trg)
-            pred_trgs.append(pred_trg_decoded.split())
+                pred_trg_decoded = en_tokenizer.decode(pred_trg)
+                pred_trgs.append(pred_trg_decoded.split())
 
-            trg_decoded = en_tokenizer.decode(trg)
-            trgs.append([trg_decoded.split()])
+                trg_decoded = en_tokenizer.decode(trg)
+                trgs.append([trg_decoded.split()])
+                progress_bar.update()
 
         return bleu_score(pred_trgs, trgs)
 
@@ -544,13 +573,13 @@ def main():
     current_dir = os.path.abspath('')
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
-    num_workers = 1
+    num_workers = 4
     force = None  # choices [selected, all, None]
     task_to_execute = None
     use_cuda = True
     seed = 1234
 
-    configure_logging()
+    configure_logging(level='INFO')
 
     dataset_loading_params = {'base_url': 'https://raw.githubusercontent.com/multi30k/dataset/'
                                           'master/data/task1/raw/',
@@ -572,7 +601,7 @@ def main():
                        'dec_dropout': 0.1,
                        'learning_rate': [0.0005, 0.001],
                        'clip_grad': 1.,
-                       'train_batch_size': [64, 128],
+                       'train_batch_size': [128, 256],
                        'valid_batch_size': 128,
                        'num_epochs': 10}
 
