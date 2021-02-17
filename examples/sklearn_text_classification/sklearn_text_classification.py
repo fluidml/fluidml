@@ -184,7 +184,7 @@ class ModelSelectionTask(Task):
 
 
 def main():
-    configure_logging()
+    configure_logging(level='INFO')
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)

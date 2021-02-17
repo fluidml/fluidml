@@ -6,7 +6,7 @@ from queue import Empty
 import sys
 from threading import Thread
 import threading
-from typing import List
+from typing import List, Union
 
 try:
     from rich.console import Console
@@ -24,10 +24,6 @@ try:
 except ImportError:
     from logging import StreamHandler
     rich_logging = False
-
-# import multiprocessing
-# from rich.progress import Progress
-# from tqdm import tqdm
 
 
 class QueueHandler(logging.Handler):
@@ -126,15 +122,11 @@ class LoggingListener(Thread):
     """
 
     def __init__(self,
-                 logging_queue: Queue,
-                 # done_queue: List,
-                 # tasks: Dict
+                 logging_queue: Queue
                  ):
         super().__init__(target=self.work,
                          args=())
         self._logging_queue = logging_queue
-        # self._done_queue = done_queue
-        # self._tasks = tasks
         self._stop_event = threading.Event()
 
         self.record_type_to_handle_fn = {'log_msg': LoggingListener._handle_log_msg,
@@ -160,7 +152,6 @@ class LoggingListener(Thread):
         while True:
             # Using queue.get(block=False) is necessary for python 3.6. queue.get() sometimes
             # leads to weird deadlocks when waiting for logging messages from child processes.
-
             try:
                 record = self._logging_queue.get(block=False, timeout=0.01)
             except Empty:
@@ -173,39 +164,13 @@ class LoggingListener(Thread):
             handle_record = self.record_type_to_handle_fn[record_type]
             handle_record(record)
 
-        # TODO: We can consider implementing a general progressbar over all tasks
-        # progress = 0
-        # num_tasks = len(self._tasks)
-        # worker_name = multiprocessing.current_process().name
-        # # with tqdm(desc=f'{worker_name} - Task Progress',
-        # #           total=num_tasks,
-        # #           unit='task',
-        # #           ascii=False,
-        # #           position=0
-        # #           ) as progress_bar:
-        # with Progress() as progress_bar:
-        #     task = progress_bar.add_task(f"{worker_name} - Task Progress", total=num_tasks)
-        #     while True:
-        #         record = self._logging_queue.get()
-        #         if record is None:
-        #             # progress_bar.update(task, advance=1.)
-        #             # progress_bar.update()
-        #             break
-        #         record_type, record = record
-        #
-        #         handle_record = self.record_type_to_handle_fn[record_type]
-        #         handle_record(record)
-        #
-        #         if len(self._done_queue) > progress:
-        #             progress += 1
-        #             progress_bar.update(task, advance=1.)
-        #             # progress_bar.update()
-
     def stop(self):
         self._stop_event.set()
 
 
-def configure_logging():
+def configure_logging(level: Union[str, int] = 'INFO'):
+    assert level in ['DEBUG', 'INFO', 'WARNING', 'WARN', 'ERROR', 'FATAL', 'CRITICAL',
+                     10, 20, 30, 40, 50]
     logger = logging.getLogger()
     if rich_logging:
         formatter = logging.Formatter('%(processName)-13s%(message)s')
@@ -217,7 +182,7 @@ def configure_logging():
     else:
         formatter = logging.Formatter('%(asctime)s %(levelname)-10s %(processName)-10s %(message)s')
         stream_handler = StreamHandler()
-    stream_handler.setLevel(logging.INFO)
+    stream_handler.setLevel(level)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)
-    logger.setLevel(logging.INFO)
+    logger.setLevel(level)

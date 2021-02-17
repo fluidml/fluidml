@@ -104,7 +104,9 @@ class DatasetLoading(Task):
 
     def run(self):
         task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         logger.info(f'Download and save raw dataset to "{task_dir}".')
+
         for split_name, files in self.data_split_names.items():
             dataset = {}
             for file_name in files:
@@ -146,6 +148,7 @@ class TokenizerTraining(Task):
 
     def run(self, train_data: Dict[str, List[str]]):
         task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # train german tokenizer
         de_tokenizer = self.train_tokenizer(data=train_data['de'])
@@ -179,6 +182,7 @@ class DatasetEncoding(Task):
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
         task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
         valid_encoded = DatasetEncoding.encode_data(valid_data, de_tokenizer, en_tokenizer)
@@ -337,6 +341,7 @@ class Training(Task):
         """ Train loop.
         """
         task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         model_dir = os.path.join(task_dir, 'models')
         logger.info(f'Save model checkpoints to "{model_dir}".')
 
@@ -423,6 +428,7 @@ class ModelSelection(Task):
 
     def run(self, reduced_results: List[Dict]):
         task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # select the best run config by comparing model performances from different parameter sweeps
         # on the validation set
@@ -573,7 +579,7 @@ def main():
     use_cuda = True
     seed = 1234
 
-    configure_logging()
+    configure_logging(level='INFO')
 
     dataset_loading_params = {'base_url': 'https://raw.githubusercontent.com/multi30k/dataset/'
                                           'master/data/task1/raw/',
@@ -595,7 +601,7 @@ def main():
                        'dec_dropout': 0.1,
                        'learning_rate': [0.0005, 0.001],
                        'clip_grad': 1.,
-                       'train_batch_size': [64, 128],
+                       'train_batch_size': [128, 256],
                        'valid_batch_size': 128,
                        'num_epochs': 10}
 

@@ -13,7 +13,17 @@ class LocalFileStore(ResultsStore):
         self.base_dir = base_dir
         self._save_load_fn_from_type = {'json': (self._save_json, self._load_json),
                                         'pickle': (self._save_pickle, self._load_pickle)}
-        self._lock = Lock()
+        self._lock = None
+
+    # This is a workaround for Jupyter. Locks cannot be instantiated from within a Notebook.
+    # Since the user instantiates the FileStore himself, the lock would be instantiated in a Notebook if the user
+    # works there. Hence, we wrap it in a property such that the lock only gets instantiated at runtime from within
+    # fluidml. This can be changed back once the Jupyter issue is fixed.
+    @property
+    def lock(self):
+        if self._lock is None:
+            self._lock = Lock()
+        return self._lock
 
     @staticmethod
     def _save_json(name: str, obj: Dict, run_dir: str):
@@ -82,7 +92,7 @@ class LocalFileStore(ResultsStore):
 
         # create new run dir if run dir did not exist
         if run_dir is None:
-            with self._lock:
+            with self.lock:
                 run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
                 json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), 'w'))
         return run_dir
@@ -96,11 +106,7 @@ class LocalFileStore(ResultsStore):
         return exist_run_dirs
 
     def _get_run_dir(self, task_dir: str, task_config: Dict) -> Optional[str]:
-        # TODO: This lock causes issues in python 3.6 and 3.7 in jupyter only.
-        # TODO: It works for 3.6, 3.7, 3.8 as a script and works for 3.8 in jupyter.
-        # TODO: When this lock is commented out, the jupyter example works mostly.
-        # TODO: It appears the error only occurs when a lock is acquired and a second process is waiting
-        with self._lock:
+        with self.lock:
             exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
             for exist_run_dir in exist_run_dirs:
                 try:
