@@ -11,9 +11,6 @@ from typing import List, Union
 try:
     from rich.console import Console
     from rich.logging import RichHandler
-    from tblib import pickling_support
-
-    pickling_support.install()
     console = Console(stderr=True)
     logging.lastResort = RichHandler(console=console,
                                      level='WARNING',
@@ -24,6 +21,13 @@ try:
 except ImportError:
     from logging import StreamHandler
     rich_logging = False
+
+try:
+    from tblib import pickling_support
+    pickling_support.install()
+    tb_lib = True
+except ImportError:
+    tb_lib = False
 
 
 class QueueHandler(logging.Handler):
@@ -69,7 +73,7 @@ class QueueHandler(logging.Handler):
         # msg + args, as these might be unpickleable. We also zap the
         # exc_info and exc_text attributes, as they are no longer
         # needed and, if not None, will typically not be pickleable.
-        if not rich_logging:
+        if not tb_lib:
             msg = self.format(record)
             # bpo-35726: make copy of record to avoid affecting other handlers in the chain.
             record = copy.copy(record)
