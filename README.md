@@ -191,9 +191,9 @@ evaluate_task = TaskSpec(task=EvaluateTask, expects=['train_result'], publishes=
 Here we create the task graph by registering dependencies between the tasks. In particular, for each task specifier, you can register a list of predecessor tasks using the `requires()` method.
 
 ```Python
-pre_process_task.requires([dataset_fetch_task])
-featurize_task_1.requires([pre_process_task])
-featurize_task_2.requires([pre_process_task])
+pre_process_task.requires(dataset_fetch_task)
+featurize_task_1.requires(pre_process_task)
+featurize_task_2.requires(pre_process_task)
 train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
 evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
 ```
@@ -292,10 +292,53 @@ Users can easily enable grid search for their tasks with just one line of code. 
 train_task = GridTaskSpec(task=TrainTask,
                           gs_config={"max_iter": [50, 100],
                                      "balanced": [True, False],
-                                     "layers": [[50, 100, 50]]})
+                                     "layers": [[50, 100, 50]]},
+                          gs_expansion_method='product'  # or 'zip'
+                          )
 ```
 
-That's it! Internally, Flow expands this task into 4 tasks with provided combinations of `max_iter` and `balanced`. Internally all values of type `List` will be unpacked to form grid search combinations. If a list itself is an argument and should not be unpacked, it has to be wrapped again in a list. That is why `layers` is not considered for different grid search realizations. Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
+That's it! Internally, Flow expands this task into 4 tasks with provided cross product combinations of `max_iter` and `balanced`. 
+Alternatively, one can select `zip` as the expansion method, which would result in 2 expanded tasks, with the respective `max_iter` and `balanced` combinations of `(50, True), (100, False)`. 
+Generally, all values of type `List` will be unpacked to form grid search combinations. 
+If a list itself is an argument and should not be expanded, it has to be wrapped again in a list. 
+That is why `layers` is not considered for different grid search realizations. 
+Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. 
+Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
+
+Running a complete machine learning pipeline usually yields trained models for many grid search parameter combinations.
+A common goal is then to automatically determine the best hyper-parameter setup and the best performing model.
+FluidML enables just that by providing a `reduce=True` argument to the `TaskSpec` class. Hence, to automatically 
+compare the 4 evaluate tasks and select the best performing model, we implement an additional `ModelSelectionTask`
+which gets wrapped by our `TaskSpec` class.
+
+```Python
+class ModelSelectionTask(Task):
+    def run(self, reduced_results: List[Dict[str, Dict]]):
+        # from all trained models/hyper-parameter combinations, determine the best performing model
+        ...
+
+model_selection_task = TaskSpec(task=ModelSelectionTask, reduce=True)
+
+model_selection_task.requires(evaluate_task)
+```
+
+The important `reduce=True` argument enables that a single `ModelSelectionTask` instance gets the reduced results
+from all grid search expanded predecessor tasks. Every `reduce=True` task expects only the special `reduced_results` argument
+as input to the `run` method. It is a list of dictionaries where each dictionary holds the results and config of one specific 
+grid search parameter combination. For example:
+
+```Python
+reduced_results = [
+    {'result': {'result_name_1': result_1,
+                'result_name_2': result_2},
+     'config': {...}  # first unique parameter combination config
+     },
+    {'result': {'result_name_1': result_1,
+                'result_name_2': result_2},
+     'config': {...}  # second unique parameter combination config
+     }
+]
+```
 
 ---
 

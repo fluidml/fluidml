@@ -16,3 +16,8 @@ class TaskResultObjectMissing(Exception):
 class TaskPublishesSpecMissing(Exception):
     """Exception raised when `publishes` specification is missing in both task specification or task definition"""
     pass
+
+
+class GridSearchExpansionError(Exception):
+    """Exception raised when Grid Search expansion fails."""
+    pass

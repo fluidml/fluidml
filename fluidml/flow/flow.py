@@ -45,6 +45,7 @@ class Flow:
     def _create_task_spec_graph(task_specs: List[BaseTaskSpec]) -> DiGraph:
         task_spec_graph = DiGraph()
         for spec in task_specs:
+            task_spec_graph.add_node(spec.name)
             for predecessor in spec.predecessors:
                 task_spec_graph.add_edge(predecessor.name, spec.name)
         return task_spec_graph

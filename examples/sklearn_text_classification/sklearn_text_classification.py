@@ -203,14 +203,14 @@ def main():
         task=ModelSelectionTask, reduce=True)
 
     # dependencies between tasks
-    pre_process_task.requires([dataset_fetch_task])
-    featurize_task_1.requires([pre_process_task])
-    featurize_task_2.requires([pre_process_task])
+    pre_process_task.requires(dataset_fetch_task)
+    featurize_task_1.requires(pre_process_task)
+    featurize_task_2.requires(pre_process_task)
     train_task.requires(
         [dataset_fetch_task, featurize_task_1, featurize_task_2])
     evaluate_task.requires(
         [dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
-    model_selection_task.requires([evaluate_task])
+    model_selection_task.requires(evaluate_task)
 
     # all tasks
     tasks = [dataset_fetch_task,

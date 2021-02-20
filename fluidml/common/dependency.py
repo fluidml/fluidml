@@ -1,13 +1,18 @@
-from typing import List, Any
+from typing import Union, List, Any, TYPE_CHECKING
 
 
-class DependencyMixin(object):
+if TYPE_CHECKING:
+    from fluidml.flow.task_spec import BaseTaskSpec
+
+
+class DependencyMixin:
     def __init__(self):
         self._predecessors = []
         self._successors = []
 
-    def requires(self, predecessors: List[Any]):
+    def requires(self, predecessors: Union['BaseTaskSpec', List['BaseTaskSpec']]):
         """Adds predecessor task specs"""
+        predecessors = predecessors if isinstance(predecessors, List) else [predecessors]
 
         self._predecessors.extend(predecessors)
 
@@ -21,9 +26,9 @@ class DependencyMixin(object):
         self._successors.append(successor)
 
     @property
-    def predecessors(self) -> List[Any]:
+    def predecessors(self) -> List['BaseTaskSpec']:
         return self._predecessors
 
     @property
-    def successors(self) -> List[Any]:
+    def successors(self) -> List['BaseTaskSpec']:
         return self._successors
