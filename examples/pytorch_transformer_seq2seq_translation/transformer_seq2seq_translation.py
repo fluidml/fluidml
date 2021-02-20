@@ -625,11 +625,11 @@ def main():
                              expects=['best_run_config'], publishes=[])
 
     # dependencies between tasks
-    tokenizer_training_task.requires([dataset_loading_task])
+    tokenizer_training_task.requires(dataset_loading_task)
     dataset_encoding_task.requires([tokenizer_training_task, dataset_loading_task])
     train_task.requires([dataset_encoding_task, tokenizer_training_task])
-    model_selection_task.requires([train_task])
-    evaluate_task.requires([model_selection_task])
+    model_selection_task.requires(train_task)
+    evaluate_task.requires(model_selection_task)
 
     # all tasks
     tasks = [dataset_loading_task, tokenizer_training_task, dataset_encoding_task,
