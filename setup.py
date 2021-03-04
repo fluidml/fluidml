@@ -30,6 +30,7 @@ setup(name='fluidml',
       python_requires='>=3.6',
       install_requires=[
           'dataclasses;python_version<"3.7"',  # backport for python versions without dataclasses
+          'grandalf',                          # for console graph visualization
           'networkx',                          # creation of task graph
       ],
       extras_require={'examples': ['datasets',

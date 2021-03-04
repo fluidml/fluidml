@@ -167,6 +167,9 @@ class EvaluateTask(Task):
 Next, we can create the defined tasks with their specifications. We now only write their specifications, later these are used to create real instances of tasks by FluidML.
 For each Task specification, we also add a list of result names that the corresponding task _publishes_ and _expects_. Each published result object will be considered when results are automatically collected for a successor task.
 
+Note: The `task_kwargs` argument holds the configuration of the task. It has to be a dictionary (possibly nested), which is `json` serializable. 
+That means a `TypeError` is thrown if the dictionary contains objects, e.g. an `np.array`, that cannot be serialized by Python's json encoder.
+
 ```Python
 dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
 pre_process_task = TaskSpec(task=PreProcessTask,
@@ -300,6 +303,10 @@ train_task = GridTaskSpec(task=TrainTask,
 That's it! Internally, Flow expands this task into 4 tasks with provided cross product combinations of `max_iter` and `balanced`. 
 Alternatively, one can select `zip` as the expansion method, which would result in 2 expanded tasks, with the respective `max_iter` and `balanced` combinations of `(50, True), (100, False)`. 
 Generally, all values of type `List` will be unpacked to form grid search combinations. 
+
+Note: Since we use Python's `json` module to serialize the provided configs, we don't distinguish between types `List` and `Tuple`. 
+In fact, tuples are internally converted to lists, and thus get expanded in the same way as described above.
+
 If a list itself is an argument and should not be expanded, it has to be wrapped again in a list. 
 That is why `layers` is not considered for different grid search realizations. 
 Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. 
