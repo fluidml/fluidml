@@ -52,22 +52,22 @@ def test_pipeline(dummy_resource):
     # initialize all task specs
     parse_task = GridTaskSpec(task=parse, gs_config={"in_dir": "/some/dir"}, publishes=['res1'])
     preprocess_task = GridTaskSpec(task=preprocess, gs_config={"pipeline": ['a', 'b'], "abc": 1},
-                                   publishes=['res2'], expects=['res1'])
+                                   publishes=['res2'])
     featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={"type_": "flair", 'batch_size': [2, 3]},
-                                         publishes=['res3'], expects=['res2'])
+                                         publishes=['res3'])
     featurize_cells_task = GridTaskSpec(task=featurize_cells, gs_config={"type_": "glove", "batch_size": 4},
-                                        publishes=['res4'], expects=['res2'])
+                                        publishes=['res4'])
     train_task = GridTaskSpec(task=train, gs_config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
-                              publishes=['res5'], expects=['res3', 'res4'])
+                              publishes=['res5'])
     evaluate_task = TaskSpec(task=evaluate, reduce=True, task_kwargs={"metric": "accuracy"},
-                             publishes=[], expects=['res5'])
+                             expects=['res5'])
 
     # dependencies between tasks
-    preprocess_task.requires([parse_task])
-    featurize_tokens_task.requires([preprocess_task])
-    featurize_cells_task.requires([preprocess_task])
+    preprocess_task.requires(parse_task)
+    featurize_tokens_task.requires(preprocess_task)
+    featurize_cells_task.requires(preprocess_task)
     train_task.requires([featurize_tokens_task, featurize_cells_task])
-    evaluate_task.requires([train_task])
+    evaluate_task.requires(train_task)
 
     # pack all tasks in a list
     tasks = [parse_task,
@@ -84,8 +84,9 @@ def test_pipeline(dummy_resource):
     with Swarm(n_dolphins=num_workers,
                resources=resources,
                results_store=None) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute='evaluate', force=None)
-        results = flow.run(tasks)
+        flow = Flow(swarm=swarm)
+        flow.create(task_specs=tasks)
+        results = flow.run(force=None)
 
         num_expanded_tasks = 0
         for name, gs_runs in results.items():
