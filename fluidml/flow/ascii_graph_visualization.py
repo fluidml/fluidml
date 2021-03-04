@@ -1,6 +1,6 @@
 """Draws DAG in ASCII.
 
-Note: This script is largely taken from the great DVC project.
+Note: This script is largely taken from the DVC project.
 See: https://github.com/iterative/dvc/blob/master/dvc/dagascii.py
 """
 

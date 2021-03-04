@@ -48,7 +48,5 @@ class Whale(Process):
                     self.exit_event.set()
             raise
         finally:
-            # sys.stdout = sys.__stdout__
-            # sys.stderr = sys.__stderr__
             sys.stdout = open(os.devnull, 'w')
             sys.stderr = open(os.devnull, 'w')

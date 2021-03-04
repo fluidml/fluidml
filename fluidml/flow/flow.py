@@ -7,6 +7,7 @@ from typing import List, Any, Dict, Optional, Set, Union
 import networkx as nx
 from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
+from rich.traceback import install as rich_install
 
 from fluidml.common import Task
 from fluidml.common.utils import update_merge, reformat_config
@@ -16,13 +17,13 @@ from fluidml.flow.ascii_graph_visualization import draw
 from fluidml.swarm import Swarm
 
 
-try:
-    from rich.traceback import install
-    install(extra_lines=2)
-except ImportError:
-    pass
+# try:
+#     from rich.traceback import install
+#     install(extra_lines=2)
+# except ImportError:
+#     pass
 
-
+rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
 
 
