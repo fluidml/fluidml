@@ -50,7 +50,12 @@ class LocalFileStore(ResultsStore):
         run_dir = self.get_context(task_name=task_name, task_unique_config=task_unique_config)
 
         # get save function for type
-        save_fn, _ = self._save_load_fn_from_type[type_]
+        try:
+            save_fn, _ = self._save_load_fn_from_type[type_]
+        except KeyError:
+            raise KeyError(f'Object type "{type_}" is not supported in LocalFileStore. Either extend it by '
+                           f'implementing specific load and save functions for this type, or save the object as one '
+                           f'of the following supported types: {", ".join(self._save_load_fn_from_type)}.')
 
         # save object
         save_fn(name=name, obj=obj, run_dir=run_dir, **kwargs)

@@ -57,6 +57,7 @@ def get_results_from_predecessor(predecessor: Task,
 def pack_predecessor_results(predecessor_tasks: List[Task],
                              results_store: ResultsStore,
                              reduce_task: bool,
+                             task_name: str,
                              task_expects: Optional[List[str]] = None) -> Dict[str, Any]:
     if reduce_task:
         all_results = []
@@ -76,8 +77,8 @@ def pack_predecessor_results(predecessor_tasks: List[Task],
             if retrieved_inputs != set(task_expects):
                 missing_input_results = list(
                     set(task_expects).difference(retrieved_inputs))
-                raise TaskResultObjectMissing(f'Result objects {missing_input_results} are required '
-                                              f'but could not be collected from predecessor tasks.')
+                raise TaskResultObjectMissing(f'{task_name}: Result objects {missing_input_results} '
+                                              f'are required but could not be collected from predecessor tasks.')
         return {"reduced_results": all_results}
 
     else:
@@ -100,8 +101,8 @@ def pack_predecessor_results(predecessor_tasks: List[Task],
             if retrieved_inputs != set(task_expects):
                 missing_input_results = list(
                     set(task_expects).difference(retrieved_inputs))
-                raise TaskResultObjectMissing(f'Result objects {missing_input_results} are required '
-                                              f'but could not be collected from predecessor tasks.')
+                raise TaskResultObjectMissing(f'{task_name}: Result objects {missing_input_results} '
+                                              f'are required but could not be collected from predecessor tasks.')
     return results
 
 
