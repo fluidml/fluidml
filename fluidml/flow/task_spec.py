@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
+import inspect
 from itertools import product
+import json
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
 from fluidml.common import Task, DependencyMixin
 from fluidml.common.utils import MyTask
-from fluidml.common.exception import TaskPublishesSpecMissing, GridSearchExpansionError
+from fluidml.common.exception import TaskExpectsSpecMissing, GridSearchExpansionError
 
 
 class BaseTaskSpec(DependencyMixin, ABC):
@@ -22,37 +24,57 @@ class BaseTaskSpec(DependencyMixin, ABC):
         self.publishes = publishes
         self.expects = expects
 
-        self.force: Optional[str] = None
+        # this will be overwritten later for expanded tasks (a unique expansion id is added)
+        self.unique_name = self.name
 
     def _create_task_object(self,
                             task_kwargs: Dict[str, Any]) -> Task:
-        if isinstance(self.task, type):
+        if inspect.isclass(self.task):
             task = self.task(**task_kwargs)
             task.kwargs = task_kwargs
+            expected_inputs = list(inspect.signature(task.run).parameters)
 
-        elif isinstance(self.task, Callable):
+        elif inspect.isfunction(self.task):
             task = MyTask(task=self.task, kwargs=task_kwargs)
+
+            task_all_arguments = list(inspect.signature(self.task).parameters)
+            task_extra_arguments = list(task_kwargs) + ['task']
+            expected_inputs = [arg for arg in task_all_arguments if arg not in task_extra_arguments]
         else:
-            raise TypeError(f'{self.task} needs to be a Class object (type="type") or a Callable, e.g. a function.'
+            raise TypeError(f'{self.task} needs to be a Class object (type="type") or a function.'
                             f'But it is of type "{type(self.task)}".')
         task.name = self.name
+        task.unique_name = self.unique_name
 
         # override publishes from task spec
         task = self._override_publishes(task)
 
-        # expects
+        # set task expects attribute based on task type and user provided expected inputs
+        task = self._set_task_expects(task, expected_inputs)
+
+        return task
+
+    def _set_task_expects(self, task: Task, expected_inputs: List[str]):
+
         if self.expects is not None:
             task.expects = self.expects
-
+        elif task.expects is None:
+            if self.reduce:
+                raise TaskExpectsSpecMissing(
+                    f'For a reduce task the expected arguments have to be provided explicitly; '
+                    f'either via the "expects" argument of TaskSpec '
+                    f'or via the task class itself as attribute. This is necessary since a reduce task '
+                    f'packs all expected inputs from expanded predecessor tasks in a single argument '
+                    f'named "reduced_results".')
+            task.expects = expected_inputs
         return task
 
     def _override_publishes(self, task: Task):
         if self.publishes is not None:
             task.publishes = self.publishes
 
-        if task.publishes is None:
-            raise TaskPublishesSpecMissing(
-                f'{self.task} needs "publishes" specification either in task definition or task specification')
+        elif task.publishes is None:
+            task.publishes = []
         return task
 
     @abstractmethod
@@ -89,7 +111,8 @@ class TaskSpec(BaseTaskSpec):
         """
         super().__init__(task=task, name=name, reduce=reduce,
                          publishes=publishes, expects=expects)
-        self.task_kwargs = task_kwargs if task_kwargs is not None else {}
+        # we assure that the provided config is json serializable since we use json to later store the config
+        self.task_kwargs = json.loads(json.dumps(task_kwargs)) if task_kwargs is not None else {}
 
     def build(self) -> List[Task]:
         task = self._create_task_object(task_kwargs=self.task_kwargs)
@@ -123,6 +146,8 @@ class GridTaskSpec(BaseTaskSpec):
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
         super().__init__(task=task, name=name, publishes=publishes, expects=expects)
+        # we assure that the provided config is json serializable since we use json to later store the config
+        gs_config = json.loads(json.dumps(gs_config))
         self.task_configs: List[Dict] = GridTaskSpec._split_gs_config(config_grid_search=gs_config,
                                                                       method=gs_expansion_method)
 
@@ -159,6 +184,11 @@ class GridTaskSpec(BaseTaskSpec):
     def _split_gs_config(config_grid_search: Dict, method: str = 'product') -> List[Dict]:
         param_grid = []
         param_grid = GridTaskSpec._find_list_in_dict(config_grid_search, param_grid)
+
+        # wrap empty parameter lists in a seperate list
+        # -> the outer list will be expanded and
+        #    the inner empty list will be passed as a single argument to all task instances.
+        param_grid = [x if x else [x] for x in param_grid]
 
         if method == 'product':
             expansion_fn = product

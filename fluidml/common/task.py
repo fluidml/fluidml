@@ -28,6 +28,7 @@ class Task(ABC, DependencyMixin):
         self._unique_config: Optional[Dict] = None
         self._reduce = False
         self._force: Optional[str] = None
+        self._unique_name: Optional[str] = None
 
         # set in Dolphin
         self._results_store: Optional[ResultsStore] = None
@@ -48,6 +49,14 @@ class Task(ABC, DependencyMixin):
     @id_.setter
     def id_(self, id_: int):
         self._id = id_
+
+    @property
+    def unique_name(self):
+        return self._unique_name
+
+    @unique_name.setter
+    def unique_name(self, unique_name: int):
+        self._unique_name = unique_name
 
     @property
     def unique_config(self):
