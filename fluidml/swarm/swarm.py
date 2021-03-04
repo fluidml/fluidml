@@ -1,6 +1,6 @@
 import logging.handlers
 import multiprocessing
-from multiprocessing import Manager, set_start_method, Queue, Lock
+from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 import random
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
@@ -56,7 +56,8 @@ class Swarm:
         self.logging_queue = Queue()
 
         self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
-        self.exception = self.manager.dict()
+
+        self.exit_event = Event()
         self.return_results = True if isinstance(
             self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, Task] = {}
@@ -71,7 +72,7 @@ class Swarm:
                                  logging_queue=self.logging_queue,
                                  lock=self.lock,
                                  tasks=self.tasks,
-                                 exception=self.exception,
+                                 exit_event=self.exit_event,
                                  exit_on_error=exit_on_error,
                                  results_store=self.results_store) for i in range(self.n_dolphins)]
 
@@ -101,7 +102,7 @@ class Swarm:
         entry_task_ids = {}
         for task in tasks:
             if len(task.predecessors) == 0:
-                entry_task_ids[task.id_] = task.name
+                entry_task_ids[task.id_] = task.unique_name
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
@@ -120,11 +121,12 @@ class Swarm:
             self.tasks[task.id_] = task
 
         # start the listener thread to receive log messages from child processes
+        self.logging_listener.daemon = True
         self.logging_listener.start()
 
         # schedule entry point tasks
-        for task_id, task_name in entry_point_tasks.items():
-            logger.debug(f'Swarm scheduling task {task_name}-{task_id}.')
+        for task_id, task_name_unique in entry_point_tasks.items():
+            logger.debug(f'Swarm scheduling task {task_name_unique}.')
             self.scheduled_queue.put(task_id)
 
         # start the workers
@@ -140,7 +142,7 @@ class Swarm:
         self.logging_listener.join()
 
         # if an exception was raised by a child process, exit the parent process.
-        if self.exception:
+        if self.exit_event.is_set():
             raise ChildProcessError
 
         # return all results
@@ -151,9 +153,10 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.running_queue = self.manager.list()
         for dolphin in self.dolphins:
+            dolphin.join()
             # dolphin.terminate() is the backup for python 3.6 where .close() is not available
             try:
                 dolphin.close()
             except AttributeError:
                 dolphin.terminate()
-        self.logging_listener.stop()
+        # self.logging_listener.stop()
