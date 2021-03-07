@@ -7,10 +7,14 @@ See: https://github.com/iterative/dvc/blob/master/dvc/dagascii.py
 import logging
 import math
 import os
+from typing import Dict, Optional, TYPE_CHECKING
 
 from grandalf.graphs import Edge, Graph, Vertex
 from grandalf.layouts import SugiyamaLayout
 from grandalf.routing import EdgeViewer, route_with_lines
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 
 logger = logging.getLogger(__name__)
@@ -50,14 +54,16 @@ class AsciiCanvas:
 
     TIMEOUT = 10
 
-    def __init__(self, cols, lines):
+    def __init__(self, cols, lines, chars: Dict[str, str]):
         assert cols > 1
         assert lines > 1
 
         self.cols = cols
         self.lines = lines
+        self.chars = chars
 
-        self.canvas = [[" "] * cols for line in range(lines)]
+        # create an empty canvas num_lines x num_cols
+        self.canvas = [[" "] * cols for _ in range(lines)]
 
     def draw(self):
         """Draws ASCII canvas on the screen."""
@@ -149,17 +155,17 @@ class AsciiCanvas:
         height -= 1
 
         for x in range(x0, x0 + width):
-            self.point(x, y0, "-")
-            self.point(x, y0 + height, "-")
+            self.point(x, y0, self.chars['horizontal_box'])
+            self.point(x, y0 + height, self.chars['horizontal_box'])
 
         for y in range(y0, y0 + height):
-            self.point(x0, y, "|")
-            self.point(x0 + width, y, "|")
+            self.point(x0, y, self.chars['vertical_box'])
+            self.point(x0 + width, y, self.chars['vertical_box'])
 
-        self.point(x0, y0, "+")
-        self.point(x0 + width, y0, "+")
-        self.point(x0, y0 + height, "+")
-        self.point(x0 + width, y0 + height, "+")
+        self.point(x0, y0, self.chars['top_left_box'])
+        self.point(x0 + width, y0, self.chars['top_right_box'])
+        self.point(x0, y0 + height, self.chars['bottom_left_box'])
+        self.point(x0 + width, y0 + height, self.chars['bottom_right_box'])
 
 
 def _build_sugiyama_layout(vertexes, edges):
@@ -173,17 +179,13 @@ def _build_sugiyama_layout(vertexes, edges):
     # Y
     #
 
-    vertexes = {v: Vertex(f" {v} ") for v in vertexes}
-    # NOTE: reverting edges to correctly orientate the graph
+    vertexes = {v: Vertex(f' {v} ') for v in vertexes}
     edges = [Edge(vertexes[s], vertexes[e]) for s, e in edges]
     vertexes = vertexes.values()
     graph = Graph(vertexes, edges)
 
     for vertex in vertexes:
         vertex.view = VertexViewer(vertex.data)
-
-    # NOTE: determine min box length to create the best layout
-    minw = min(v.view.w for v in vertexes)
 
     for edge in edges:
         edge.view = EdgeViewer()
@@ -194,7 +196,14 @@ def _build_sugiyama_layout(vertexes, edges):
 
     sug.init_all(roots=roots, optimize=True)
 
-    sug.yspace = VertexViewer.HEIGHT
+    # vertical space between nodes
+    max_num_layer_nodes = max([len(layer) for layer in sug.layers])
+    minh = max(max_num_layer_nodes, VertexViewer.HEIGHT)
+    sug.yspace = minh
+
+    # horizontal space between nodes
+    # determine min box length to create the best layout
+    minw = min(v.view.w for v in vertexes)
     sug.xspace = minw
     sug.route_edge = route_with_lines
 
@@ -203,41 +212,69 @@ def _build_sugiyama_layout(vertexes, edges):
     return sug
 
 
-def draw(vertexes, edges):
-    """Build a DAG and draw it in ASCII.
+def create_console_graph(graph: 'nx.DiGraph', use_ascii: Optional[bool] = None) -> str:
+    """Build the DAG graph layout and draw to console.
     Args:
-        vertexes (list): list of graph vertexes.
-        edges (list): list of graph edges.
+        graph (DiGraph): a networkx directed graph object
+        use_ascii (bool): renders the graph in ascii
+            if None or False, renders in unicode if console supports it
     """
+
+    chars = {'line': '*',
+             'top_left_box': '+',
+             'top_right_box': '+',
+             'bottom_left_box': '+',
+             'bottom_right_box': '+',
+             'horizontal_box': '-',
+             'vertical_box': '|'}
+
+    if not use_ascii:
+        try:
+            import sys
+            '╭╮╰╯·─|'.encode(sys.stdout.encoding).decode(sys.stdout.encoding)
+            chars = {'line': '·',
+                     'top_left_box': '╭',
+                     'top_right_box': '╮',
+                     'bottom_left_box': '╰',
+                     'bottom_right_box': '╯',
+                     'horizontal_box': '─',
+                     'vertical_box': '│'}
+
+        except UnicodeEncodeError:
+            logging.warning(f'Console does not support unicode chars. Defaulting to ascii.')
+
+    vertexes = list(graph.nodes())
+    edges = list(graph.edges())
+
     # pylint: disable=too-many-locals
     # NOTE: coordinates might me negative, so we need to shift
     # everything to the positive plane before we actually draw it.
-    Xs = []  # pylint: disable=invalid-name
-    Ys = []  # pylint: disable=invalid-name
+    xs = []  # pylint: disable=invalid-name
+    ys = []  # pylint: disable=invalid-name
 
     sug = _build_sugiyama_layout(vertexes, edges)
 
     for vertex in sug.g.sV:
         # NOTE: moving boxes w/2 to the left
-        Xs.append(vertex.view.xy[0] - vertex.view.w / 2.0)
-        Xs.append(vertex.view.xy[0] + vertex.view.w / 2.0)
-        Ys.append(vertex.view.xy[1])
-        Ys.append(vertex.view.xy[1] + vertex.view.h)
+        xs.append(vertex.view.xy[0] - vertex.view.w / 2.0)
+        xs.append(vertex.view.xy[0] + vertex.view.w / 2.0)
+        ys.append(vertex.view.xy[1])
+        ys.append(vertex.view.xy[1] + vertex.view.h)
 
     for edge in sug.g.sE:
         for x, y in edge.view._pts:  # pylint: disable=protected-access
-            Xs.append(x)
-            Ys.append(y)
+            xs.append(x)
+            ys.append(y)
 
-    minx = min(Xs)
-    miny = min(Ys)
-    maxx = max(Xs)
-    maxy = max(Ys)
+    minx = min(xs)
+    miny = min(ys)
+    maxx = max(xs)
+    maxy = max(ys)
 
     canvas_cols = int(math.ceil(math.ceil(maxx) - math.floor(minx))) + 1
     canvas_lines = int(round(maxy - miny))
 
-    canvas = AsciiCanvas(canvas_cols, canvas_lines)
+    canvas = AsciiCanvas(canvas_cols, canvas_lines, chars)
 
     # NOTE: first draw edges so that node boxes could overwrite them
     for edge in sug.g.sE:
@@ -257,7 +294,7 @@ def draw(vertexes, edges):
             assert end_x >= 0
             assert end_y >= 0
 
-            canvas.line(start_x, start_y, end_x, end_y, "*")
+            canvas.line(start_x, start_y, end_x, end_y, chars['line'])
 
     for vertex in sug.g.sV:
         # NOTE: moving boxes w/2 to the left
@@ -276,26 +313,3 @@ def draw(vertexes, edges):
         )
 
     return canvas.draw()
-
-
-# import grandalf
-# from grandalf.layouts import SugiyamaLayout
-#
-#
-# G = nx.DiGraph() # Build your networkx graph here
-#
-#
-# g = grandalf.utils.convert_nextworkx_graph_to_grandalf(G) # undocumented function
-#
-# class defaultview(object):
-#     w, h = 10, 10
-# for v in V: v.view = defaultview()
-#
-# sug = SugiyamaLayout(g.C[0])
-# sug.init_all() # roots=[V[0]])
-# sug.draw() # This is a bit of a misnomer, as grandalf doesn't actually come with any visualization methods. This method instead calculates positions
-#
-# poses = {v.data: (v.view.xy[0], v.view.xy[1]) for v in g.C[0].sV} # Extracts the positions
-# nx.draw(G, pos=poses, with_labels=True)
-# import matplotlib.pyplot as plt
-# plt.show()

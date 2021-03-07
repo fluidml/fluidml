@@ -13,12 +13,6 @@ from fluidml.swarm import Dolphin
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.utils import pack_results
 
-# try:
-#     from rich.traceback import install
-#     install(extra_lines=2)
-# except ImportError:
-#     pass
-
 
 rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
@@ -162,4 +156,3 @@ class Swarm:
                 dolphin.close()
             except AttributeError:
                 dolphin.terminate()
-        # self.logging_listener.stop()

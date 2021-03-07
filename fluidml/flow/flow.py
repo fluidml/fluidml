@@ -1,7 +1,6 @@
 from collections import defaultdict
 import logging
 from itertools import product
-import pydoc
 from typing import List, Any, Dict, Optional, Set, Union
 
 import networkx as nx
@@ -13,15 +12,10 @@ from fluidml.common import Task
 from fluidml.common.utils import update_merge, reformat_config
 from fluidml.common.exception import NoTasksError, CyclicGraphError
 from fluidml.flow import BaseTaskSpec, GridTaskSpec
-from fluidml.flow.ascii_graph_visualization import draw
+from fluidml.flow.graph_visualization import create_console_graph
+from fluidml.flow.pager import FluidPager
 from fluidml.swarm import Swarm
 
-
-# try:
-#     from rich.traceback import install
-#     install(extra_lines=2)
-# except ImportError:
-#     pass
 
 rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
@@ -276,20 +270,20 @@ class Flow:
         return tasks
 
     @staticmethod
-    def visualize(graph: DiGraph):
+    def visualize(graph: DiGraph, use_ascii: Optional[bool] = None):
         """Creates the task graph by expanding all GridTaskSpecs and taking reduce=True tasks into account.
 
         Args:
             graph (DiGraph): a networkx directed graph object
+            use_ascii (bool): renders the graph in ascii
+                if None or False, renders in unicode if console supports it
         """
 
-        vertexes = list(graph.nodes())
-        edges = list(graph.edges())
+        console_graph = f'{graph.name}\n\n' if graph.name else ''
+        console_graph += f'{create_console_graph(graph=graph, use_ascii=use_ascii)}\n\n'
 
-        paged_text = f'{graph.name}\n\n' if graph.name else ''
-        paged_text += f'{draw(vertexes=vertexes, edges=edges)}\n\n'
-
-        pydoc.pager(text=paged_text)
+        pager = FluidPager()
+        pager.show(content=console_graph)
 
     def create(self,
                task_specs: List[BaseTaskSpec]):
