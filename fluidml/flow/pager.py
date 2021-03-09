@@ -15,9 +15,9 @@ class FluidPager(Pager):
     IDEAL_PAGER = 'less --chop-long-lines --clear-screen --RAW-CONTROL-CHARS'
 
     def __init__(self):
-        self._pager = self.get_pager()
-
         self.use_pager = None
+
+        self._pager = self.get_pager()
 
     def get_pager(self):
         """Decide what method to use for paging through text."""
