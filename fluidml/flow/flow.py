@@ -142,11 +142,16 @@ class Flow:
     @staticmethod
     def _validate_task_combination(task_combination: List[Task]) -> bool:
         def _match(task_cfgs: List[Dict[str, Any]]):
+            # If the list of task_cfgs is empty we return True and continue with the next combination
+            if not task_cfgs:
+                return True
+
             unique_cfgs = []
             for config in task_cfgs:
                 if config not in unique_cfgs:
                     unique_cfgs.append(config)
 
+            # the predecessor tasks in the combination have no contradicting configs (they come from the same sweep)
             if len(unique_cfgs) == 1:
                 return True
             return False
@@ -157,11 +162,12 @@ class Flow:
         task_names_in_path = list(
             set(name for task in task_combination for name in task.unique_config))
 
-        # for each task in path config
+        # for each defined task name in path config
         for name in task_names_in_path:
-            # task configs
+            # we collect configs for this task name from each predecessor task in the task combination list
+            # if a predecessor task is of type reduce or its config doesn't contain the above task name we skip
             task_configs = [task.unique_config[name] for task in task_combination
-                            if name in task.unique_config.keys()]
+                            if not task.reduce and name in task.unique_config.keys()]
 
             # if they do not match, return False
             if not _match(task_configs):
