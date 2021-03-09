@@ -293,8 +293,8 @@ Calling `flow.visualize(flow.task_spec_graph)` renders the constructed graph to 
 See below the visualization of the task specifier graph from our example:
 
 <div align="center">
-<img src="logo/task_spec_graph.png" width="400px">
-</div>div>
+<img src="logo/task_spec_graph.png" width="500px">
+</div>
 
 **Note 2**: We can provide a `force='all'` to the `run` method in order to force execute all tasks in the pipeline regardless of previously saved results.
 Alternatively, `force` can take a concrete task name or a list of task names as argument. 
@@ -328,8 +328,8 @@ The expanded task graph object is available via `flow.task_graph` after calling 
 As before, we can again visualize the expanded task graph in the console via `flow.visualize(flow.task_graph)`.
 
 <div align="center">
-<img src="logo/task_graph.png" width="400px">
-</div>div>
+<img src="logo/task_graph.png">
+</div>
 
 Note: Since we use Python's `json` module to serialize the provided configs, we don't distinguish between types `List` and `Tuple`. 
 In fact, tuples are internally converted to lists, and thus get expanded in the same way as described above.
