@@ -359,8 +359,9 @@ model_selection_task.requires(evaluate_task)
 The important `reduce=True` argument enables that a single `ModelSelectionTask` instance gets the reduced results
 from all grid search expanded predecessor tasks. 
 
-Note: When specifying a `reduce` task one has to explicitly provide the expected inputs as list of strings to the `expects` argument of `TaskSpec`.
-The expected inputs will be retrieved from the predecessor tasks and packed in a special `reduced_results` argument (the only input to the task's `run` method). 
+Note: When specifying a `reduce` task one can explicitly provide the expected inputs as list of strings to the `expects` argument of `TaskSpec`.
+The expected inputs will be retrieved from the predecessor tasks and packed in a special `reduced_results` argument (the only input to the task's `run` method).
+If `expects` is not provided all published predecessor task results will be retrieved and packed in `reduced_results`.
 It is a list of dictionaries where each dictionary holds the results and config of one specific grid search parameter combination. For example:
 
 ```Python

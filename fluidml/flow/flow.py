@@ -1,6 +1,7 @@
 from collections import defaultdict
 import logging
 from itertools import product
+import sys
 from typing import List, Any, Dict, Optional, Set, Union
 
 import networkx as nx
@@ -10,7 +11,7 @@ from rich.traceback import install as rich_install
 
 from fluidml.common import Task
 from fluidml.common.utils import update_merge, reformat_config
-from fluidml.common.exception import NoTasksError, CyclicGraphError
+from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
 from fluidml.flow import BaseTaskSpec, GridTaskSpec
 from fluidml.flow.graph_visualization import create_console_graph
 from fluidml.flow.pager import FluidPager
@@ -64,6 +65,24 @@ class Flow:
 
         msg = f'Pipeline has a cycle involving: {", ".join(list(nodes_containing_cycle))}.'
         raise CyclicGraphError(msg)
+
+    @staticmethod
+    def _check_no_task_name_clash(task_specs: List[BaseTaskSpec]) -> None:
+        from importlib import import_module
+
+        for task_spec in task_specs:
+            task_obj = task_spec.task
+            task_name = task_spec.task.__name__
+            module_name = getattr(task_obj, '__module__')
+            import_module(module_name)
+            module = sys.modules[module_name]
+            obj = getattr(module, task_name)
+            if obj is not task_obj:
+                raise TaskNameError(
+                    f'Task names have to be unique. '
+                    f'A second object different from task "{task_name}" was found with the same name: \n'
+                    f'{obj} in {module}.'
+                )
 
     @staticmethod
     def _create_graph_from_task_list(tasks: List[Union[BaseTaskSpec, Task]], name: Optional[str] = None) -> DiGraph:
@@ -301,6 +320,8 @@ class Flow:
 
         if not task_specs:
             raise NoTasksError("There are no tasks to run")
+
+        Flow._check_no_task_name_clash(task_specs=task_specs)
 
         ordered_task_specs = self._order_task_specs(task_specs=task_specs)
         self._expanded_tasks: List[Task] = Flow._generate_task_graph(ordered_task_specs)

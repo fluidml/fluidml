@@ -150,8 +150,13 @@ class Swarm:
         self.done_queue = self.manager.list()
         self.running_queue = self.manager.list()
         for dolphin in self.dolphins:
-            dolphin.join()
-            # dolphin.terminate() is the backup for python 3.6 where .close() is not available
+            try:
+                # Only call join() if child processes have been started.
+                # If they haven't been started, an AssertionError is thrown and we pass.
+                dolphin.join()
+            except AssertionError:
+                pass
+            # for python 3.6 dolphin.terminate() is the backup where .close() is not available.
             try:
                 dolphin.close()
             except AttributeError:

@@ -13,8 +13,10 @@ class TaskResultObjectMissing(Exception):
     pass
 
 
-class TaskExpectsSpecMissing(Exception):
-    """Exception raised when `publishes` specification is missing in both task specification or task definition"""
+class TaskNameError(Exception):
+    """Exception raised when an other object with the name of a task exists.
+    Task names have to be unique for pickling.
+    """
     pass
 
 

@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional, List, Tuple, Union, Callable
 
 from fluidml.common import Task, DependencyMixin
 from fluidml.common.utils import MyTask
-from fluidml.common.exception import TaskExpectsSpecMissing, GridSearchExpansionError
+from fluidml.common.exception import GridSearchExpansionError
 
 
 class BaseTaskSpec(DependencyMixin, ABC):
@@ -54,22 +54,18 @@ class BaseTaskSpec(DependencyMixin, ABC):
 
         return task
 
-    def _set_task_expects(self, task: Task, expected_inputs: List[str]):
+    def _set_task_expects(self, task: Task, expected_inputs: List[str]) -> Task:
 
         if self.expects is not None:
             task.expects = self.expects
-        elif task.expects is None:
-            if self.reduce:
-                raise TaskExpectsSpecMissing(
-                    f'For a reduce task the expected arguments have to be provided explicitly; '
-                    f'either via the "expects" argument of TaskSpec '
-                    f'or via the task class itself as attribute. This is necessary since a reduce task '
-                    f'packs all expected inputs from expanded predecessor tasks in a single argument '
-                    f'named "reduced_results".')
+        elif task.expects is None and not self.reduce:
             task.expects = expected_inputs
+
+        # if task.expects is None, we collect all published results from each predecessor
+        #  and pack them in the "reduced_results" dict.
         return task
 
-    def _override_publishes(self, task: Task):
+    def _override_publishes(self, task: Task) -> Task:
         if self.publishes is not None:
             task.publishes = self.publishes
 
