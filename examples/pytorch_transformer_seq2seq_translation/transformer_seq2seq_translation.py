@@ -574,8 +574,7 @@ def main():
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
     num_workers = 4
-    force = None  # choices [selected, all, None]
-    task_to_execute = None
+    force = None
     use_cuda = True
     seed = 1234
 
@@ -645,8 +644,9 @@ def main():
     with Swarm(n_dolphins=num_workers,
                resources=resources,
                results_store=results_store) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute=task_to_execute, force=force)
-        flow.run(tasks)
+        flow = Flow(swarm=swarm)
+        flow.create(tasks)
+        flow.run(tasks, force=force)
 
 
 if __name__ == '__main__':

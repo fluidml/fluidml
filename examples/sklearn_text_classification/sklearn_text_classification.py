@@ -223,7 +223,8 @@ def main():
     with Swarm(n_dolphins=2,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
-        results = flow.run(tasks)
+        flow.create(tasks)
+        results = flow.run()
     print(results["ModelSelectionTask"]["result"]["best_config"])
     print(results["ModelSelectionTask"]["result"]["best_performance"])
 
