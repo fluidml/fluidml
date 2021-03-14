@@ -2,6 +2,7 @@ import logging
 import pydoc
 import os
 import sys
+import tempfile
 
 from rich.pager import Pager
 
@@ -51,7 +52,6 @@ class FluidPager(Pager):
 
         logger.warning('"less" pager could not be found. Defaulting to "more" or, if vot available, "ttypager". '
                        'Install "less" for a better graph visualization experience.')
-        import tempfile
         (fd, filename) = tempfile.mkstemp()
         os.close(fd)
         try:
