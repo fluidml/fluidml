@@ -111,12 +111,13 @@ class Flow:
             for task in self._expanded_tasks:
                 task.force = True
             return
+
         # convert to list if force is of type str
         if isinstance(force, str):
             force = [force]
 
         if not isinstance(force, List):
-            raise TypeError(f'"force" argument has to be of type str or list of str.')
+            raise TypeError('"force" argument has to be of type str or list of str.')
 
         # get all user provided task names to force execute
         force_task_names = [task_name[:-1] if task_name[-1] == '+' else task_name for task_name in force]
@@ -237,7 +238,7 @@ class Flow:
         return merged_config
 
     @staticmethod
-    def _generate_task_graph(task_specs: List[BaseTaskSpec]) -> List[Task]:
+    def _generate_task_nodes(task_specs: List[BaseTaskSpec]) -> List[Task]:
         # keep track of expanded tasks by their names
         expanded_tasks_by_name = defaultdict(list)
         task_id = 0
@@ -296,7 +297,8 @@ class Flow:
 
     @staticmethod
     def visualize(graph: DiGraph, use_ascii: Optional[bool] = None):
-        """Creates the task graph by expanding all GridTaskSpecs and taking reduce=True tasks into account.
+        """Visualizes the task graph by rendering it to the console via a pager
+        -> keyboard input ":q" required to continue.
 
         Args:
             graph (DiGraph): a networkx directed graph object
@@ -324,7 +326,7 @@ class Flow:
         Flow._check_no_task_name_clash(task_specs=task_specs)
 
         ordered_task_specs = self._order_task_specs(task_specs=task_specs)
-        self._expanded_tasks: List[Task] = Flow._generate_task_graph(ordered_task_specs)
+        self._expanded_tasks: List[Task] = Flow._generate_task_nodes(ordered_task_specs)
         self.task_graph: DiGraph = Flow._create_graph_from_task_list(tasks=self._expanded_tasks, name='task graph')
 
     def run(self,
@@ -334,8 +336,11 @@ class Flow:
         Args:
             force (Optional[str], optional): forcefully re-run tasks
                 Possible options are:
-                    "selected" - Only specified tasks in task_to_execute are re-run
-                    "all" - All the tasks are re-run
+                   1)  "all" - All the tasks are re-run
+                   2)  a task name (eg. "PreProcessTask")
+                       or list of task names (eg. ["PreProcessTask1", "PreProcessTask2])
+                       Additionally, each task name can have the suffix '+' to re-run also its successors
+                       (eg. "PreProcessTask+")
 
         Returns:
             Dict[str, Dict[str, Any]]: a nested dict of results
