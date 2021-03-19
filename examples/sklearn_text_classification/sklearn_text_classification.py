@@ -190,7 +190,7 @@ def main():
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
-    pre_process_task = TaskSpec(task=PreProcessTask, task_kwargs={
+    pre_process_task = TaskSpec(task=PreProcessTask, config={
                                 "pre_processing_steps": ["lower_case", "remove_punct"]})
     featurize_task_1 = TaskSpec(
         task=GloveFeaturizeTask)
@@ -223,7 +223,8 @@ def main():
     with Swarm(n_dolphins=2,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
-        results = flow.run(tasks)
+        flow.create(task_specs=tasks)
+        results = flow.run()
     print(results["ModelSelectionTask"]["result"]["best_config"])
     print(results["ModelSelectionTask"]["result"]["best_performance"])
 

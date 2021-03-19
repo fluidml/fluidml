@@ -16,29 +16,31 @@ class BaseTaskSpec(DependencyMixin, ABC):
                  name: Optional[str] = None,
                  reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
-                 expects: Optional[List[str]] = None):
+                 expects: Optional[List[str]] = None,
+                 additional_kwargs: Optional[Dict[str, Any]] = None):
         DependencyMixin.__init__(self)
         self.task = task
         self.name = name if name is not None else self.task.__name__
         self.reduce = reduce
         self.publishes = publishes
         self.expects = expects
+        self.additional_kwargs = additional_kwargs if additional_kwargs is not None else {}
 
         # this will be overwritten later for expanded tasks (a unique expansion id is added)
         self.unique_name = self.name
 
     def _create_task_object(self,
-                            task_kwargs: Dict[str, Any]) -> Task:
+                            config_kwargs: Dict[str, Any]) -> Task:
         if inspect.isclass(self.task):
-            task = self.task(**task_kwargs)
-            task.kwargs = task_kwargs
+            task = self.task(**config_kwargs, **self.additional_kwargs)
+            task.config_kwargs = config_kwargs
             expected_inputs = list(inspect.signature(task.run).parameters)
 
         elif inspect.isfunction(self.task):
-            task = MyTask(task=self.task, kwargs=task_kwargs)
+            task = MyTask(task=self.task, config_kwargs=config_kwargs, additional_kwargs=self.additional_kwargs)
 
             task_all_arguments = list(inspect.signature(self.task).parameters)
-            task_extra_arguments = list(task_kwargs) + ['task']
+            task_extra_arguments = list(config_kwargs) + list(self.additional_kwargs) + ['task']
             expected_inputs = [arg for arg in task_all_arguments if arg not in task_extra_arguments]
         else:
             raise TypeError(f'{self.task} needs to be a Class object (type="type") or a function.'
@@ -87,7 +89,8 @@ class BaseTaskSpec(DependencyMixin, ABC):
 class TaskSpec(BaseTaskSpec):
     def __init__(self,
                  task: Union[type, Callable],
-                 task_kwargs: Optional[Dict[str, Any]] = None,
+                 config: Optional[Dict[str, Any]] = None,
+                 additional_kwargs: Optional[Dict[str, Any]] = None,
                  name: Optional[str] = None,
                  reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
@@ -97,8 +100,9 @@ class TaskSpec(BaseTaskSpec):
 
         Args:
             task (Union[type, Callable]): task class
-            task_kwargs (Optional[Dict[str, Any]], optional): task arguments that are used while instantiating.
-                                                              Defaults to None.
+            config (Optional[Dict[str, Any]], optional): task configuration parameters that are used
+                                                         while instantiating. Defaults to None.
+            additional_kwargs (Optional[Dict[str, Any]], optional): Additional kwargs provided to the task.
             name (Optional[str], optional): an unique name of the class. Defaults to None.
             reduce (Optional[bool], optional): a boolean indicating whether this is a reduce task. Defaults to None.
             publishes (Optional[List[str]], optional): a list of result names that this task publishes. 
@@ -106,27 +110,21 @@ class TaskSpec(BaseTaskSpec):
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
         super().__init__(task=task, name=name, reduce=reduce,
-                         publishes=publishes, expects=expects)
+                         publishes=publishes, expects=expects, additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
-        self.task_kwargs = json.loads(json.dumps(task_kwargs)) if task_kwargs is not None else {}
+        self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}
 
     def build(self) -> List[Task]:
-        task = self._create_task_object(task_kwargs=self.task_kwargs)
+        task = self._create_task_object(config_kwargs=self.config_kwargs)
         return [task]
 
 
 class GridTaskSpec(BaseTaskSpec):
-    """A class to hold specification of a grid searcheable task
-
-    Args:
-        task (type): a task class to instantiate and expand
-        gs_config (Dict[str, Any]): a grid search config that will be expanded
-        name (Optional[str], optional): Defaults to None
-    """
 
     def __init__(self,
                  task: Union[type, Callable],
                  gs_config: Dict[str, Any],
+                 additional_kwargs: Optional[Dict[str, Any]] = None,
                  gs_expansion_method: Optional[str] = 'product',
                  name: Optional[str] = None,
                  publishes: Optional[List[str]] = None,
@@ -137,19 +135,21 @@ class GridTaskSpec(BaseTaskSpec):
         Args:
             task (Union[type, Callable]): task class
             gs_config (Dict[str, Any]): a grid search config that will be expanded
+            additional_kwargs (Optional[Dict[str, Any]], optional): Additional kwargs provided to the task.
             name (Optional[str], optional): an unique name of the class. Defaults to None.
-           publishes (Optional[List[str]], optional): a list of result names that this task publishes. Defaults to None.
+            publishes (Optional[List[str]], optional): a list of result names that this task publishes.
+                                                       Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
-        super().__init__(task=task, name=name, publishes=publishes, expects=expects)
+        super().__init__(task=task, name=name, publishes=publishes, expects=expects,
+                         additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
         gs_config = json.loads(json.dumps(gs_config))
         self.task_configs: List[Dict] = GridTaskSpec._split_gs_config(config_grid_search=gs_config,
                                                                       method=gs_expansion_method)
 
     def build(self) -> List[Task]:
-        tasks = [self._create_task_object(
-            task_kwargs=config) for config in self.task_configs]
+        tasks = [self._create_task_object(config_kwargs=config) for config in self.task_configs]
         return tasks
 
     @staticmethod

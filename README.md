@@ -169,21 +169,21 @@ We now only write their specifications, later these are used to create real inst
 For each Task specification, we also add a list of result names that the corresponding task _publishes_. 
 Each published result object will be considered when results are automatically collected for a successor task.
 
-Note: The `task_kwargs` argument holds the configuration of the task. 
+Note: The `config` argument holds the configuration of the task. 
 It has to be a dictionary (possibly nested), which is `json` serializable. 
 That means a `TypeError` is thrown if the dictionary contains objects, e.g. an `np.array`, that cannot be serialized by Python's json encoder.
 
 ```Python
 dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
 pre_process_task = TaskSpec(task=PreProcessTask,
-                            task_kwargs={
+                            config={
                                 "pre_processing_steps": ["lower_case", "remove_punct"]},
                             publishes=['pre_process_result'])
 featurize_task_1 = TaskSpec(task=GloveFeaturizeTask,
                             publishes=['glove_featurize_result'])
-featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, task_kwargs={"min_df": 5, "max_features": 1000},
+featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, config={"min_df": 5, "max_features": 1000},
                             publishes=['tfidf_featurize_result'])
-train_task = TaskSpec(task=TrainTask, task_kwargs={"max_iter": 50, "balanced": True},
+train_task = TaskSpec(task=TrainTask, config={"max_iter": 50, "balanced": True},
                       publishes=['train_result'])
 evaluate_task = TaskSpec(task=EvaluateTask, publishes=['evaluate_result'])
 ```

@@ -14,11 +14,10 @@ class Resource:
 class Task(ABC, DependencyMixin):
     """Abstract class for task"""
 
-    def __init__(self,
-                 kwargs: Optional[Dict] = None):
+    def __init__(self):
         DependencyMixin.__init__(self)
         # set in Task_spec
-        self.kwargs = kwargs
+        self._config_kwargs: Optional[Dict[str, Any]] = None
         self._name: Optional[str] = None
         self._publishes: Optional[List[str]] = None
         self._expects: Optional[List[str]] = None
@@ -41,6 +40,14 @@ class Task(ABC, DependencyMixin):
     @name.setter
     def name(self, name: str):
         self._name = name
+
+    @property
+    def config_kwargs(self):
+        return self._config_kwargs
+
+    @config_kwargs.setter
+    def config_kwargs(self, config_kwargs: str):
+        self._config_kwargs = config_kwargs
 
     @property
     def id_(self):

@@ -77,7 +77,8 @@ class LocalFileStore(ResultsStore):
         try:
             load_info = pickle.load(open(os.path.join(run_dir, f".{name}_load_info.p"), "rb"))
         except FileNotFoundError:
-            logger.warning(f'"{name}" could not be found in store. Task will be executed again.')
+            logger.warning(f'"{name}" could not be found in store, since ".{name}_load_info.p" does not exist. '
+                           f'Task will be executed again.')
             return None
 
         # unpack load info
@@ -88,7 +89,12 @@ class LocalFileStore(ResultsStore):
         _, load_fn = self._save_load_fn_from_type[type_]
 
         # load the saved object from run dir
-        obj = load_fn(name=name, run_dir=run_dir, **kwargs)
+        try:
+            obj = load_fn(name=name, run_dir=run_dir, **kwargs)
+        except FileNotFoundError:
+            logger.warning(f'"{name}" could not be found in store. Task will be executed again. '
+                           f'Note ".{name}_load_info.p" does still exist and will be overwritten.')
+            return None
         return obj
 
     def get_context(self, task_name: str, task_unique_config: Dict):

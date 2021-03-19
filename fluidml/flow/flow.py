@@ -263,7 +263,7 @@ class Flow:
                     task.id_ = task_id
                     task.reduce = True
                     expanded_tasks_by_name[task.name].append(task)
-                    task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
+                    task.unique_config = {**predecessor_config, **{task.name: task.config_kwargs}}
                     task_id += 1
             else:
                 # for each combination, create a new task
@@ -277,7 +277,7 @@ class Flow:
                     for task in tasks:
                         task.id_ = task_id
                         task.requires(task_combination)
-                        task.unique_config = {**predecessor_config, **{task.name: task.kwargs}}
+                        task.unique_config = {**predecessor_config, **{task.name: task.config_kwargs}}
                         expanded_tasks_by_name[task.name].append(task)
                         task_id += 1
 

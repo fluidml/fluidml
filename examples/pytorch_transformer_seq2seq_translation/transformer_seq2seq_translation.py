@@ -81,7 +81,6 @@ class MyLocalFileStore(LocalFileStore):
 @dataclass
 class TaskResource(Resource):
     device: str
-    seed: int
 
 
 class DatasetLoading(Task):
@@ -238,7 +237,8 @@ class Training(Task):
                  clip_grad: float,
                  train_batch_size: int,
                  valid_batch_size: int,
-                 num_epochs: int):
+                 num_epochs: int,
+                 seed: int):
         super().__init__()
 
         # transformer model parameters
@@ -260,6 +260,7 @@ class Training(Task):
         self.train_batch_size = train_batch_size
         self.valid_batch_size = valid_batch_size
         self.num_epochs = num_epochs
+        self.seed = seed
 
     def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int):
         """ Initialize all training components.
@@ -376,7 +377,7 @@ class Training(Task):
             valid_encoded: List[Tuple[List[int], List[int]]],
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
-        set_seed(self.resource.seed)
+        set_seed(self.seed)
 
         # instantiate the collate fn for the dataloader
         batch_collator = BatchCollator(de_pad_idx=de_tokenizer.token_to_id('<pad>'),
@@ -439,10 +440,11 @@ class ModelSelection(Task):
 
 
 class Evaluation(Task):
-    def __init__(self, test_batch_size: int):
+    def __init__(self, test_batch_size: int, seed: int):
         super().__init__()
 
         self.batch_size = test_batch_size
+        self.seed = seed
 
     def _init_model(self, train_config: Dict, input_dim: int, output_dim: int,
                     src_pad_idx: int, trg_pad_idx: int) -> nn.Module:
@@ -525,7 +527,7 @@ class Evaluation(Task):
         return bleu_score(pred_trgs, trgs)
 
     def run(self, best_run_config: Dict):
-        set_seed(self.resource.seed)
+        set_seed(self.seed)
 
         # load the best model, test-data and the tokenizers based on the previously selected best run config
         model_state_dict = self.load(name='best_model', task_name='Training', task_unique_config=best_run_config)
@@ -574,8 +576,9 @@ def main():
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
     num_workers = 4
-    force = None  # choices [selected, all, None]
-    task_to_execute = None
+    # choices [<task_name>, <task_name+>, [<task_name1+>, <task_name2>], all, None]
+    #  "+" registers successor tasks for force execution as well
+    force = None
     use_cuda = True
     seed = 1234
 
@@ -603,26 +606,24 @@ def main():
                        'clip_grad': 1.,
                        'train_batch_size': [128, 256],
                        'valid_batch_size': 128,
-                       'num_epochs': 10}
+                       'num_epochs': 10,
+                       'seed': seed}
 
-    evaluation_params = {'test_batch_size': 128}
+    evaluation_params = {'test_batch_size': 128,
+                         'seed': seed}
 
     # create all task specs
-    dataset_loading_task = TaskSpec(task=DatasetLoading, task_kwargs=dataset_loading_params,
+    dataset_loading_task = TaskSpec(task=DatasetLoading, config=dataset_loading_params,
                                     publishes=['train_data', 'valid_data', 'test_data'])
     tokenizer_training_task = GridTaskSpec(task=TokenizerTraining, gs_config=tokenizer_training_params,
-                                           expects=['train_data'],
                                            publishes=['de_tokenizer', 'en_tokenizer'])
     dataset_encoding_task = TaskSpec(task=DatasetEncoding,
-                                     expects=['train_data', 'valid_data', 'test_data', 'de_tokenizer', 'en_tokenizer'],
                                      publishes=['train_encoded', 'valid_encoded', 'test_encoded'])
     train_task = GridTaskSpec(task=Training, gs_config=training_params,
-                              expects=['train_encoded', 'valid_encoded', 'de_tokenizer', 'en_tokenizer'],
                               publishes=['best_model', 'best_model_metric'])
     model_selection_task = TaskSpec(task=ModelSelection, reduce=True, expects=['best_model_metric'],
                                     publishes=['best_run_config'])
-    evaluate_task = TaskSpec(task=Evaluation, reduce=False, task_kwargs=evaluation_params,
-                             expects=['best_run_config'], publishes=[])
+    evaluate_task = TaskSpec(task=Evaluation, reduce=False, config=evaluation_params)
 
     # dependencies between tasks
     tokenizer_training_task.requires(dataset_loading_task)
@@ -637,7 +638,7 @@ def main():
 
     # create list of resources
     devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda)
-    resources = [TaskResource(device=devices[i], seed=seed) for i in range(num_workers)]
+    resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
 
     # create local file storage used for versioning
     results_store = MyLocalFileStore(base_dir=base_dir)
@@ -645,8 +646,14 @@ def main():
     with Swarm(n_dolphins=num_workers,
                resources=resources,
                results_store=results_store) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute=task_to_execute, force=force)
-        flow.run(tasks)
+        flow = Flow(swarm=swarm)
+        flow.create(task_specs=tasks)
+
+        # visualize graphs
+        flow.visualize(flow.task_spec_graph)
+        flow.visualize(flow.task_graph)
+
+        flow.run(force=force)
 
 
 if __name__ == '__main__':

@@ -59,7 +59,7 @@ def test_pipeline(dummy_resource):
                                         publishes=['res4'])
     train_task = GridTaskSpec(task=train, gs_config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
                               publishes=['res5'])
-    evaluate_task = TaskSpec(task=evaluate, reduce=True, task_kwargs={"metric": "accuracy"},
+    evaluate_task = TaskSpec(task=evaluate, reduce=True, config={"metric": "accuracy"},
                              expects=['res5'])
 
     # dependencies between tasks
