@@ -15,6 +15,7 @@ from fluidml.common import Task
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow, GridTaskSpec, TaskSpec
 from fluidml.common.logging import configure_logging
+from fluidml.visualization import visualize_graph_in_console
 
 
 class DatasetFetchTask(Task):
@@ -224,7 +225,13 @@ def main():
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
         flow.create(task_specs=tasks)
+
+        # visualize graphs
+        visualize_graph_in_console(flow.task_spec_graph, use_pager=False)
+        visualize_graph_in_console(flow.task_spec_graph, use_pager=True)
+ 
         results = flow.run()
+
     print(results["ModelSelectionTask"]["result"]["best_config"])
     print(results["ModelSelectionTask"]["result"]["best_performance"])
 
