@@ -1,3 +1,9 @@
+"""Draws DAG in ASCII.
+Note: This script is largely taken from the DVC project.
+See: https://github.com/iterative/dvc/blob/master/dvc/dagascii.py
+"""
+
+
 import logging
 import math
 import os
@@ -6,6 +12,7 @@ from typing import Dict, TYPE_CHECKING
 from fluidml.visualization import build_sugiyama_layout
 
 if TYPE_CHECKING:
+    from grandalf.layouts import SugiyamaLayout
     import networkx as nx
 
 
@@ -15,14 +22,18 @@ logger = logging.getLogger(__name__)
 class AsciiCanvas:
     """Class for drawing graph in ASCII.
     Args:
+        sug (SugiyamaLayout): calculated sugiyama layout for the input graph
         cols (int): number of columns in the canvas. Should be > 1.
         rows (int): number of rows in the canvas. Should be > 1.
+        chars (Dict): character set used for graph rendering (can be ascii or unicode)
+        minx (int): minimum x coordinate drawn on canvas.
+        miny (int): minimum y coordinate drawn on canvas.
     """
 
     TIMEOUT = 10
 
     def __init__(self,
-                 sug,
+                 sug: 'SugiyamaLayout',
                  cols: int,
                  rows: int,
                  chars: Dict[str, str],
@@ -206,8 +217,8 @@ def _get_graph_char_set(use_unicode: bool) -> Dict[str, str]:
     return chars
 
 
-def visualize_graph_in_ascii(graph: 'nx.DiGraph', use_unicode: bool = False) -> str:
-    """Build the DAG graph layout and draw ascii (or unicode) graph.
+def create_graph_in_ascii(graph: 'nx.DiGraph', use_unicode: bool = False) -> str:
+    """Create ascii (or unicode) graph and return as str ready for printing.
     Args:
         graph (DiGraph): a networkx directed graph object
         use_unicode (bool): renders the graph in unicode if console supports it

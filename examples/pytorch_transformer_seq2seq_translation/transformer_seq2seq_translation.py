@@ -576,7 +576,7 @@ def main():
     current_dir = os.path.abspath('')
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
-    num_workers = 4
+    num_workers = 1
     # choices [<task_name>, <task_name+>, [<task_name1+>, <task_name2>], all, None]
     #  "+" registers successor tasks for force execution as well
     force = None
@@ -616,15 +616,15 @@ def main():
     # create all task specs
     dataset_loading_task = TaskSpec(task=DatasetLoading, config=dataset_loading_params,
                                     publishes=['train_data', 'valid_data', 'test_data'])
-    tokenizer_training_task = GridTaskSpec(task=TokenizerTraining, gs_config=tokenizer_training_params,
-                                           publishes=['de_tokenizer', 'en_tokenizer'])
+    tokenizer_training_task = TaskSpec(task=TokenizerTraining, config=tokenizer_training_params,
+                                       publishes=['de_tokenizer', 'en_tokenizer'])
     dataset_encoding_task = TaskSpec(task=DatasetEncoding,
                                      publishes=['train_encoded', 'valid_encoded', 'test_encoded'])
     train_task = GridTaskSpec(task=Training, gs_config=training_params,
                               publishes=['best_model', 'best_model_metric'])
     model_selection_task = TaskSpec(task=ModelSelection, reduce=True, expects=['best_model_metric'],
                                     publishes=['best_run_config'])
-    evaluate_task = TaskSpec(task=Evaluation, reduce=False, config=evaluation_params)
+    evaluate_task = TaskSpec(task=Evaluation, config=evaluation_params)
 
     # dependencies between tasks
     tokenizer_training_task.requires(dataset_loading_task)
@@ -651,8 +651,8 @@ def main():
         flow.create(task_specs=tasks)
 
         # visualize graphs
-        visualize_graph_in_console(flow.task_spec_graph)
-        visualize_graph_in_console(flow.task_graph)
+        visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
+        visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
 
         flow.run(force=force)
 
