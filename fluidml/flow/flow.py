@@ -10,11 +10,9 @@ from networkx.algorithms.dag import topological_sort
 from rich.traceback import install as rich_install
 
 from fluidml.common import Task
-from fluidml.common.utils import update_merge, reformat_config
+from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
 from fluidml.flow import BaseTaskSpec, GridTaskSpec
-from fluidml.flow.graph_visualization import create_console_graph
-from fluidml.flow.pager import FluidPager
 from fluidml.swarm import Swarm
 
 
@@ -264,7 +262,8 @@ class Flow:
                     task.id_ = task_id
                     task.reduce = True
                     expanded_tasks_by_name[task.name].append(task)
-                    task.unique_config = {**predecessor_config, **{task.name: task.config_kwargs}}
+                    task.unique_config = {**predecessor_config,
+                                          **{task.name: remove_none_from_dict(task.config_kwargs)}}
                     task_id += 1
             else:
                 # for each combination, create a new task
@@ -278,7 +277,8 @@ class Flow:
                     for task in tasks:
                         task.id_ = task_id
                         task.requires(task_combination)
-                        task.unique_config = {**predecessor_config, **{task.name: task.config_kwargs}}
+                        task.unique_config = {**predecessor_config,
+                                              **{task.name: remove_none_from_dict(task.config_kwargs)}}
                         expanded_tasks_by_name[task.name].append(task)
                         task_id += 1
 
@@ -294,23 +294,6 @@ class Flow:
                     tasks.append(task)
 
         return tasks
-
-    @staticmethod
-    def visualize(graph: DiGraph, use_ascii: Optional[bool] = None):
-        """Visualizes the task graph by rendering it to the console via a pager
-        -> keyboard input ":q" required to continue.
-
-        Args:
-            graph (DiGraph): a networkx directed graph object
-            use_ascii (bool): renders the graph in ascii
-                if None or False, renders in unicode if console supports it
-        """
-
-        console_graph = f'{graph.name}\n\n' if graph.name else ''
-        console_graph += f'{create_console_graph(graph=graph, use_ascii=use_ascii)}\n\n'
-
-        pager = FluidPager()
-        pager.show(content=console_graph)
 
     def create(self,
                task_specs: List[BaseTaskSpec]):

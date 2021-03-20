@@ -26,6 +26,7 @@ from fluidml.common import Task, Resource
 from fluidml.common.logging import configure_logging
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import LocalFileStore
+from fluidml.visualization import visualize_graph_in_console
 
 
 logger = logging.getLogger(__name__)
@@ -650,8 +651,8 @@ def main():
         flow.create(task_specs=tasks)
 
         # visualize graphs
-        flow.visualize(flow.task_spec_graph)
-        flow.visualize(flow.task_graph)
+        visualize_graph_in_console(flow.task_spec_graph)
+        visualize_graph_in_console(flow.task_graph)
 
         flow.run(force=force)
 

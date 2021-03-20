@@ -3,8 +3,14 @@ import pydoc
 import os
 import sys
 import tempfile
+from typing import TYPE_CHECKING
 
 from rich.pager import Pager
+
+from fluidml.visualization import visualize_graph_in_ascii
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 
 logger = logging.getLogger(__name__)
@@ -65,3 +71,19 @@ class FluidPager(Pager):
     def show(self, content: str) -> None:
         """Use the same pager used by pydoc."""
         self._pager(content)
+
+
+def visualize_graph_in_console(graph: 'nx.DiGraph', use_unicode: bool = False):
+    """Visualizes the task graph by rendering it to the console via a pager
+    -> keyboard input ":q" required to continue.
+
+    Args:
+        graph (DiGraph): a networkx directed graph object
+        use_unicode (bool): renders the graph in unicode if console supports it
+    """
+
+    console_graph = f'{graph.name}\n\n' if graph.name else ''
+    console_graph += f'{visualize_graph_in_ascii(graph=graph, use_unicode=use_unicode)}\n\n'
+
+    pager = FluidPager()
+    pager.show(content=console_graph)

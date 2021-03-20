@@ -56,3 +56,12 @@ def reformat_config(d: Dict) -> Dict:
         else:
             continue
     return d
+
+
+def remove_none_from_dict(obj: Dict) -> Dict:
+    if isinstance(obj, (list, tuple, set)):
+        return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
+    elif isinstance(obj, dict):
+        return {k: remove_none_from_dict(v) for k, v in obj.items() if k is not None and v is not None}
+    else:
+        return obj
