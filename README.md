@@ -169,9 +169,12 @@ We now only write their specifications, later these are used to create real inst
 For each Task specification, we also add a list of result names that the corresponding task _publishes_. 
 Each published result object will be considered when results are automatically collected for a successor task.
 
-Note: The `config` argument holds the configuration of the task. 
+Note: The `config` argument holds the configuration of the task (ie. hyper-parameters). 
 It has to be a dictionary (possibly nested), which is `json` serializable. 
 That means a `TypeError` is thrown if the dictionary contains objects, e.g. an `np.array`, that cannot be serialized by Python's json encoder.
+
+Additionally, if there are other parameters to the task, including objects of non-standard types (eg. models, tensors, files, etc), they can be passed using `additional_kwargs` argument.
+
 
 ```Python
 dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
@@ -309,7 +312,7 @@ Our shipped result stores can be utilized to fetch specific task results from th
 ### Grid Search
 
 Users can easily enable grid search for their tasks with just one line of code. 
-To enable grid search on a particular task, we just have to wrap it with `GridTaskSpec` instead of `TaskSpec`.
+To enable grid search on a particular task, we just have to wrap it with `GridTaskSpec` instead of `TaskSpec` and specify hyper-parameters in the grid search config argument `gs_config` as follows:
 
 ```Python
 train_task = GridTaskSpec(task=TrainTask,
@@ -323,6 +326,8 @@ train_task = GridTaskSpec(task=TrainTask,
 That's it! Internally, Flow expands this task into 4 tasks with provided cross product combinations of `max_iter` and `balanced`. 
 Alternatively, one can select `zip` as the expansion method, which would result in 2 expanded tasks, with the respective `max_iter` and `balanced` combinations of `(50, True), (100, False)`. 
 Generally, all values of type `List` will be unpacked to form grid search combinations. 
+
+Additional task parameters can be provided via `additional_kwargs` argument. However, note that these parameters are not subject to grid search expansion. 
 
 The expanded task graph object is available via `flow.task_graph` after calling `flow.create()`. 
 As before, we can again visualize the expanded task graph in the console via `flow.visualize(flow.task_graph)`.
