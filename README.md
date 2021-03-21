@@ -289,10 +289,19 @@ with Swarm(n_dolphins=2,                        # optional (defaults to number o
     flow = Flow(swarm=swarm)
     flow.create(task_specs=tasks)
     
-    visualize_graph_in_console(graph=flow.task_spec_graph)  # optional
+    # optional graph visualization
+    visualize_graph_in_console(graph=flow.task_spec_graph,
+                               use_pager=True,    # optional (defaults to True)
+                               use_unicode=False  # optional (defaults to False)
+                               )
     results = flow.run(force=None)
 ```
-**Note 1**: After calling `flow.create()` we have access to the created task specifier graph via `flow.task_spec_graph`. This constructed graph can be rendered on the console using fluidML's visualization routine `visualize_graph_in_console(graph=flow.task_spec_graph)`
+**Note 1**: After calling `flow.create()` we have access to the created task specifier graph via `flow.task_spec_graph`. 
+This constructed graph can be rendered on the console using fluidML's visualization routine `visualize_graph_in_console(graph=flow.task_spec_graph)`. 
+The default arguments `use_pager=True` and `use_unicode=False` will render the graph in ascii within a pager for horizontal scralling support. 
+If `use_pager=False` the graph is simply printed and if `use_unicode=True` a visually more appealing unicode character set is used for console rendering. 
+Note not every console supports unicode characters.
+
 
 See below the visualization of the task specifier graph from our example:
 
@@ -365,7 +374,7 @@ model_selection_task.requires(evaluate_task)
 The important `reduce=True` argument enables that a single `ModelSelectionTask` instance gets the reduced results
 from all grid search expanded predecessor tasks. 
 
-Note: When specifying a `reduce` task one can explicitly provide the expected inputs as list of strings to the `expects` argument of `TaskSpec`.
+**Note**: When specifying a `reduce` task one can explicitly provide the expected inputs as list of strings to the `expects` argument of `TaskSpec`.
 The expected inputs will be retrieved from the predecessor tasks and packed in a special `reduced_results` argument (the only input to the task's `run` method).
 If `expects` is not provided all published predecessor task results will be retrieved and packed in `reduced_results`.
 It is a list of dictionaries where each dictionary holds the results and config of one specific grid search parameter combination. For example:
