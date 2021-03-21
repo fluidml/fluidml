@@ -24,8 +24,6 @@ _Develop ML pipelines fluently with no boilerplate code. Focus only on your task
 
 **FluidML** is a lightweight framework for developing machine learning pipelines.
 
-![fluidML live](logo/fluidml_live.gif)
-
 Developing machine learning models is a challenging process, with a wide range of sub-tasks: data collection, pre-processing, model development, hyper-parameter tuning and deployment. Each of these tasks is iterative in nature and requires lot of iterations to get it right with good performance.
 
 Due to this, each task is generally developed sequentially, with artifacts from one task being fed as inputs to the subsequent tasks. For instance, raw datasets are first cleaned, pre-processed, featurized and stored as iterable datasets (on disk), which are then used for model training. However, this type of development can become messy and un-maintenable quickly for several reasons:
