@@ -77,6 +77,7 @@ from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
+from fluidml.visualization import visualize_graph_in_console
 ```
 
 #### 2. Define Tasks
@@ -288,11 +289,11 @@ with Swarm(n_dolphins=2,                        # optional (defaults to number o
     flow = Flow(swarm=swarm)
     flow.create(task_specs=tasks)
     
-    flow.visualize(graph=flow.task_spec_graph)  # optional
+    visualize_graph_in_console(graph=flow.task_spec_graph)  # optional
     results = flow.run(force=None)
 ```
-**Note 1**: After calling `flow.create()` we have access to the created task specifier task via `flow.task_spec_graph`.
-Calling `flow.visualize(flow.task_spec_graph)` renders the constructed graph to the console. 
+**Note 1**: After calling `flow.create()` we have access to the created task specifier graph via `flow.task_spec_graph`. This constructed graph can be rendered on the console using fluidML's visualization routine `visualize_graph_in_console(graph=flow.task_spec_graph)`
+
 See below the visualization of the task specifier graph from our example:
 
 <div align="center">
@@ -330,7 +331,7 @@ Generally, all values of type `List` will be unpacked to form grid search combin
 Additional task parameters can be provided via `additional_kwargs` argument. However, note that these parameters are not subject to grid search expansion. 
 
 The expanded task graph object is available via `flow.task_graph` after calling `flow.create()`. 
-As before, we can again visualize the expanded task graph in the console via `flow.visualize(flow.task_graph)`.
+As before, we can again visualize the expanded task graph in the console via `visualize_graph_in_console(graph=flow.task_graph)`.
 
 <div align="center">
 <img src="logo/task_graph.png">
