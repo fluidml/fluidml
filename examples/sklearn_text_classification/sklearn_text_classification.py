@@ -15,7 +15,7 @@ from fluidml.common import Task
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow, GridTaskSpec, TaskSpec
 from fluidml.common.logging import configure_logging
-from fluidml.visualization import visualize_graph_in_console
+from fluidml.visualization import visualize_graph_interactive
 
 
 class DatasetFetchTask(Task):
@@ -227,8 +227,8 @@ def main():
         flow.create(task_specs=tasks)
 
         # visualize graphs
-        visualize_graph_in_console(flow.task_spec_graph, use_pager=False)
-        visualize_graph_in_console(flow.task_spec_graph, use_pager=True)
+        visualize_graph_interactive(flow.task_spec_graph, 1000, 1000, 100, 100)
+        visualize_graph_interactive(flow.task_graph, 1000, 1000, 100, 100)
  
         results = flow.run()
 
