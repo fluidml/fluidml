@@ -7,59 +7,7 @@ from bokeh.palettes import Spectral4
 from bokeh.plotting import from_networkx
 from bokeh.models import ColumnDataSource, LabelSet
 
-from grandalf.graphs import Edge, Graph, Vertex
-from grandalf.layouts import SugiyamaLayout
-from grandalf.routing import EdgeViewer, route_with_lines
-from networkx import DiGraph
-
-
-class VertexViewer:
-    """Class to define vertex box boundaries that will be accounted for during
-    graph building by grandalf.
-    Args:
-        name (str): name of the vertex.
-    """
-    def __init__(self, height: int, width: int):
-        self.h = height
-        self.w = width
-
-
-def build_sugiyama_layout(graph: DiGraph, node_height: int, node_width: int):
-    """ Function to build a sugiyama layout for a graph
-    """
-
-    vertexes = {v: Vertex(f' {v} ') for v in list(graph.nodes())}
-    edges = [Edge(vertexes[s], vertexes[e]) for s, e in list(graph.edges())]
-    vertexes = vertexes.values()
-
-    graph = Graph(vertexes, edges)
-
-    for vertex in vertexes:
-        vertex.view = VertexViewer(node_height, node_width)
-
-    for edge in edges:
-        edge.view = EdgeViewer()
-
-    sug = SugiyamaLayout(graph.C[0])
-    graph = graph.C[0]
-    roots = list(filter(lambda x: len(x.e_in()) == 0, graph.sV))
-
-    sug.init_all(roots=roots, optimize=True)
-
-    # vertical space between nodes
-    max_num_layer_nodes = max([len(layer) for layer in sug.layers])
-    minh = max(max_num_layer_nodes, node_height)
-    sug.yspace = minh
-
-    # horizontal space between nodes
-    # determine min box length to create the best layout
-    minw = min(v.view.w for v in vertexes)
-    sug.xspace = minw
-    sug.route_edge = route_with_lines
-
-    sug.draw(10)
-
-    return sug
+from fluidml.visualization import build_sugiyama_layout
 
 
 def reformat_graph(graph):
@@ -88,7 +36,7 @@ def visualize_graph_interactive(graph: nx.Graph, plot_width: int, plot_height: i
     reformatted_graph = reformat_graph(graph)
 
     # get sugiyama layout
-    layout = build_sugiyama_layout(reformatted_graph, node_height, node_width)
+    layout = build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
     positions = {vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1]) for vertex in layout.g.sV}
     positions = flip_positions(positions, plot_height)
 
@@ -102,7 +50,7 @@ def visualize_graph_interactive(graph: nx.Graph, plot_width: int, plot_height: i
     # Show with Bokeh
     plot = Plot(plot_width=plot_width, plot_height=plot_height)
     plot.title.text = "Task Graph"
-    plot.sizing_mode = "scale_both"
+    #plot.sizing_mode = "scale_both"
 
     node_hover_tool = HoverTool(tooltips=[("task_name", "@task_name")])
     plot.add_tools(node_hover_tool, BoxZoomTool(), ResetTool(), BoxSelectTool(), PanTool(), WheelZoomTool())
@@ -117,7 +65,6 @@ def visualize_graph_interactive(graph: nx.Graph, plot_width: int, plot_height: i
                       background_fill_color='white', text_font_size="12px", border_line_color="black")
     plot.renderers.append(labels)
 
-    #graph_renderer.node_renderer.glyph = Square(fill_color=Spectral4[0])
     graph_renderer.edge_renderer.glyph = MultiLine(line_color="edge_color", line_alpha=0.8, line_width=1)
     plot.renderers.append(graph_renderer)
 

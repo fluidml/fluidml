@@ -1,3 +1,4 @@
+from typing import Optional
 from grandalf.graphs import Edge, Graph, Vertex
 from grandalf.layouts import SugiyamaLayout
 from grandalf.routing import EdgeViewer, route_with_lines
@@ -12,14 +13,15 @@ class VertexViewer:
     """
     HEIGHT = 3
 
-    def __init__(self, name):
+    def __init__(self, name: str, height: Optional[int] = None, width: Optional[int] = None):
         # height of the node (top and bottom box edges + name).
-        self.h = self.HEIGHT
+        self.h = height if height is not None else self.HEIGHT
         # width of the node (right and left bottom edges + name).
-        self.w = len(name) + 2
+        self.w = width if width is not None else len(name) + 2
 
 
-def build_sugiyama_layout(graph: DiGraph):
+def build_sugiyama_layout(graph: DiGraph, iterations: int = 1, node_height: Optional[int] = None,
+                          node_width: Optional[int] = None):
     """ Function to build a sugiyama layout for a graph
 
     Just a reminder about naming conventions:
@@ -38,7 +40,7 @@ def build_sugiyama_layout(graph: DiGraph):
     graph = Graph(vertexes, edges)
 
     for vertex in vertexes:
-        vertex.view = VertexViewer(vertex.data)
+        vertex.view = VertexViewer(vertex.data, node_height, node_width)
 
     for edge in edges:
         edge.view = EdgeViewer()
@@ -51,7 +53,7 @@ def build_sugiyama_layout(graph: DiGraph):
 
     # vertical space between nodes
     max_num_layer_nodes = max([len(layer) for layer in sug.layers])
-    minh = max(max_num_layer_nodes, VertexViewer.HEIGHT)
+    minh = max(max_num_layer_nodes, node_height if node_height else VertexViewer.HEIGHT)
     sug.yspace = minh
 
     # horizontal space between nodes
@@ -60,6 +62,6 @@ def build_sugiyama_layout(graph: DiGraph):
     sug.xspace = minw
     sug.route_edge = route_with_lines
 
-    sug.draw()
+    sug.draw(iterations)
 
     return sug
