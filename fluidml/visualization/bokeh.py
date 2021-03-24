@@ -30,6 +30,32 @@ def flip_positions(positons, height):
     return flipped
 
 
+def get_edges(sug_layout, height):
+    xs, ys = [], []
+    for edge in sug_layout.g.sE:
+        for x, y in edge.view._pts:
+            xs.append(x)
+            ys.append(height - y - 1)
+    minx = min(xs)
+    miny = min(ys)
+
+    xs, ys = [], []
+    for edge in sug_layout.g.sE:
+        assert len(edge.view._pts) > 1
+        node_x, node_y = [], []
+        for index in range(1, len(edge.view._pts)):
+            start = edge.view._pts[index - 1]
+            end = edge.view._pts[index]
+            node_x.append(start[0])
+            node_x.append(end[0])
+            node_y.append(height - start[1] - 1)
+            node_y.append(height - end[1] - 1)
+
+        xs.append(node_x)
+        ys.append(node_y)
+    return xs, ys
+
+
 def visualize_graph_interactive(graph: nx.Graph, plot_width: int, plot_height: int,
                                 node_width: int, node_height: int):
     # reformat the graph with attributes
@@ -65,7 +91,12 @@ def visualize_graph_interactive(graph: nx.Graph, plot_width: int, plot_height: i
                       background_fill_color='white', text_font_size="12px", border_line_color="black")
     plot.renderers.append(labels)
 
-    graph_renderer.edge_renderer.glyph = MultiLine(line_color="edge_color", line_alpha=0.8, line_width=1)
+    # # edges from the layout
+    xs, ys = get_edges(layout, plot_height)
+    graph_renderer.edge_renderer.data_source.data['xs'] = xs
+    graph_renderer.edge_renderer.data_source.data['ys'] = ys
+
+    #graph_renderer.edge_renderer.glyph = MultiLine(line_color="edge_color", line_alpha=0.8, line_width=1)
     plot.renderers.append(graph_renderer)
 
     #output_file("interactive_graphs.html")

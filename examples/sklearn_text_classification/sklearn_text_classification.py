@@ -227,13 +227,13 @@ def main():
         flow.create(task_specs=tasks)
 
         # visualize graphs
-        visualize_graph_interactive(flow.task_spec_graph, 1000, 1000, 100, 100)
-        visualize_graph_interactive(flow.task_graph, 1000, 1000, 100, 100)
+        visualize_graph_interactive(flow.task_spec_graph, 1000, 1000, 50, 50)
+        visualize_graph_interactive(flow.task_graph, 1000, 1000, 50, 50)
  
-        results = flow.run()
+    #     results = flow.run()
 
-    print(results["ModelSelectionTask"]["result"]["best_config"])
-    print(results["ModelSelectionTask"]["result"]["best_performance"])
+    # print(results["ModelSelectionTask"]["result"]["best_config"])
+    # print(results["ModelSelectionTask"]["result"]["best_performance"])
 
 
 if __name__ == "__main__":
