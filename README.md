@@ -73,8 +73,8 @@ For real machine learning examples, check the "Examples" section below.
 First, we import necessary classes from FluidML.
 
 ```Python
-from fluidml import Flow, Swarm
-from fluidml.common import Task, Resource
+from fluidml import Task, Flow, Swarm
+from fluidml.common import Resource
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 from fluidml.visualization import visualize_graph_in_console
@@ -225,9 +225,13 @@ resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
 
 #### 6. [optional] Results Store/Caching
 
-By default, results of tasks are stored in an `InMemoryStore`, which might be impractical for large datasets/models. Also, the results are not persistent. To have persistent storage, FluidML provides two fully implemented `ResultsStore` namely `LocalFileStore` and `MongoDBStore`.
+By default, results of tasks are stored in an `InMemoryStore`, which might be impractical for large datasets/models. 
+Also, the results are not persistent. To have persistent storage, FluidML provides two fully implemented `ResultsStore` namely `LocalFileStore` and `MongoDBStore`.
 
-Additionally, users can provide their own results store to `Swarm` by inheriting from `ResultsStore` class and implementing `load()` and `save()`. Note, these methods rely on task name and its config parameters, which act as lookup-key for results. In this way, tasks are skipped by FluidML when task results are already available for the given config. But users can override and force execute tasks by passing `force` parameter to the `Flow`.
+Additionally, users can provide their own results store to `Swarm` by inheriting from `ResultsStore` class and implementing `load()`, `save()` and `delete()`. 
+Note these methods rely on task name and its config parameters, which act as lookup-key for results. 
+In this way, tasks are skipped by FluidML when task results are already available for the given config. 
+But users can override and force execute tasks by passing `force` parameter to the `Flow`.
 
 ```Python
 class MyResultsStore(ResultsStore):
@@ -237,6 +241,10 @@ class MyResultsStore(ResultsStore):
 
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """ Method to save/update any artifact """
+        raise NotImplementedError
+
+    def delete(self, name: str, task_name: str, task_unique_config: Dict):
+        """ Method to delete any artifact """
         raise NotImplementedError
 ```
 

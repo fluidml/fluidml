@@ -25,7 +25,7 @@ from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
 from fluidml.common.logging import configure_logging
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.storage import LocalFileStore
+from fluidml.storage import LocalFileStore, TypeInfo
 from fluidml.visualization import visualize_graph_in_console
 
 
@@ -56,27 +56,24 @@ class MyLocalFileStore(LocalFileStore):
     def __init__(self, base_dir: str):
         super().__init__(base_dir=base_dir)
 
-        self._save_load_fn_from_type['torch'] = (self._save_torch, self._load_torch)
-        self._save_load_fn_from_type['tokenizer'] = (self._save_tokenizer, self._load_tokenizer)
+        self._type_registry['torch'] = TypeInfo(self._save_torch, self._load_torch, 'pt')
+        self._type_registry['tokenizer'] = TypeInfo(self._save_tokenizer, self._load_tokenizer, 'json')
 
     @staticmethod
-    def _save_torch(name: str, obj: Any, run_dir: str):
-        model_dir = os.path.join(run_dir, 'models')
-        os.makedirs(model_dir, exist_ok=True)
-        torch.save(obj, f=os.path.join(model_dir, f'{name}.pt'))
+    def _save_torch(name: str, obj: Any, obj_dir: str, extension: str):
+        torch.save(obj, f=os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _load_torch(name: str, run_dir: str) -> Any:
-        model_dir = os.path.join(run_dir, 'models')
-        return torch.load(os.path.join(model_dir, f'{name}.pt'))
+    def _load_torch(name: str, obj_dir: str, extension: str) -> Any:
+        return torch.load(os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _save_tokenizer(name: str, obj: Tokenizer, run_dir: str):
-        obj.save(os.path.join(run_dir, f'{name}.json'))
+    def _save_tokenizer(name: str, obj: Tokenizer, obj_dir: str, extension: str):
+        obj.save(os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _load_tokenizer(name: str, run_dir: str) -> Tokenizer:
-        return Tokenizer.from_file(os.path.join(run_dir, f'{name}.json'))
+    def _load_tokenizer(name: str, obj_dir: str, extension: str) -> Tokenizer:
+        return Tokenizer.from_file(os.path.join(obj_dir, f'{name}.{extension}'))
 
 
 @dataclass
@@ -362,9 +359,9 @@ class Training(Task):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 best_model = model.state_dict()
-                self.save(obj=model.state_dict(), name='best_model', type_='torch')
+                self.save(obj=model.state_dict(), name='best_model', type_='torch', sub_dir='models')
                 self.save(obj={'epoch': epoch,
-                               'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
+                               'valid_loss': best_valid_loss}, name='best_model_metric', type_='json', sub_dir='models')
 
             logger.info(f'\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n'
                         f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n'
