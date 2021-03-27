@@ -21,7 +21,7 @@ class InMemoryStore(ResultsStore):
             return None
 
         for task_sweep in self._memory_store[task_name]:
-            if task_sweep["config"] == task_unique_config:
+            if task_sweep["config"].items() <= task_unique_config.items():
                 try:
                     obj = task_sweep['results'][name]
                 except KeyError:
@@ -63,7 +63,7 @@ class InMemoryStore(ResultsStore):
             existing_task_results = self._memory_store[task_name]
 
             for task_sweep in existing_task_results:
-                if task_sweep["config"] == task_unique_config:
+                if task_sweep["config"].items() <= task_unique_config.items():
                     try:
                         del task_sweep['results'][name]
                         # task_sweep['results'][name] = None

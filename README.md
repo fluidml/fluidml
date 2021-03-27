@@ -235,7 +235,7 @@ But users can override and force execute tasks by passing `force` parameter to t
 
 ```Python
 class MyResultsStore(ResultsStore):
-    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
+    def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
         """ Query method to load an object based on its name, task_name and task_config if it exists """
         raise NotImplementedError
 

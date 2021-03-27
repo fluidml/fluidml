@@ -359,9 +359,9 @@ class Training(Task):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 best_model = model.state_dict()
-                self.save(obj=model.state_dict(), name='best_model', type_='torch', sub_dir='models')
+                self.save(obj=best_model, name='best_model', type_='torch')
                 self.save(obj={'epoch': epoch,
-                               'valid_loss': best_valid_loss}, name='best_model_metric', type_='json', sub_dir='models')
+                               'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
 
             logger.info(f'\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n'
                         f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n'

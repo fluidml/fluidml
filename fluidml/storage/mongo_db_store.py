@@ -41,7 +41,7 @@ class MongoDBStore(ResultsStore):
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
         except me.DoesNotExist:
             return None
         # try to query obj from results DictField
@@ -76,7 +76,7 @@ class MongoDBStore(ResultsStore):
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
         except me.DoesNotExist:
             logger.warning(f'"{name}" could not be deleted. '
                            f'No document for task "{task_name}" and the provided unique_config exists.')
@@ -103,18 +103,22 @@ class MongoDBStore(ResultsStore):
 def main():
     store = MongoDBStore("test")
 
-    task_config = {"param_a": 23, "param_b": 55}
+    task_1_config = {"param_a": 23, "param_b": 55}
+    task_2_config = {"param_a": 23, "param_b": 55, "param_c": 88}
     obj1 = {"Result": 5}
     obj2 = 'hallo'
-    task_name = "task_1"
+    task_1 = "task_1"
+    task_2 = "task_2"
 
-    store.save(obj=obj1, name='obj1', type_='a', task_name=task_name, task_unique_config=task_config)
-    store.save(obj=obj2, name='obj2', type_='b', task_name=task_name, task_unique_config=task_config)
+    store.save(obj=obj1, name='obj1', type_='a', task_name=task_1, task_unique_config=task_1_config)
+    store.save(obj=obj2, name='obj2', type_='b', task_name=task_2, task_unique_config=task_2_config)
     # store.delete(name='obj2', task_name=task_name, task_unique_config=task_config)
-    result1 = store.load(name='obj1', task_name=task_name, task_unique_config=task_config)
-    result2 = store.load(name='obj2', task_name=task_name, task_unique_config=task_config)
+    result1 = store.load(name='obj1', task_name=task_1, task_unique_config=task_1_config)
+    result2 = store.load(name='obj2', task_name=task_2, task_unique_config=task_2_config)
+    result3 = store.load(name='obj1', task_name=task_1, task_unique_config=task_2_config)
     print(result1)
     print(result2)
+    print(result3)
 
 
 if __name__ == "__main__":
