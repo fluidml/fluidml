@@ -227,8 +227,8 @@ def main():
         flow.create(task_specs=tasks)
 
         # visualize graphs
-        visualize_graph_interactive(flow.task_spec_graph, 1000, 1000, 50, 50)
-        visualize_graph_interactive(flow.task_graph, 1000, 1000, 50, 50)
+        visualize_graph_interactive(flow.task_spec_graph)
+        visualize_graph_interactive(flow.task_graph)
  
     #     results = flow.run()
 
