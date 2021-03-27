@@ -29,6 +29,7 @@ setup(name='fluidml',
       packages=find_packages(),
       python_requires='>=3.6',
       install_requires=[
+          'bokeh',                             # enables interactive graph rendering in jupyter
           'dataclasses;python_version<"3.7"',  # backport for python versions without dataclasses
           'grandalf',                          # for console graph visualization
           'networkx',                          # creation of task graph

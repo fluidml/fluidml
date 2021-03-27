@@ -12,6 +12,7 @@ except NameError:
 if not __FLUIDML_SETUP__:
     from .flow import Flow
     from .swarm import Swarm
+    from .common import Task
 
 _this_year = time.strftime("%Y")
 __version__ = '0.1.3'

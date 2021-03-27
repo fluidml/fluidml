@@ -83,8 +83,8 @@ def visualize_graph_in_console(graph: 'nx.DiGraph', use_pager: bool = True, use_
         use_unicode (bool): renders the graph in unicode if console supports it
     """
 
-    console_graph = f'{graph.name}\n\n' if graph.name else ''
-    console_graph += f'{create_graph_in_ascii(graph=graph, use_unicode=use_unicode)}\n\n'
+    console_graph = f'{graph.name}\n' if graph.name else 'Graph'
+    console_graph += f'{create_graph_in_ascii(graph=graph, use_unicode=use_unicode)}\n'
 
     if use_pager:
         pager = FluidPager()
