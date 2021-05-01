@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from copy import deepcopy
 import inspect
 from itertools import product
@@ -187,7 +188,36 @@ class GridTaskSpec(BaseTaskSpec):
         param_grid = [x if x else [x] for x in param_grid]
 
         if method == 'product':
-            expansion_fn = product
+            # get unique zip identifier and their respective parameter combination ids in the param_grid list
+            zip_identifier = defaultdict(lambda: defaultdict(list))
+            for i, var_params in enumerate(param_grid):
+                if isinstance(var_params[-1], str) and var_params[-1].startswith('@'):
+                    zip_identifier[var_params[-1]]['param_comb_ids'].append(i)
+
+            # remove special zip_identifier ('@<identifier>') from param grid
+            param_grid = [var_params[:-1]
+                          if isinstance(var_params[-1], str) and var_params[-1].startswith('@')
+                          else var_params
+                          for var_params in param_grid]
+
+            # store zipped param combinations for each zip identifier
+            for identifier, values in zip_identifier.items():
+                zip_identifier[identifier]['zipped'] = list(zip(*[param_grid[idx] for idx in values['param_comb_ids']]))
+
+            # create all param combinations
+            all_combs = list(product(*param_grid))
+
+            # remove all param combinations that violate one of the zipped combinations
+            combinations = []
+            for comb in all_combs:
+                add_comb = True
+                for identifier in zip_identifier.values():
+                    if tuple(comb[i] for i in identifier['param_comb_ids']) not in identifier['zipped']:
+                        add_comb = False
+                        break
+                if add_comb:
+                    combinations.append(comb)
+
         elif method == 'zip':
             # get the maximum parameter list lengths in config
             max_param_list_len = max([len(param_list) for param_list in param_grid])
@@ -196,14 +226,16 @@ class GridTaskSpec(BaseTaskSpec):
             # check that all parameter grid lists are of same lengths
             if not all(len(param_grid[0]) == len(x) for x in param_grid[1:]):
                 raise GridSearchExpansionError('For method "zip" all expanded lists have to be of equal lengths.')
-            expansion_fn = zip
+
+            combinations = zip(*param_grid)
+
         else:
             raise GridSearchExpansionError(f'Expansion method "{method}" is not supported. '
                                            f'Grid search config can only be expanded via "product" or "zip".')
 
         config_copy = deepcopy(config_grid_search)
         individual_configs = []
-        for comb in expansion_fn(*param_grid):
+        for comb in combinations:
             counter = []
             individual_config = GridTaskSpec._replace_list_in_dict(
                 config_grid_search, config_copy, comb, counter)[0]

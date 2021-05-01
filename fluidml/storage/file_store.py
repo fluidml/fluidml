@@ -84,7 +84,7 @@ class LocalFileStore(ResultsStore):
 
         # save load info
         load_info = {'kwargs': kwargs,
-                     'obj_dir': obj_dir,
+                     'obj_dir': os.path.relpath(obj_dir, run_dir),
                      'type_': type_}
 
         # create a hidden load info dir to save object information used by self.load()
@@ -111,7 +111,7 @@ class LocalFileStore(ResultsStore):
 
         # unpack load info
         type_ = load_info['type_']
-        obj_dir = load_info['obj_dir']
+        obj_dir = os.path.join(run_dir, load_info['obj_dir'])
         saved_kwargs = load_info['kwargs']
 
         # merge saved kwargs with user provided kwargs
@@ -152,7 +152,7 @@ class LocalFileStore(ResultsStore):
 
         # unpack load info
         type_ = load_info['type_']
-        obj_dir = load_info['obj_dir']
+        obj_dir = os.path.join(run_dir, load_info['obj_dir'])
 
         # use type_ to get the file extension
         extension = self._type_registry[type_].extension
@@ -186,7 +186,7 @@ class LocalFileStore(ResultsStore):
         os.makedirs(task_dir, exist_ok=True)
         exist_run_dirs = [os.path.join(task_dir, d.name)
                           for d in os.scandir(task_dir)
-                          if d.is_dir() and d.name.isdigit()]
+                          if d.is_dir()]
         return exist_run_dirs
 
     def _get_run_dir(self, task_dir: str, task_config: Dict) -> Optional[str]:
@@ -206,8 +206,16 @@ class LocalFileStore(ResultsStore):
     @staticmethod
     def _make_run_dir(task_dir: str) -> str:
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
-        new_id = max([int(os.path.split(d)[-1])
-                      for d in exist_run_dirs]) + 1 if exist_run_dirs else 0
+
+        # get all numeric dir names in task dir and convert to ids
+        ids = [int(d_name)
+               for d_name in [os.path.split(d)[-1] for d in exist_run_dirs]
+               if d_name.isdigit()] if exist_run_dirs else []
+
+        # increment max id by 1 or start at 0
+        new_id = max(ids) + 1 if ids else 0
+
+        # create new run dir
         new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir
