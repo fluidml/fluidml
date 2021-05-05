@@ -218,6 +218,9 @@ class GridTaskSpec(BaseTaskSpec):
                 if add_comb:
                     combinations.append(comb)
 
+            # Ensure each combination is unique
+            combinations = list(set(combinations))
+
         elif method == 'zip':
             # get the maximum parameter list lengths in config
             max_param_list_len = max([len(param_list) for param_list in param_grid])
