@@ -2,6 +2,7 @@ from typing import Union, List, Any, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
+    from fluidml.common import Task
     from fluidml.flow.task_spec import BaseTaskSpec
 
 
@@ -10,7 +11,7 @@ class DependencyMixin:
         self._predecessors = []
         self._successors = []
 
-    def requires(self, predecessors: Union['BaseTaskSpec', List['BaseTaskSpec']]):
+    def requires(self, predecessors: Union['BaseTaskSpec', List['BaseTaskSpec'], List['Task']]):
         """Adds predecessor task specs"""
         predecessors = predecessors if isinstance(predecessors, List) else [predecessors]
 
@@ -26,9 +27,9 @@ class DependencyMixin:
         self._successors.append(successor)
 
     @property
-    def predecessors(self) -> List['BaseTaskSpec']:
+    def predecessors(self) -> Union[List['Task'], List['BaseTaskSpec']]:
         return self._predecessors
 
     @property
-    def successors(self) -> List['BaseTaskSpec']:
+    def successors(self) -> Union[List['Task'], List['BaseTaskSpec']]:
         return self._successors

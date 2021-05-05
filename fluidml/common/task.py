@@ -14,11 +14,10 @@ class Resource:
 class Task(ABC, DependencyMixin):
     """Abstract class for task"""
 
-    def __init__(self,
-                 kwargs: Optional[Dict] = None):
+    def __init__(self):
         DependencyMixin.__init__(self)
         # set in Task_spec
-        self.kwargs = kwargs
+        self._config_kwargs: Optional[Dict[str, Any]] = None
         self._name: Optional[str] = None
         self._publishes: Optional[List[str]] = None
         self._expects: Optional[List[str]] = None
@@ -28,6 +27,7 @@ class Task(ABC, DependencyMixin):
         self._unique_config: Optional[Dict] = None
         self._reduce = False
         self._force: Optional[str] = None
+        self._unique_name: Optional[str] = None
 
         # set in Dolphin
         self._results_store: Optional[ResultsStore] = None
@@ -42,12 +42,28 @@ class Task(ABC, DependencyMixin):
         self._name = name
 
     @property
+    def config_kwargs(self):
+        return self._config_kwargs
+
+    @config_kwargs.setter
+    def config_kwargs(self, config_kwargs: str):
+        self._config_kwargs = config_kwargs
+
+    @property
     def id_(self):
         return self._id
 
     @id_.setter
     def id_(self, id_: int):
         self._id = id_
+
+    @property
+    def unique_name(self):
+        return self._unique_name
+
+    @unique_name.setter
+    def unique_name(self, unique_name: int):
+        self._unique_name = unique_name
 
     @property
     def unique_config(self):
