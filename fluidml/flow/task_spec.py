@@ -96,6 +96,63 @@ class TaskSpec(BaseTaskSpec):
         return [task]
 
 
+def get_dict_obj(keys: List, values: List) -> Dict:
+    dict = {}
+    for key, value in zip(keys, values):
+        dict[key] = value
+    return dict
+
+
+def find_products(splits_by_keys: Dict) -> List[Dict]:
+    values = list(splits_by_keys.values())
+    keys = list(splits_by_keys.keys())
+    if len(values) == 1:
+        dict_objs = [get_dict_obj(keys, [value]) for value in values[0]]
+    else:
+        product_values = product(*values)
+        dict_objs = [get_dict_obj(keys, value) for value in product_values]
+    return dict_objs
+
+
+def to_expand(obj: Any) -> bool:
+    expand = True if isinstance(obj, dict) and obj.get(
+        "expand", False) else False
+    return expand
+
+
+def split_config(obj: Dict) -> List[Dict]:
+    """
+    Recursively splits the given object
+    """
+    if not isinstance(obj, dict):
+        return obj
+
+    # it is a dict and further split
+    splits_by_key = {}
+    for key, child_obj in obj.items():
+        if key != "expand":
+            if to_expand(child_obj):
+                all_splits = []
+                for item in child_obj["values"]:
+                    splits = split_config(item)
+                    if isinstance(splits, list):
+                        all_splits.extend(splits)
+                    else:
+                        all_splits.append(splits)
+                splits_by_key[key] = all_splits
+
+            # another dict, which needs to be expanded
+            elif isinstance(child_obj, dict):
+                splits_by_key[key] = split_config(child_obj)
+            else:  # others which need not be expanded
+                splits_by_key[key] = [child_obj]
+
+    # here, find cartesian
+    configs = find_products(splits_by_key)
+
+    return configs
+
+
 class GridTaskSpec(BaseTaskSpec):
     """A class to hold specification of a grid searcheable task
 
@@ -123,64 +180,9 @@ class GridTaskSpec(BaseTaskSpec):
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
         super().__init__(task=task, name=name, publishes=publishes, expects=expects)
-        self.task_configs: List[Dict] = GridTaskSpec._split_gs_config(config_grid_search=gs_config,
-                                                                      method=gs_expansion_method)
+        self.task_configs: List[Dict] = split_config(gs_config)
 
     def build(self) -> List[Task]:
         tasks = [self._create_task_object(
             task_kwargs=config) for config in self.task_configs]
         return tasks
-
-    @staticmethod
-    def _find_list_in_dict(obj: Dict, param_grid: List) -> List:
-        for key in obj:
-            if isinstance(obj[key], list):
-                param_grid.append([val for val in obj[key]])
-            elif isinstance(obj[key], dict):
-                GridTaskSpec._find_list_in_dict(obj[key], param_grid)
-            else:
-                continue
-        return param_grid
-
-    @staticmethod
-    def _replace_list_in_dict(obj: Dict, obj_copy: Dict, comb: Tuple, counter: List) -> Tuple[Dict, List]:
-        for key, key_copy in zip(obj, obj_copy):
-            if isinstance(obj[key], list):
-                obj_copy[key_copy] = comb[len(counter)]
-                counter.append(1)
-            elif isinstance(obj[key], dict):
-                GridTaskSpec._replace_list_in_dict(
-                    obj[key], obj_copy[key_copy], comb, counter)
-            else:
-                continue
-        return obj_copy, counter
-
-    @staticmethod
-    def _split_gs_config(config_grid_search: Dict, method: str = 'product') -> List[Dict]:
-        param_grid = []
-        param_grid = GridTaskSpec._find_list_in_dict(config_grid_search, param_grid)
-
-        if method == 'product':
-            expansion_fn = product
-        elif method == 'zip':
-            # get the maximum parameter list lengths in config
-            max_param_list_len = max([len(param_list) for param_list in param_grid])
-            # if a parameter list holds only one element, repeat it max_param_list_len times.
-            param_grid = [x * max_param_list_len if len(x) == 1 else x for x in param_grid]
-            # check that all parameter grid lists are of same lengths
-            if not all(len(param_grid[0]) == len(x) for x in param_grid[1:]):
-                raise GridSearchExpansionError('For method "zip" all expanded lists have to be of equal lengths.')
-            expansion_fn = zip
-        else:
-            raise GridSearchExpansionError(f'Expansion method "{method}" is not supported. '
-                                           f'Grid search config can only be expanded via "product" or "zip".')
-
-        config_copy = deepcopy(config_grid_search)
-        individual_configs = []
-        for comb in expansion_fn(*param_grid):
-            counter = []
-            individual_config = GridTaskSpec._replace_list_in_dict(
-                config_grid_search, config_copy, comb, counter)[0]
-            individual_config = deepcopy(individual_config)
-            individual_configs.append(individual_config)
-        return individual_configs
