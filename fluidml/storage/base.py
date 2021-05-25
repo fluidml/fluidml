@@ -19,6 +19,10 @@ class ResultsStore(ABC):
         """ Method to delete any artifact """
         raise NotImplementedError
 
+    def get_context(self, task_name: str, task_unique_config: Dict):
+        """ Method to get store specific storage context, e.g. the current run directory for Local File Store """
+        raise NotImplementedError
+
     def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
         # if a task publishes no results, we always execute the task
         if not task_publishes:

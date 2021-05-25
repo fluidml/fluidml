@@ -33,7 +33,6 @@ class Dolphin(Whale):
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
-        self.lock = lock
         self.tasks = tasks
         self.results_store = results_store
 
@@ -48,11 +47,12 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
-                                                 results_store=self.results_store,
-                                                 reduce_task=task.reduce,
-                                                 task_name=task.name,
-                                                 task_expects=task.expects)
+        with self._lock:
+            results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
+                                                     results_store=self.results_store,
+                                                     reduce_task=task.reduce,
+                                                     task_name=task.name,
+                                                     task_expects=task.expects)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
@@ -60,11 +60,12 @@ class Dolphin(Whale):
         if task.force:
             results = None
         else:
-            # try to get results from results store
-            results: Optional[Tuple[Dict, str]
-                              ] = self.results_store.get_results(task_name=task.name,
-                                                                 task_unique_config=task.unique_config,
-                                                                 task_publishes=task.publishes)
+            with self._lock:
+                # try to get results from results store
+                results: Optional[Tuple[Dict, str]
+                                  ] = self.results_store.get_results(task_name=task.name,
+                                                                     task_unique_config=task.unique_config,
+                                                                     task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
             logger.debug(f'Started task {task.unique_name}.')
@@ -73,7 +74,7 @@ class Dolphin(Whale):
             else:
                 task.run(**pred_results)
 
-        with self.lock:
+        with self._lock:
             # put task in done_queue
             self.done_queue.append(task.id_)
 
@@ -88,6 +89,7 @@ class Dolphin(Whale):
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
         task.resource = self.resource
+        task.lock = self._lock
         return task
 
     def _execute_task(self, task: Task):
@@ -124,7 +126,7 @@ class Dolphin(Whale):
                 # execute the task
                 self._execute_task(task)
 
-                with self.lock:
+                with self._lock:
                     # schedule the task's successors
                     self._schedule_successors(task)
 

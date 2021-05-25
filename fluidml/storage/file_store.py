@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import json
 import logging
-from multiprocessing import Lock
 import os
 import pickle
 from typing import List, Dict, Optional, Any, Callable
@@ -25,17 +24,6 @@ class LocalFileStore(ResultsStore):
         self.base_dir = base_dir
         self._type_registry = {'json': TypeInfo(self._save_json, self._load_json, 'json'),
                                'pickle': TypeInfo(self._save_pickle, self._load_pickle, 'p')}
-        self._lock = None
-
-    # This is a workaround for Jupyter. Locks cannot be instantiated from within a Notebook.
-    # Since the user instantiates the FileStore himself, the lock would be instantiated in a Notebook if the user
-    # works there. Hence, we wrap it in a property such that the lock only gets instantiated at runtime from within
-    # fluidml. This can be changed back once the Jupyter issue is fixed.
-    @property
-    def lock(self):
-        if self._lock is None:
-            self._lock = Lock()
-        return self._lock
 
     @staticmethod
     def _save_json(name: str, obj: Dict, obj_dir: str, extension: str):
@@ -97,7 +85,7 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
 
@@ -135,7 +123,7 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             logger.warning(f'"{name}" could not be deleted. '
                            f'No run directory for task "{task_name}" and the provided unique_config exists.')
@@ -171,14 +159,13 @@ class LocalFileStore(ResultsStore):
         """
         task_dir = os.path.join(self.base_dir, task_name)
 
-        with self.lock:
-            # try to get existing run dir
-            run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        # try to get existing run dir
+        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
 
-            # create new run dir if run dir did not exist
-            if run_dir is None:
-                run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
-                json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), 'w'))
+        # create new run dir if run dir did not exist
+        if run_dir is None:
+            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
+            json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), 'w'))
         return run_dir
 
     @staticmethod

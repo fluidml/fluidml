@@ -1,5 +1,7 @@
 from abc import ABC, abstractmethod
+import contextlib
 from dataclasses import dataclass
+from multiprocessing import Lock
 from typing import Dict, List, Optional, Any
 
 from fluidml.common import DependencyMixin
@@ -32,6 +34,7 @@ class Task(ABC, DependencyMixin):
         # set in Dolphin
         self._results_store: Optional[ResultsStore] = None
         self._resource: Optional[Resource] = None
+        self._lock: Optional[Lock] = None
 
     @property
     def name(self):
@@ -121,6 +124,18 @@ class Task(ABC, DependencyMixin):
     def reduce(self, reduce: bool):
         self._reduce = reduce
 
+    @property
+    def lock(self):
+        # if no lock was provided we return a dummy contextmanager that does nothing
+        if self._lock is None:
+            null_context = contextlib.suppress()
+            return null_context
+        return self._lock
+
+    @lock.setter
+    def lock(self, lock: Lock):
+        self._lock = lock
+
     @abstractmethod
     def run(self, **results):
         """Implementation of core logic of task
@@ -140,19 +155,31 @@ class Task(ABC, DependencyMixin):
             type_ (Optional[str], optional): additional type specification
                                              (eg. json, which is to be passed to results store). Defaults to None.
         """
-        self.results_store.save(obj=obj, name=name, type_=type_,
-                                task_name=self.name, task_unique_config=self.unique_config, **kwargs)
+        with self.lock:
+            self.results_store.save(obj=obj, name=name, type_=type_,
+                                    task_name=self.name, task_unique_config=self.unique_config, **kwargs)
 
     def load(self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None) -> Any:
-        """Saves the given object to the results store
+        """ Loads the given object from results store
 
         Args:
             name (str): an unique name given to this object
             task_name (str): task name which saved the loaded object
             task_unique_config (Dict): unique config which specifies the run of the loaded object
         """
-        if task_name is None and task_unique_config is None:
-            obj = self.results_store.load(name=name, task_name=self.name, task_unique_config=self.unique_config)
-        else:
-            obj = self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
+        with self.lock:
+            if task_name is None and task_unique_config is None:
+                obj = self.results_store.load(name=name, task_name=self.name, task_unique_config=self.unique_config)
+            else:
+                obj = self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
         return obj
+
+    def delete(self, name: str):
+        """ Deletes object with specified name from results store """
+        with self.lock:
+            return self.results_store.delete(name=name, task_name=self.name, task_unique_config=self.unique_config)
+
+    def get_store_context(self):
+        """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
+        with self.lock:
+            return self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
