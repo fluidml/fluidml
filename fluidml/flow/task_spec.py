@@ -215,11 +215,9 @@ class GridTaskSpec(BaseTaskSpec):
                     if tuple(comb[i] for i in identifier['param_comb_ids']) not in identifier['zipped']:
                         add_comb = False
                         break
-                if add_comb:
+                # ensure combination is valid and has not been added before (it is unique)
+                if add_comb and comb not in combinations:
                     combinations.append(comb)
-
-            # Ensure each combination is unique
-            combinations = list(set(combinations))
 
         elif method == 'zip':
             # get the maximum parameter list lengths in config

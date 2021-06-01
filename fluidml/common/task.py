@@ -167,19 +167,24 @@ class Task(ABC, DependencyMixin):
             task_name (str): task name which saved the loaded object
             task_unique_config (Dict): unique config which specifies the run of the loaded object
         """
-        with self.lock:
-            if task_name is None and task_unique_config is None:
-                obj = self.results_store.load(name=name, task_name=self.name, task_unique_config=self.unique_config)
-            else:
-                obj = self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
-        return obj
+        task_name = task_name if task_name is not None else self.name
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-    def delete(self, name: str):
+        with self.lock:
+            return self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
+
+    def delete(self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None):
         """ Deletes object with specified name from results store """
-        with self.lock:
-            return self.results_store.delete(name=name, task_name=self.name, task_unique_config=self.unique_config)
+        task_name = task_name if task_name is not None else self.name
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-    def get_store_context(self):
-        """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
         with self.lock:
-            return self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+            self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
+
+    def get_store_context(self, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None) -> Any:
+        """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
+        task_name = task_name if task_name is not None else self.name
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+
+        with self.lock:
+            return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
