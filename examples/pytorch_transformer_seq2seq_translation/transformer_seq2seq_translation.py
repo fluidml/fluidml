@@ -100,7 +100,7 @@ class DatasetLoading(Task):
         return data
 
     def run(self):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         logger.info(f'Download and save raw dataset to "{task_dir}".')
 
@@ -144,7 +144,7 @@ class TokenizerTraining(Task):
         return tokenizer
 
     def run(self, train_data: Dict[str, List[str]]):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # train german tokenizer
@@ -178,7 +178,7 @@ class DatasetEncoding(Task):
             test_data: Dict[str, List[str]],
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
@@ -339,7 +339,7 @@ class Training(Task):
     def _train(self, model, train_iterator, valid_iterator, optimizer, criterion):
         """ Train loop.
         """
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         model_dir = os.path.join(task_dir, 'models')
         logger.info(f'Save model checkpoints to "{model_dir}".')
@@ -426,7 +426,7 @@ class ModelSelection(Task):
         return config
 
     def run(self, reduced_results: List[Dict]):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # select the best run config by comparing model performances from different parameter sweeps
