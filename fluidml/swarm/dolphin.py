@@ -1,5 +1,5 @@
 import logging
-from multiprocessing import Queue, Lock
+from multiprocessing import Queue, Lock, Event
 from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
@@ -22,10 +22,10 @@ class Dolphin(Whale):
                  logging_queue: Queue,
                  lock: Lock,
                  tasks: Dict[int, Task],
-                 exception: Dict[str, Exception],
+                 exit_event: Event,
                  exit_on_error: bool,
                  results_store: Optional[ResultsStore] = None):
-        super().__init__(exception=exception,
+        super().__init__(exit_event=exit_event,
                          exit_on_error=exit_on_error,
                          logging_queue=logging_queue,
                          lock=lock)
@@ -33,9 +33,12 @@ class Dolphin(Whale):
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
-        self.lock = lock
         self.tasks = tasks
         self.results_store = results_store
+
+    @property
+    def num_tasks(self):
+        return len(self.tasks)
 
     def _is_task_ready(self, task: Task):
         for predecessor in task.predecessors:
@@ -44,10 +47,12 @@ class Dolphin(Whale):
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
-                                                 results_store=self.results_store,
-                                                 reduce_task=task.reduce,
-                                                 task_expects=task.expects)
+        with self._lock:
+            results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
+                                                     results_store=self.results_store,
+                                                     reduce_task=task.reduce,
+                                                     task_name=task.name,
+                                                     task_expects=task.expects)
         return results
 
     def _run_task(self, task: Task, pred_results: Dict):
@@ -55,33 +60,36 @@ class Dolphin(Whale):
         if task.force:
             results = None
         else:
-            # try to get results from results store
-            results: Optional[Tuple[Dict, str]
-                              ] = self.results_store.get_results(task_name=task.name,
-                                                                 task_unique_config=task.unique_config,
-                                                                 task_publishes=task.publishes)
+            with self._lock:
+                # try to get results from results store
+                results: Optional[Tuple[Dict, str]
+                                  ] = self.results_store.get_results(task_name=task.name,
+                                                                     task_unique_config=task.unique_config,
+                                                                     task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
-            logger.debug(f'Started task {task.name}-{task.id_}.')
+            logger.debug(f'Started task {task.unique_name}.')
             if isinstance(task, MyTask):
                 task.run(results=pred_results)
             else:
                 task.run(**pred_results)
 
-        with self.lock:
+        with self._lock:
             # put task in done_queue
             self.done_queue.append(task.id_)
 
             # Log task completion
             if results is None:
-                msg = f'Finished task {task.name}-{task.id_}'
+                msg = f'Finished task {task.unique_name}'
             else:
-                msg = f'Task {task.name}-{task.id_} already executed.'
-            logger.info(f'{msg} ({round((len(self.done_queue) / len(self.tasks)) * 100)}%)')
+                msg = f'Task {task.unique_name} already executed'
+            logger.info(f'{msg} [{len(self.done_queue)}/{self.num_tasks} '
+                        f'- {round((len(self.done_queue) / self.num_tasks) * 100)}%]')
 
     def _pack_task(self, task: Task) -> Task:
         task.results_store = self.results_store
         task.resource = self.resource
+        task.lock = self._lock
         return task
 
     def _execute_task(self, task: Task):
@@ -102,7 +110,7 @@ class Dolphin(Whale):
         return task_id
 
     def _done(self) -> bool:
-        return self.exception or (len(self.done_queue) == len(self.tasks))
+        return self.exit_event.is_set() or (len(self.done_queue) == len(self.tasks))  # self.exception
 
     def _work(self):
         while not self._done():
@@ -118,7 +126,7 @@ class Dolphin(Whale):
                 # execute the task
                 self._execute_task(task)
 
-                with self.lock:
+                with self._lock:
                     # schedule the task's successors
                     self._schedule_successors(task)
 
@@ -128,15 +136,15 @@ class Dolphin(Whale):
             # run task only if all dependencies are satisfied
             if not self._is_task_ready(task=self.tasks[successor.id_]):
                 logger.debug(f'Dependencies are not satisfied yet for '
-                             f'task {successor.name}-{successor.id_}')
+                             f'task {successor.unique_name}')
             # the done_queue check should not be necessary because tasks don't leave the running queue once they're
             # finished. we use the done_queue for progress measuring and running_queue to avoid tasks being executed
             # twice.
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                logger.debug(f'Task {successor.name}-{successor.id_} '
+                logger.debug(f'Task {successor.unique_name} '
                              f'is currently running or already finished.')
             else:
-                logger.debug(f'Is now scheduling {successor.name}-{successor.id_}.')
+                logger.debug(f'Is now scheduling {successor.unique_name}.')
                 self.scheduled_queue.put(successor.id_)
                 # We have to add the successor id to the running queue here already
                 # Assume, 2 workers execute a task each in parallel, finish at the same time

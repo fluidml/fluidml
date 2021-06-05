@@ -8,14 +8,16 @@ class MyTask(Task):
 
     def __init__(self,
                  task: Callable,
-                 kwargs: Dict):
+                 config_kwargs: Dict,
+                 additional_kwargs: Dict):
         super().__init__()
         self.task = task
-        self.kwargs = kwargs
+        self.config_kwargs = config_kwargs
+        self.additional_kwargs = additional_kwargs
 
     def run(self,
             results: Dict[str, Any]):
-        self.task(**results, **self.kwargs, task=self)
+        self.task(**results, **self.config_kwargs, **self.additional_kwargs, task=self)
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
@@ -54,3 +56,12 @@ def reformat_config(d: Dict) -> Dict:
         else:
             continue
     return d
+
+
+def remove_none_from_dict(obj: Dict) -> Dict:
+    if isinstance(obj, (list, tuple, set)):
+        return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
+    elif isinstance(obj, dict):
+        return {k: remove_none_from_dict(v) for k, v in obj.items() if k is not None and v is not None}
+    else:
+        return obj

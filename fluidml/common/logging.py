@@ -1,33 +1,24 @@
-import copy
 import logging
 from logging import LogRecord
 from multiprocessing import Queue
 from queue import Empty
 import sys
 from threading import Thread
-import threading
 from typing import List, Union
 
-try:
-    from rich.console import Console
-    from rich.logging import RichHandler
-    console = Console(stderr=True)
-    logging.lastResort = RichHandler(console=console,
-                                     level='WARNING',
-                                     rich_tracebacks=True,
-                                     tracebacks_extra_lines=2,
-                                     show_path=False)
-    rich_logging = True
-except ImportError:
-    from logging import StreamHandler
-    rich_logging = False
+from rich.console import Console
+from rich.logging import RichHandler
+from tblib import pickling_support
 
-try:
-    from tblib import pickling_support
-    pickling_support.install()
-    tb_lib = True
-except ImportError:
-    tb_lib = False
+
+console = Console(stderr=True)
+logging.lastResort = RichHandler(console=console,
+                                 level='WARNING',
+                                 rich_tracebacks=True,
+                                 tracebacks_extra_lines=2,
+                                 show_path=False)
+
+pickling_support.install()
 
 
 class QueueHandler(logging.Handler):
@@ -73,15 +64,16 @@ class QueueHandler(logging.Handler):
         # msg + args, as these might be unpickleable. We also zap the
         # exc_info and exc_text attributes, as they are no longer
         # needed and, if not None, will typically not be pickleable.
-        if not tb_lib:
-            msg = self.format(record)
-            # bpo-35726: make copy of record to avoid affecting other handlers in the chain.
-            record = copy.copy(record)
-            record.message = msg
-            record.msg = msg
-            record.args = None
-            record.exc_info = None
-            record.exc_text = None
+
+        # Not nedded, since we use tblib
+        # msg = self.format(record)
+        # # bpo-35726: make copy of record to avoid affecting other handlers in the chain.
+        # record = copy.copy(record)
+        # record.message = msg
+        # record.msg = msg
+        # record.args = None
+        # record.exc_info = None
+        # record.exc_text = None
         return ['log_msg', record]
 
     def emit(self, record: LogRecord):
@@ -131,7 +123,6 @@ class LoggingListener(Thread):
         super().__init__(target=self.work,
                          args=())
         self._logging_queue = logging_queue
-        self._stop_event = threading.Event()
 
         self.record_type_to_handle_fn = {'log_msg': LoggingListener._handle_log_msg,
                                          'stdout_msg': LoggingListener._handle_stdout_msg,
@@ -168,24 +159,17 @@ class LoggingListener(Thread):
             handle_record = self.record_type_to_handle_fn[record_type]
             handle_record(record)
 
-    def stop(self):
-        self._stop_event.set()
-
 
 def configure_logging(level: Union[str, int] = 'INFO'):
     assert level in ['DEBUG', 'INFO', 'WARNING', 'WARN', 'ERROR', 'FATAL', 'CRITICAL',
                      10, 20, 30, 40, 50]
     logger = logging.getLogger()
-    if rich_logging:
-        formatter = logging.Formatter('%(processName)-13s%(message)s')
-        stream_handler = RichHandler(
-            rich_tracebacks=True,
-            tracebacks_extra_lines=2,
-            show_path=False
-        )
-    else:
-        formatter = logging.Formatter('%(asctime)s %(levelname)-10s %(processName)-10s %(message)s')
-        stream_handler = StreamHandler()
+    formatter = logging.Formatter('%(processName)-13s%(message)s')
+    stream_handler = RichHandler(
+        rich_tracebacks=True,
+        tracebacks_extra_lines=2,
+        show_path=False
+    )
     stream_handler.setLevel(level)
     stream_handler.setFormatter(formatter)
     logger.addHandler(stream_handler)

@@ -13,11 +13,18 @@ class TaskResultObjectMissing(Exception):
     pass
 
 
-class TaskPublishesSpecMissing(Exception):
-    """Exception raised when `publishes` specification is missing in both task specification or task definition"""
+class TaskNameError(Exception):
+    """Exception raised when an other object with the name of a task exists.
+    Task names have to be unique for pickling.
+    """
     pass
 
 
 class GridSearchExpansionError(Exception):
     """Exception raised when Grid Search expansion fails."""
+    pass
+
+
+class CyclicGraphError(Exception):
+    """Exception raised when task spec graph contains circular dependencies."""
     pass

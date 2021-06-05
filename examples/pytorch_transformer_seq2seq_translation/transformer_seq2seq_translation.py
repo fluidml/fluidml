@@ -25,7 +25,8 @@ from fluidml import Flow, Swarm
 from fluidml.common import Task, Resource
 from fluidml.common.logging import configure_logging
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.storage import LocalFileStore
+from fluidml.storage import LocalFileStore, TypeInfo
+from fluidml.visualization import visualize_graph_in_console
 
 
 logger = logging.getLogger(__name__)
@@ -55,33 +56,29 @@ class MyLocalFileStore(LocalFileStore):
     def __init__(self, base_dir: str):
         super().__init__(base_dir=base_dir)
 
-        self._save_load_fn_from_type['torch'] = (self._save_torch, self._load_torch)
-        self._save_load_fn_from_type['tokenizer'] = (self._save_tokenizer, self._load_tokenizer)
+        self._type_registry['torch'] = TypeInfo(self._save_torch, self._load_torch, 'pt')
+        self._type_registry['tokenizer'] = TypeInfo(self._save_tokenizer, self._load_tokenizer, 'json')
 
     @staticmethod
-    def _save_torch(name: str, obj: Any, run_dir: str):
-        model_dir = os.path.join(run_dir, 'models')
-        os.makedirs(model_dir, exist_ok=True)
-        torch.save(obj, f=os.path.join(model_dir, f'{name}.pt'))
+    def _save_torch(name: str, obj: Any, obj_dir: str, extension: str):
+        torch.save(obj, f=os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _load_torch(name: str, run_dir: str) -> Any:
-        model_dir = os.path.join(run_dir, 'models')
-        return torch.load(os.path.join(model_dir, f'{name}.pt'))
+    def _load_torch(name: str, obj_dir: str, extension: str) -> Any:
+        return torch.load(os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _save_tokenizer(name: str, obj: Tokenizer, run_dir: str):
-        obj.save(os.path.join(run_dir, f'{name}.json'))
+    def _save_tokenizer(name: str, obj: Tokenizer, obj_dir: str, extension: str):
+        obj.save(os.path.join(obj_dir, f'{name}.{extension}'))
 
     @staticmethod
-    def _load_tokenizer(name: str, run_dir: str) -> Tokenizer:
-        return Tokenizer.from_file(os.path.join(run_dir, f'{name}.json'))
+    def _load_tokenizer(name: str, obj_dir: str, extension: str) -> Tokenizer:
+        return Tokenizer.from_file(os.path.join(obj_dir, f'{name}.{extension}'))
 
 
 @dataclass
 class TaskResource(Resource):
     device: str
-    seed: int
 
 
 class DatasetLoading(Task):
@@ -103,7 +100,7 @@ class DatasetLoading(Task):
         return data
 
     def run(self):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         logger.info(f'Download and save raw dataset to "{task_dir}".')
 
@@ -147,7 +144,7 @@ class TokenizerTraining(Task):
         return tokenizer
 
     def run(self, train_data: Dict[str, List[str]]):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # train german tokenizer
@@ -181,7 +178,7 @@ class DatasetEncoding(Task):
             test_data: Dict[str, List[str]],
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
@@ -238,7 +235,8 @@ class Training(Task):
                  clip_grad: float,
                  train_batch_size: int,
                  valid_batch_size: int,
-                 num_epochs: int):
+                 num_epochs: int,
+                 seed: int):
         super().__init__()
 
         # transformer model parameters
@@ -260,6 +258,7 @@ class Training(Task):
         self.train_batch_size = train_batch_size
         self.valid_batch_size = valid_batch_size
         self.num_epochs = num_epochs
+        self.seed = seed
 
     def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int):
         """ Initialize all training components.
@@ -340,7 +339,7 @@ class Training(Task):
     def _train(self, model, train_iterator, valid_iterator, optimizer, criterion):
         """ Train loop.
         """
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
         model_dir = os.path.join(task_dir, 'models')
         logger.info(f'Save model checkpoints to "{model_dir}".')
@@ -360,7 +359,7 @@ class Training(Task):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 best_model = model.state_dict()
-                self.save(obj=model.state_dict(), name='best_model', type_='torch')
+                self.save(obj=best_model, name='best_model', type_='torch')
                 self.save(obj={'epoch': epoch,
                                'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
 
@@ -376,7 +375,7 @@ class Training(Task):
             valid_encoded: List[Tuple[List[int], List[int]]],
             de_tokenizer: Tokenizer,
             en_tokenizer: Tokenizer):
-        set_seed(self.resource.seed)
+        set_seed(self.seed)
 
         # instantiate the collate fn for the dataloader
         batch_collator = BatchCollator(de_pad_idx=de_tokenizer.token_to_id('<pad>'),
@@ -427,7 +426,7 @@ class ModelSelection(Task):
         return config
 
     def run(self, reduced_results: List[Dict]):
-        task_dir = self.results_store.get_context(task_name=self.name, task_unique_config=self.unique_config)
+        task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # select the best run config by comparing model performances from different parameter sweeps
@@ -439,10 +438,11 @@ class ModelSelection(Task):
 
 
 class Evaluation(Task):
-    def __init__(self, test_batch_size: int):
+    def __init__(self, test_batch_size: int, seed: int):
         super().__init__()
 
         self.batch_size = test_batch_size
+        self.seed = seed
 
     def _init_model(self, train_config: Dict, input_dim: int, output_dim: int,
                     src_pad_idx: int, trg_pad_idx: int) -> nn.Module:
@@ -525,7 +525,7 @@ class Evaluation(Task):
         return bleu_score(pred_trgs, trgs)
 
     def run(self, best_run_config: Dict):
-        set_seed(self.resource.seed)
+        set_seed(self.seed)
 
         # load the best model, test-data and the tokenizers based on the previously selected best run config
         model_state_dict = self.load(name='best_model', task_name='Training', task_unique_config=best_run_config)
@@ -573,9 +573,10 @@ def main():
     current_dir = os.path.abspath('')
     base_dir = os.path.join(current_dir, 'seq2seq_experiments')
 
-    num_workers = 4
-    force = None  # choices [selected, all, None]
-    task_to_execute = None
+    num_workers = 1
+    # choices [<task_name>, <task_name+>, [<task_name1+>, <task_name2>], all, None]
+    #  "+" registers successor tasks for force execution as well
+    force = None
     use_cuda = True
     seed = 1234
 
@@ -603,26 +604,24 @@ def main():
                        'clip_grad': 1.,
                        'train_batch_size': [128, 256],
                        'valid_batch_size': 128,
-                       'num_epochs': 10}
+                       'num_epochs': 10,
+                       'seed': seed}
 
-    evaluation_params = {'test_batch_size': 128}
+    evaluation_params = {'test_batch_size': 128,
+                         'seed': seed}
 
     # create all task specs
-    dataset_loading_task = TaskSpec(task=DatasetLoading, task_kwargs=dataset_loading_params,
+    dataset_loading_task = TaskSpec(task=DatasetLoading, config=dataset_loading_params,
                                     publishes=['train_data', 'valid_data', 'test_data'])
-    tokenizer_training_task = GridTaskSpec(task=TokenizerTraining, gs_config=tokenizer_training_params,
-                                           expects=['train_data'],
-                                           publishes=['de_tokenizer', 'en_tokenizer'])
+    tokenizer_training_task = TaskSpec(task=TokenizerTraining, config=tokenizer_training_params,
+                                       publishes=['de_tokenizer', 'en_tokenizer'])
     dataset_encoding_task = TaskSpec(task=DatasetEncoding,
-                                     expects=['train_data', 'valid_data', 'test_data', 'de_tokenizer', 'en_tokenizer'],
                                      publishes=['train_encoded', 'valid_encoded', 'test_encoded'])
     train_task = GridTaskSpec(task=Training, gs_config=training_params,
-                              expects=['train_encoded', 'valid_encoded', 'de_tokenizer', 'en_tokenizer'],
                               publishes=['best_model', 'best_model_metric'])
     model_selection_task = TaskSpec(task=ModelSelection, reduce=True, expects=['best_model_metric'],
                                     publishes=['best_run_config'])
-    evaluate_task = TaskSpec(task=Evaluation, reduce=False, task_kwargs=evaluation_params,
-                             expects=['best_run_config'], publishes=[])
+    evaluate_task = TaskSpec(task=Evaluation, config=evaluation_params)
 
     # dependencies between tasks
     tokenizer_training_task.requires(dataset_loading_task)
@@ -637,7 +636,7 @@ def main():
 
     # create list of resources
     devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda)
-    resources = [TaskResource(device=devices[i], seed=seed) for i in range(num_workers)]
+    resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
 
     # create local file storage used for versioning
     results_store = MyLocalFileStore(base_dir=base_dir)
@@ -645,8 +644,14 @@ def main():
     with Swarm(n_dolphins=num_workers,
                resources=resources,
                results_store=results_store) as swarm:
-        flow = Flow(swarm=swarm, task_to_execute=task_to_execute, force=force)
-        flow.run(tasks)
+        flow = Flow(swarm=swarm)
+        flow.create(task_specs=tasks)
+
+        # visualize graphs
+        visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
+        visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
+
+        flow.run(force=force)
 
 
 if __name__ == '__main__':

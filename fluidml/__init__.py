@@ -12,9 +12,10 @@ except NameError:
 if not __FLUIDML_SETUP__:
     from .flow import Flow
     from .swarm import Swarm
+    from .common import Task
 
 _this_year = time.strftime("%Y")
-__version__ = '0.1.3'
+__version__ = '0.2.0'
 __author__ = 'Rajkumar Ramamurthy, Lars Hillebrand'
 __author_email__ = 'raj1514@gmail.com'
 __license__ = 'Apache-2.0'

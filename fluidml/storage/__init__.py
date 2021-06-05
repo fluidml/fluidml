@@ -1,5 +1,5 @@
 from .base import ResultsStore
-from .file_store import LocalFileStore
+from .file_store import LocalFileStore, TypeInfo
 from .in_memory_store import InMemoryStore
 try:
     from .mongo_db_store import MongoDBStore

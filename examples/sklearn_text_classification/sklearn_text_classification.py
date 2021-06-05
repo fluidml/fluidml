@@ -15,6 +15,7 @@ from fluidml.common import Task
 from fluidml.swarm import Swarm
 from fluidml.flow import Flow, GridTaskSpec, TaskSpec
 from fluidml.common.logging import configure_logging
+from fluidml.visualization import visualize_graph_interactive
 
 
 class DatasetFetchTask(Task):
@@ -190,7 +191,7 @@ def main():
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
-    pre_process_task = TaskSpec(task=PreProcessTask, task_kwargs={
+    pre_process_task = TaskSpec(task=PreProcessTask, config={
                                 "pre_processing_steps": ["lower_case", "remove_punct"]})
     featurize_task_1 = TaskSpec(
         task=GloveFeaturizeTask)
@@ -223,9 +224,16 @@ def main():
     with Swarm(n_dolphins=2,
                return_results=True) as swarm:
         flow = Flow(swarm=swarm)
-        results = flow.run(tasks)
-    print(results["ModelSelectionTask"]["result"]["best_config"])
-    print(results["ModelSelectionTask"]["result"]["best_performance"])
+        flow.create(task_specs=tasks)
+
+        # visualize graphs
+        visualize_graph_interactive(flow.task_spec_graph)
+        visualize_graph_interactive(flow.task_graph)
+ 
+    #     results = flow.run()
+
+    # print(results["ModelSelectionTask"]["result"]["best_config"])
+    # print(results["ModelSelectionTask"]["result"]["best_performance"])
 
 
 if __name__ == "__main__":
