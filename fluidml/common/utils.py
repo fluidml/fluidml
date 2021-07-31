@@ -16,7 +16,7 @@ class MyTask(Task):
         self.additional_kwargs = additional_kwargs
 
     def run(self,
-            results: Dict[str, Any]):
+            **results: Dict[str, Any]):
         self.task(**results, **self.config_kwargs, **self.additional_kwargs, task=self)
 
 
@@ -63,5 +63,26 @@ def remove_none_from_dict(obj: Dict) -> Dict:
         return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
     elif isinstance(obj, dict):
         return {k: remove_none_from_dict(v) for k, v in obj.items() if k is not None and v is not None}
+    else:
+        return obj
+
+
+def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = '@') -> Dict:
+    if isinstance(obj, (list, tuple, set)):
+        return type(obj)(remove_prefixed_keys_from_dict(x, prefix) for x in obj)
+    elif isinstance(obj, dict):
+        return {k: remove_prefixed_keys_from_dict(v, prefix) for k, v in obj.items()
+                if not isinstance(k, str) or (isinstance(k, str) and not k.startswith(prefix))}
+    else:
+        return obj
+
+
+def remove_prefix_from_dict(obj: Dict, prefix: str = '@') -> Dict:
+    if isinstance(obj, (list, tuple, set)):
+        return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)
+    elif isinstance(obj, dict):
+        return {(k.split(prefix, 1)[-1]
+                 if isinstance(k, str) and k.startswith(prefix)
+                 else k): remove_prefix_from_dict(v, prefix) for k, v in obj.items()}
     else:
         return obj

@@ -66,7 +66,6 @@ class InMemoryStore(ResultsStore):
                 if task_sweep["config"].items() <= task_unique_config.items():
                     try:
                         del task_sweep['results'][name]
-                        # task_sweep['results'][name] = None
                         self._memory_store[task_name] = existing_task_results
                     except KeyError:
                         logger.warning(f'"{name}" could not be deleted from store since it was not found.')

@@ -32,7 +32,8 @@ def get_filtered_results_from_predecessor(predecessor: Task,
         if item_name in task_expects:
             obj: Optional[Any] = results_store.load(name=item_name,
                                                     task_name=predecessor.name,
-                                                    task_unique_config=predecessor.unique_config)
+                                                    task_unique_config=predecessor.unique_config,
+                                                    lazy=results_store.lazy_loading)
             if obj is not None:
                 result[item_name] = obj
     return result

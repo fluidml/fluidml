@@ -2,7 +2,15 @@ from abc import ABC, abstractmethod
 from typing import Optional, List, Dict, Any
 
 
+class Promise(ABC):
+    @abstractmethod
+    def load(self, **kwargs):
+        raise NotImplementedError
+
+
 class ResultsStore(ABC):
+    def __init__(self, lazy_loading: bool = False):
+        self.lazy_loading = lazy_loading
 
     @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
@@ -19,13 +27,29 @@ class ResultsStore(ABC):
         """ Method to delete any artifact """
         raise NotImplementedError
 
+    def open(self,
+             name: Optional[str] = None,
+             task_name: Optional[str] = None,
+             task_unique_config: Optional[Dict] = None,
+             mode: Optional[str] = None,
+             promise: Optional[Promise] = None,
+             type_: Optional[str] = None,
+             sub_dir: Optional[str] = None,
+             **open_kwargs):
+        """ Method to open a file from Local File Store (only available for Local File Store)."""
+
     def get_context(self, task_name: str, task_unique_config: Dict):
         """ Method to get store specific storage context, e.g. the current run directory for Local File Store """
-        raise NotImplementedError
 
     def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
         # if a task publishes no results, we always execute the task
         if not task_publishes:
+            return None
+
+        # try to load task completed object; if it is None we return None and re-run the task
+        completed: Optional[Any] = self.load(
+            name='.completed', task_name=task_name, task_unique_config=task_unique_config)
+        if not completed:
             return None
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
@@ -33,7 +57,7 @@ class ResultsStore(ABC):
         for item_name in task_publishes:
             # load object
             obj: Optional[Any] = self.load(
-                name=item_name, task_name=task_name, task_unique_config=task_unique_config)
+                name=item_name, task_name=task_name, task_unique_config=task_unique_config, lazy=self.lazy_loading)
 
             # if at least one expected result object of the task cannot be loaded, return None and re-run the task.
             if obj is None:

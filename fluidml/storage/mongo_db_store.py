@@ -31,12 +31,14 @@ class MongoDBStore(ResultsStore):
                  db: str,
                  collection_name: Optional[str] = None,
                  host: Optional[str] = None):
+        super().__init__()
+
         self._host = host
         self._db = db
         self._collection_name = collection_name
 
     @connection
-    def load(self, name: str, task_name: str, task_unique_config: Dict) -> Optional[Any]:
+    def load(self, name: str, task_name: str, task_unique_config: Dict, lazy: bool = False) -> Optional[Any]:
         """ Query method to load an object based on its name, task_name and task_config if it exists """
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config

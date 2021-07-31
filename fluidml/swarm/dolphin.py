@@ -69,10 +69,7 @@ class Dolphin(Whale):
         # if results is none, run the task now
         if results is None:
             logger.debug(f'Started task {task.unique_name}.')
-            if isinstance(task, MyTask):
-                task.run(results=pred_results)
-            else:
-                task.run(**pred_results)
+            task.run_wrapped(**pred_results)
 
         with self._lock:
             # put task in done_queue

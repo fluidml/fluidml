@@ -5,12 +5,12 @@ from multiprocessing import Lock
 from typing import Dict, List, Optional, Any
 
 from fluidml.common import DependencyMixin
-from fluidml.storage import ResultsStore
+from fluidml.storage import ResultsStore, Promise, File
 
 
 @dataclass
-class Resource:
-    pass
+class Resource(ABC):
+    """Dataclass used to register resources, made available to all tasks, e.g. cuda device ids"""
 
 
 class Task(ABC, DependencyMixin):
@@ -143,8 +143,12 @@ class Task(ABC, DependencyMixin):
         Args:
             results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
         """
-
         raise NotImplementedError
+
+    def run_wrapped(self, **results):
+        """Calls run function to execute task and saves a 'completed' event file to signal successful execution."""
+        self.run(**results)
+        self.save('1', '.completed', type_='event', sub_dir='.load_info')
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
         """Saves the given object to the results store
@@ -159,7 +163,13 @@ class Task(ABC, DependencyMixin):
             self.results_store.save(obj=obj, name=name, type_=type_,
                                     task_name=self.name, task_unique_config=self.unique_config, **kwargs)
 
-    def load(self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None) -> Any:
+    def load(
+            self,
+            name: str,
+            task_name: Optional[str] = None,
+            task_unique_config: Optional[Dict] = None,
+            **kwargs
+    ) -> Any:
         """ Loads the given object from results store
 
         Args:
@@ -171,7 +181,8 @@ class Task(ABC, DependencyMixin):
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
         with self.lock:
-            return self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config)
+            return self.results_store.load(name=name, task_name=task_name,
+                                           task_unique_config=task_unique_config, **kwargs)
 
     def delete(self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None):
         """ Deletes object with specified name from results store """
@@ -188,3 +199,26 @@ class Task(ABC, DependencyMixin):
 
         with self.lock:
             return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
+
+    def open(
+            self,
+            name: Optional[str] = None,
+            task_name: Optional[str] = None,
+            task_unique_config: Optional[Dict] = None,
+            mode: Optional[str] = None,
+            promise: Optional[Promise] = None,
+            type_: Optional[str] = None,
+            sub_dir: Optional[str] = None,
+            **open_kwargs
+    ) -> Optional[File]:
+        """ Wrapper to open a file from Local File Store (only available for Local File Store)."""
+
+        if promise:
+            with self.lock:
+                return self.results_store.open(promise=promise, mode=mode)
+
+        task_name = task_name if task_name is not None else self.name
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        with self.lock:
+            return self.results_store.open(name=name, task_name=task_name, task_unique_config=task_unique_config,
+                                           mode=mode, type_=type_, sub_dir=sub_dir, **open_kwargs)
