@@ -7,7 +7,6 @@ from fluidml.common import Task, Resource
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
 from fluidml.storage.utils import pack_predecessor_results
-from fluidml.common.utils import MyTask
 
 
 logger = logging.getLogger(__name__)
@@ -55,7 +54,7 @@ class Dolphin(Whale):
                                                      task_expects=task.expects)
         return results
 
-    def _run_task(self, task: Task, pred_results: Dict):
+    def _run_task(self, task: Task):
         # if force is set to false, try to get task results, else set results to none
         if task.force:
             results = None
@@ -68,6 +67,9 @@ class Dolphin(Whale):
                                                                      task_publishes=task.publishes)
         # if results is none, run the task now
         if results is None:
+            # extract predecessor results
+            pred_results = self._extract_results_from_predecessors(task)
+
             logger.debug(f'Started task {task.unique_name}.')
             task.run_wrapped(**pred_results)
 
@@ -90,14 +92,11 @@ class Dolphin(Whale):
         return task
 
     def _execute_task(self, task: Task):
-        # extract predecessor results
-        pred_results = self._extract_results_from_predecessors(task)
-
         # pack the task
         task = self._pack_task(task)
 
         # run the task
-        self._run_task(task, pred_results)
+        self._run_task(task)
 
     def _fetch_next_task(self) -> Union[int, None]:
         try:
