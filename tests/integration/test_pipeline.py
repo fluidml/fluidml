@@ -4,6 +4,7 @@ from fluidml.common import Task
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
 from fluidml.swarm import Swarm
+from fluidml.storage import Sweep
 
 
 def parse(in_dir: str, task: Task):
@@ -26,7 +27,7 @@ def train(res3: Dict, res4: Dict, model, dataloader, evaluator, optimizer, num_e
     task.save(obj={}, name='res5', type_='pickle')
 
 
-def evaluate(reduced_results: Dict, metric: str, task: Task):
+def evaluate(res5: List[Sweep], metric: str, task: Task):
     task.save(obj={}, name='res6', type_='pickle')
 
 

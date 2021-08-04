@@ -4,9 +4,10 @@ from queue import Empty
 from typing import Dict, Any, List, Optional, Tuple, Union
 
 from fluidml.common import Task, Resource
+from fluidml.flow.task_spec import TaskSpec
 from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
-from fluidml.storage.utils import pack_predecessor_results
+from fluidml.storage.controller import TaskDataController
 
 
 logger = logging.getLogger(__name__)
@@ -20,7 +21,7 @@ class Dolphin(Whale):
                  done_queue: List[int],
                  logging_queue: Queue,
                  lock: Lock,
-                 tasks: Dict[int, Task],
+                 tasks: Dict[int, TaskSpec],
                  exit_event: Event,
                  exit_on_error: bool,
                  results_store: Optional[ResultsStore] = None):
@@ -39,19 +40,16 @@ class Dolphin(Whale):
     def num_tasks(self):
         return len(self.tasks)
 
-    def _is_task_ready(self, task: Task):
-        for predecessor in task.predecessors:
+    def _is_task_ready(self, task_spec: TaskSpec):
+        for predecessor in task_spec.predecessors:
             if predecessor.id_ not in self.done_queue:
                 return False
         return True
 
     def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
         with self._lock:
-            results: Dict = pack_predecessor_results(predecessor_tasks=task.predecessors,
-                                                     results_store=self.results_store,
-                                                     reduce_task=task.reduce,
-                                                     task_name=task.name,
-                                                     task_expects=task.expects)
+            controller = TaskDataController(task)
+            results: Dict = controller.pack_predecessor_results()
         return results
 
     def _run_task(self, task: Task):
@@ -116,21 +114,24 @@ class Dolphin(Whale):
             # continue when there is a valid task to run
             if task_id is not None:
 
-                # get current task from task_id
-                task = self.tasks[task_id]
+                # get current task_spec from task_id
+                task_spec = self.tasks[task_id]
+
+                # instantiate task obj
+                task = Task.from_spec(task_spec)
 
                 # execute the task
                 self._execute_task(task)
 
                 with self._lock:
                     # schedule the task's successors
-                    self._schedule_successors(task)
+                    self._schedule_successors(task_spec)
 
-    def _schedule_successors(self, task: Task):
+    def _schedule_successors(self, task_spec: TaskSpec):
         # get successor tasks and put them in task queue for processing
-        for successor in task.successors:
+        for successor in task_spec.successors:
             # run task only if all dependencies are satisfied
-            if not self._is_task_ready(task=self.tasks[successor.id_]):
+            if not self._is_task_ready(task_spec=self.tasks[successor.id_]):
                 logger.debug(f'Dependencies are not satisfied yet for '
                              f'task {successor.unique_name}')
             # the done_queue check should not be necessary because tasks don't leave the running queue once they're

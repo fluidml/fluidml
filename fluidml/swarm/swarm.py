@@ -8,10 +8,11 @@ from typing import Optional, Type, List, Dict, Union, Any
 from rich.traceback import install as rich_install
 
 from fluidml.common.logging import LoggingListener
-from fluidml.common import Task, Resource
+from fluidml.common import Resource
+from fluidml.flow.task_spec import TaskSpec
 from fluidml.swarm import Dolphin
 from fluidml.storage import ResultsStore, InMemoryStore
-from fluidml.storage.utils import pack_results
+from fluidml.storage.controller import pack_pipeline_results
 
 
 rich_install(extra_lines=2)
@@ -57,7 +58,7 @@ class Swarm:
         self.exit_event = Event()
         self.return_results = True if isinstance(
             self.results_store, InMemoryStore) else return_results
-        self.tasks: Dict[int, Task] = {}
+        self.tasks: Dict[int, TaskSpec] = {}
 
         self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
 
@@ -92,7 +93,7 @@ class Swarm:
         return resources
 
     @staticmethod
-    def _get_entry_point_tasks(tasks: List[Task]) -> Dict[int, str]:
+    def _get_entry_point_tasks(tasks: List[TaskSpec]) -> Dict[int, str]:
         """
         Gets tasks that are run first (tasks with no predecessors)
         """
@@ -103,12 +104,12 @@ class Swarm:
         return entry_task_ids
 
     def _collect_results(self) -> Dict[str, Any]:
-        results = pack_results(all_tasks=list(self.tasks.values()),
-                               results_store=self.results_store,
-                               return_results=self.return_results)
+        results = pack_pipeline_results(all_tasks=list(self.tasks.values()),
+                                        results_store=self.results_store,
+                                        return_results=self.return_results)
         return results
 
-    def work(self, tasks: List[Task]) -> Optional[Dict[str, Union[List[Dict], Dict]]]:
+    def work(self, tasks: List[TaskSpec]) -> Optional[Dict[str, Union[List[Dict], Dict]]]:
 
         # get entry point task ids
         entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)

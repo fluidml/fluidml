@@ -4,92 +4,56 @@ from copy import deepcopy
 import inspect
 from itertools import product
 import json
-from typing import Dict, Any, Optional, List, Tuple, Union, Callable, Sequence, Iterable
+from typing import Dict, Any, Optional, List, Tuple, Union, Callable, Sequence, Iterable, Type
 
-from fluidml.common import Task, DependencyMixin
-from fluidml.common.utils import MyTask
+from fluidml.common import DependencyMixin
+from fluidml.common import Task
 from fluidml.common.exception import GridSearchExpansionError
 
 
 class BaseTaskSpec(DependencyMixin, ABC):
+
     def __init__(self,
-                 task: Union[type, Callable],
+                 task: Union[Type[Task], Callable],
                  name: Optional[str] = None,
-                 reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None,
+                 reduce: Optional[bool] = None,
                  additional_kwargs: Optional[Dict[str, Any]] = None):
         DependencyMixin.__init__(self)
+
+        # task has to be a class object which inherits Task or it has to be a function
+        if not ((inspect.isclass(task)
+                 and f'{task.__base__.__module__}.{task.__base__.__name__}' == f'{Task.__module__}.{Task.__name__}')
+                or inspect.isfunction(task)):
+            raise TypeError(f'{task} needs to be a Class object which inherits Task (type="type") or a function.'
+                            f'But it is of type "{type(task)}".')
         self.task = task
         self.name = name if name is not None else self.task.__name__
-        self.reduce = reduce
         self.publishes = publishes
         self.expects = expects
+        self.reduce = reduce
         self.additional_kwargs = additional_kwargs if additional_kwargs is not None else {}
 
         # this will be overwritten later for expanded tasks (a unique expansion id is added)
-        self.unique_name = self.name
+        self._unique_name = self.name
 
-    def _create_task_object(self,
-                            config_kwargs: Dict[str, Any]) -> Task:
-        if inspect.isclass(self.task):
-            task = self.task(**config_kwargs, **self.additional_kwargs)
-            task.config_kwargs = config_kwargs
-            expected_inputs = list(inspect.signature(task.run).parameters)
+    @property
+    def unique_name(self):
+        return self._unique_name
 
-        elif inspect.isfunction(self.task):
-            task = MyTask(task=self.task, config_kwargs=config_kwargs, additional_kwargs=self.additional_kwargs)
-
-            task_all_arguments = list(inspect.signature(self.task).parameters)
-            task_extra_arguments = list(config_kwargs) + list(self.additional_kwargs) + ['task']
-            expected_inputs = [arg for arg in task_all_arguments if arg not in task_extra_arguments]
-        else:
-            raise TypeError(f'{self.task} needs to be a Class object (type="type") or a function.'
-                            f'But it is of type "{type(self.task)}".')
-        task.name = self.name
-        task.unique_name = self.unique_name
-
-        # override publishes from task spec
-        task = self._override_publishes(task)
-
-        # set task expects attribute based on task type and user provided expected inputs
-        task = self._set_task_expects(task, expected_inputs)
-
-        return task
-
-    def _set_task_expects(self, task: Task, expected_inputs: List[str]) -> Task:
-
-        if self.expects is not None:
-            task.expects = self.expects
-        elif task.expects is None and not self.reduce:
-            task.expects = expected_inputs
-
-        # if task.expects is None, we collect all published results from each predecessor
-        #  and pack them in the "reduced_results" dict.
-        return task
-
-    def _override_publishes(self, task: Task) -> Task:
-        if self.publishes is not None:
-            task.publishes = self.publishes
-
-        elif task.publishes is None:
-            task.publishes = []
-        return task
+    @unique_name.setter
+    def unique_name(self, unique_name: str):
+        self._unique_name = unique_name
 
     @abstractmethod
-    def build(self) -> List[Task]:
-        """Builds task from the specification
-
-        Returns:
-            List[Task]: task objects that are created
-        """
-
+    def expand(self) -> List['TaskSpec']:
         raise NotImplementedError
 
 
 class TaskSpec(BaseTaskSpec):
     def __init__(self,
-                 task: Union[type, Callable],
+                 task: Union[Type[Task], Callable],
                  config: Optional[Dict[str, Any]] = None,
                  additional_kwargs: Optional[Dict[str, Any]] = None,
                  name: Optional[str] = None,
@@ -110,20 +74,54 @@ class TaskSpec(BaseTaskSpec):
                                                     Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
-        super().__init__(task=task, name=name, reduce=reduce,
-                         publishes=publishes, expects=expects, additional_kwargs=additional_kwargs)
+        super().__init__(task, name, publishes, expects, reduce, additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
         self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}
 
-    def build(self) -> List[Task]:
-        task = self._create_task_object(config_kwargs=self.config_kwargs)
-        return [task]
+        # set in Flow
+        self._id: Optional[int] = None
+        self._unique_config: Optional[Dict] = None
+        self._force: Optional[str] = None
+
+    @property
+    def id_(self):
+        return self._id
+
+    @id_.setter
+    def id_(self, id_: int):
+        self._id = id_
+
+    @property
+    def unique_config(self):
+        return self._unique_config
+
+    @unique_config.setter
+    def unique_config(self, config: Dict):
+        self._unique_config = config
+
+    @property
+    def force(self):
+        return self._force
+
+    @force.setter
+    def force(self, force: str):
+        self._force = force
+
+    def expand(self) -> List['TaskSpec']:
+        # we don't return [self] since we have to return a copy without self.predecessors and self.successors
+        return [TaskSpec(task=self.task,
+                         config=self.config_kwargs,
+                         additional_kwargs=self.additional_kwargs,
+                         name=self.name,
+                         reduce=self.reduce,
+                         publishes=self.publishes,
+                         expects=self.expects)]
 
 
 class GridTaskSpec(BaseTaskSpec):
 
     def __init__(self,
-                 task: Union[type, Callable],
+                 task: Union[Type[Task], Callable],
                  gs_config: Dict[str, Any],
                  additional_kwargs: Optional[Dict[str, Any]] = None,
                  gs_expansion_method: Optional[str] = 'product',
@@ -142,16 +140,20 @@ class GridTaskSpec(BaseTaskSpec):
                                                        Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
-        super().__init__(task=task, name=name, publishes=publishes, expects=expects,
-                         additional_kwargs=additional_kwargs)
+        super().__init__(task, name, publishes, expects, additional_kwargs)
+
         # we assure that the provided config is json serializable since we use json to later store the config
         gs_config = json.loads(json.dumps(gs_config))
         self.task_configs: List[Dict] = GridTaskSpec._split_gs_config(config_grid_search=gs_config,
                                                                       method=gs_expansion_method)
 
-    def build(self) -> List[Task]:
-        tasks = [self._create_task_object(config_kwargs=config) for config in self.task_configs]
-        return tasks
+    def expand(self) -> List['TaskSpec']:
+        return [TaskSpec(task=self.task,
+                         config=config,
+                         additional_kwargs=self.additional_kwargs,
+                         name=self.name,
+                         publishes=self.publishes,
+                         expects=self.expects) for config in self.task_configs]
 
     @staticmethod
     def _find_list_in_dict(obj: Dict, param_grid: List) -> List:

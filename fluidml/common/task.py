@@ -1,11 +1,15 @@
 from abc import ABC, abstractmethod
 import contextlib
 from dataclasses import dataclass
+import inspect
 from multiprocessing import Lock
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
 
-from fluidml.common import DependencyMixin
+from fluidml.common.dependency import DependencyMixin
 from fluidml.storage import ResultsStore, Promise, File
+
+if TYPE_CHECKING:
+    from fluidml.flow import TaskSpec
 
 
 @dataclass
@@ -18,63 +22,21 @@ class Task(ABC, DependencyMixin):
 
     def __init__(self):
         DependencyMixin.__init__(self)
-        # set in Task_spec
-        self._config_kwargs: Optional[Dict[str, Any]] = None
-        self._name: Optional[str] = None
-        self._publishes: Optional[List[str]] = None
-        self._expects: Optional[List[str]] = None
 
-        # set in Flow
-        self._id: Optional[int] = None
-        self._unique_config: Optional[Dict] = None
-        self._reduce = False
-        self._force: Optional[str] = None
-        self._unique_name: Optional[str] = None
+        self.name: Optional[str] = None
+        self.config_kwargs: Optional[Dict[str, Any]] = None
+        self.publishes: Optional[List[str]] = None
+        self.expects: Optional[Dict[str, inspect.Parameter]] = None
+        self.id_: Optional[int] = None
+        self.unique_config: Optional[Dict] = None
+        self.reduce: Optional[bool] = None
+        self.force: Optional[str] = None
+        self.unique_name: Optional[str] = None
 
-        # set in Dolphin
+        # set in Dolphin or manually
         self._results_store: Optional[ResultsStore] = None
         self._resource: Optional[Resource] = None
         self._lock: Optional[Lock] = None
-
-    @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, name: str):
-        self._name = name
-
-    @property
-    def config_kwargs(self):
-        return self._config_kwargs
-
-    @config_kwargs.setter
-    def config_kwargs(self, config_kwargs: str):
-        self._config_kwargs = config_kwargs
-
-    @property
-    def id_(self):
-        return self._id
-
-    @id_.setter
-    def id_(self, id_: int):
-        self._id = id_
-
-    @property
-    def unique_name(self):
-        return self._unique_name
-
-    @unique_name.setter
-    def unique_name(self, unique_name: int):
-        self._unique_name = unique_name
-
-    @property
-    def unique_config(self):
-        return self._unique_config
-
-    @unique_config.setter
-    def unique_config(self, config: Dict):
-        self._unique_config = config
 
     @property
     def results_store(self):
@@ -91,38 +53,6 @@ class Task(ABC, DependencyMixin):
     @resource.setter
     def resource(self, resource: Resource):
         self._resource = resource
-
-    @property
-    def force(self):
-        return self._force
-
-    @force.setter
-    def force(self, force: str):
-        self._force = force
-
-    @property
-    def publishes(self):
-        return self._publishes
-
-    @publishes.setter
-    def publishes(self, publishes: List[str]):
-        self._publishes = publishes
-
-    @property
-    def expects(self):
-        return self._expects
-
-    @expects.setter
-    def expects(self, expects: List[str]):
-        self._expects = expects
-
-    @property
-    def reduce(self):
-        return self._reduce
-
-    @reduce.setter
-    def reduce(self, reduce: bool):
-        self._reduce = reduce
 
     @property
     def lock(self):
@@ -222,3 +152,65 @@ class Task(ABC, DependencyMixin):
         with self.lock:
             return self.results_store.open(name=name, task_name=task_name, task_unique_config=task_unique_config,
                                            mode=mode, type_=type_, sub_dir=sub_dir, **open_kwargs)
+
+    @classmethod
+    def from_spec(cls, task_spec: 'TaskSpec'):
+        # avoid circular import
+        from fluidml.common.utils import MyTask
+
+        if inspect.isclass(task_spec.task):
+            task = task_spec.task(**task_spec.config_kwargs, **task_spec.additional_kwargs)
+            task.config_kwargs = task_spec.config_kwargs
+            task_all_arguments = dict(inspect.signature(task.run).parameters)
+            expected_inputs = {arg: value for arg, value in task_all_arguments.items()
+                               if value.kind.name not in ['VAR_POSITIONAL', 'VAR_KEYWORD']}
+        elif inspect.isfunction(task_spec.task):
+            task = MyTask(task=task_spec.task,
+                          config_kwargs=task_spec.config_kwargs,
+                          additional_kwargs=task_spec.additional_kwargs)
+
+            task_all_arguments = dict(inspect.signature(task_spec.task).parameters)
+            task_extra_arguments = list(task_spec.config_kwargs) + list(task_spec.additional_kwargs) + ['task']
+            expected_inputs = {arg: value for arg, value in task_all_arguments.items()
+                               if arg not in task_extra_arguments
+                               and value.kind.name not in ['VAR_POSITIONAL', 'VAR_KEYWORD']}
+        else:
+            # cannot be reached, check has been made in TaskSpec.
+            raise TypeError
+
+        task.name = task_spec.name
+        task.unique_name = task_spec.unique_name
+        task.id_ = task_spec.id_
+        task.unique_config = task_spec.unique_config
+        task.reduce = task_spec.reduce
+        task.force = task_spec.force
+        task.predecessors = task_spec.predecessors
+        task.successors = task_spec.successors
+
+        # override publishes from task spec
+        task = Task._override_publishes(task_spec, task)
+
+        # set task expects attribute based on task type and user provided expected inputs
+        task = Task._set_task_expects(task_spec, task, expected_inputs)
+
+        return task
+
+    @staticmethod
+    def _set_task_expects(task_spec: 'TaskSpec', task: 'Task', expected_inputs: Dict[str, inspect.Parameter]) -> 'Task':
+        # if self.expects is set manually we add missing arguments to the expected_inputs dict
+        if task_spec.expects is not None:
+            for arg in task_spec.expects:
+                if arg not in expected_inputs:
+                    expected_inputs[arg] = inspect.Parameter(name=arg, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+
+        task.expects = expected_inputs
+        return task
+
+    @staticmethod
+    def _override_publishes(task_spec: 'TaskSpec', task: 'Task') -> 'Task':
+        if task_spec.publishes is not None:
+            task.publishes = task_spec.publishes
+
+        elif task.publishes is None:
+            task.publishes = []
+        return task

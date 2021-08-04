@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
 
@@ -8,9 +9,19 @@ class Promise(ABC):
         raise NotImplementedError
 
 
+@dataclass
+class Sweep:
+    value: Any
+    config: Dict
+
+
+@dataclass
+class LazySweep:
+    value: Promise
+    config: Dict
+
+
 class ResultsStore(ABC):
-    def __init__(self, lazy_loading: bool = False):
-        self.lazy_loading = lazy_loading
 
     @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
@@ -57,7 +68,7 @@ class ResultsStore(ABC):
         for item_name in task_publishes:
             # load object
             obj: Optional[Any] = self.load(
-                name=item_name, task_name=task_name, task_unique_config=task_unique_config, lazy=self.lazy_loading)
+                name=item_name, task_name=task_name, task_unique_config=task_unique_config)
 
             # if at least one expected result object of the task cannot be loaded, return None and re-run the task.
             if obj is None:

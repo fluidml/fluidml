@@ -1,6 +1,6 @@
 from typing import Any, Dict, Callable, Union, Tuple
 
-from fluidml.common import Task
+from fluidml.common.task import Task
 
 
 class MyTask(Task):

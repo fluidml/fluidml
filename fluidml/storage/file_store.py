@@ -148,12 +148,13 @@ class TypeInfo:
     extension: Optional[str] = None     # file extension the object is saved with
     is_binary: Optional[bool] = None    # read, write and append in binary mode
     open_fn: Optional[Callable] = None  # function used to open a file object (default is builtin open())
-    is_dir: bool = False                # save and load fn operate on dir and not on file
+    needs_path: bool = False            # save and load fn operate on path and not on file like object
 
 
 class LocalFileStore(ResultsStore):
-    def __init__(self, base_dir: str, lazy_loading: bool = False):
-        super().__init__(lazy_loading)
+    def __init__(self, base_dir: str):
+        super().__init__()
+
         self.base_dir = base_dir
         self._type_registry = {
             'event': TypeInfo(self._save_event, self._load_event),
@@ -212,7 +213,7 @@ class LocalFileStore(ResultsStore):
                         open_kwargs: Dict, load_kwargs: Dict) -> FilePromise:
         # load the saved object from run dir
         mode = 'rb' if type_info.is_binary else 'r'
-        if type_info.is_dir:
+        if type_info.needs_path:
             mode = None
         return FilePromise(name, path, type_info.save_fn, type_info.load_fn, type_info.open_fn, mode,
                            load_kwargs, **open_kwargs)
@@ -246,7 +247,7 @@ class LocalFileStore(ResultsStore):
         if not mode:
             mode = 'wb' if type_info.is_binary else 'w'
 
-        if type_info.is_dir:
+        if type_info.needs_path:
             type_info.save_fn(obj, path, **kwargs)
         else:
             with File(path, mode, save_fn=type_info.save_fn, load_fn=type_info.load_fn, open_fn=type_info.open_fn,
@@ -286,7 +287,7 @@ class LocalFileStore(ResultsStore):
             return self._create_promise(type_info, name, path, open_kwargs, load_kwargs)
 
         # load the saved object from run dir
-        if type_info.is_dir:
+        if type_info.needs_path:
             obj = type_info.load_fn(path, **load_kwargs)
         else:
             mode = 'rb' if type_info.is_binary else 'r'
