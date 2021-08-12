@@ -55,16 +55,20 @@ class Dolphin(Whale):
     def _run_task(self, task: Task):
         # if force is set to false, try to get task results, else set results to none
         if task.force:
-            results = None
+            completed = False
         else:
             with self._lock:
-                # try to get results from results store
-                results: Optional[Tuple[Dict, str]
-                                  ] = self.results_store.get_results(task_name=task.name,
-                                                                     task_unique_config=task.unique_config,
-                                                                     task_publishes=task.publishes)
-        # if results is none, run the task now
-        if results is None:
+                # # try to get results from results store
+                # results: Optional[Tuple[Dict, str]
+                #                   ] = self.results_store.is_finished(task_name=task.name,
+                #                                                      task_unique_config=task.unique_config,
+                #                                                      task_publishes=task.publishes)
+
+                # check if task was successfully completed before
+                completed: bool = self.results_store.is_finished(task_name=task.name,
+                                                                 task_unique_config=task.unique_config)
+        # if task is not completed, run the task now
+        if not completed:
             # extract predecessor results
             pred_results = self._extract_results_from_predecessors(task)
 
@@ -76,10 +80,11 @@ class Dolphin(Whale):
             self.done_queue.append(task.id_)
 
             # Log task completion
-            if results is None:
-                msg = f'Finished task {task.unique_name}'
-            else:
+            if completed:
                 msg = f'Task {task.unique_name} already executed'
+            else:
+                msg = f'Finished task {task.unique_name}'
+
             logger.info(f'{msg} [{len(self.done_queue)}/{self.num_tasks} '
                         f'- {round((len(self.done_queue) / self.num_tasks) * 100)}%]')
 

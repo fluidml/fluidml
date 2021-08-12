@@ -1,9 +1,6 @@
 from setuptools import setup, find_packages
 
-try:
-    import builtins
-except ImportError:
-    import __builtin__ as builtins
+import builtins
 
 # https://packaging.python.org/guides/single-sourcing-package-version/
 # http://blog.ionelmc.ro/2014/05/25/python-packaging/

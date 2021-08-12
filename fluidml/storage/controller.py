@@ -25,6 +25,10 @@ class TaskDataController:
             return False
 
     def _get_filtered_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
+        if not predecessor.publishes:
+            raise TaskResultObjectMissing(f'{self._task_name} expects {list(self._task_expects)} but predecessor '
+                                          f'did not publish any results.')
+
         results = {}
         for item_name in predecessor.publishes:
             if item_name in self._task_expects:
@@ -39,6 +43,7 @@ class TaskDataController:
         return results
 
     def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
+
         if self._task_expects:
             # get only expected results by the task from predecessor tasks
             results = self._get_filtered_results_from_predecessor(predecessor=predecessor)

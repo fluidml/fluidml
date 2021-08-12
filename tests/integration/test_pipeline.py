@@ -7,8 +7,17 @@ from fluidml.swarm import Swarm
 from fluidml.storage import Sweep
 
 
-def parse(in_dir: str, task: Task):
-    task.save(obj={}, name='res1')
+class Parsing(Task):
+    publishes = ['res1']
+
+    def __init__(self, in_dir: str, z: int):
+        super().__init__()
+
+        self.in_dir = in_dir
+        self.z = z
+
+    def run(self):
+        self.save(obj={}, name='res1')
 
 
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
@@ -51,7 +60,7 @@ def test_pipeline(dummy_resource):
     num_workers = 4
 
     # initialize all task specs
-    parse_task = GridTaskSpec(task=parse, gs_config={"in_dir": "/some/dir"}, publishes=['res1'])
+    parse_task = GridTaskSpec(task=Parsing, gs_config={"in_dir": "/some/dir"}, additional_kwargs={'z': 1})
     preprocess_task = GridTaskSpec(task=preprocess, gs_config={"pipeline": ['a', 'b'], "abc": 1},
                                    publishes=['res2'])
     featurize_tokens_task = GridTaskSpec(task=featurize_tokens, gs_config={"type_": "flair", 'batch_size': [2, 3]},

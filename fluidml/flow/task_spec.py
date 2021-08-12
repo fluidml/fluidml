@@ -23,13 +23,13 @@ class BaseTaskSpec(DependencyMixin, ABC):
         DependencyMixin.__init__(self)
 
         # task has to be a class object which inherits Task or it has to be a function
-        if not ((inspect.isclass(task)
-                 and f'{task.__base__.__module__}.{task.__base__.__name__}' == f'{Task.__module__}.{Task.__name__}')
-                or inspect.isfunction(task)):
+        if not (self._inherits_from_task_class(task) or inspect.isfunction(task)):
             raise TypeError(f'{task} needs to be a Class object which inherits Task (type="type") or a function.'
                             f'But it is of type "{type(task)}".')
         self.task = task
         self.name = name if name is not None else self.task.__name__
+        if publishes is None and self._inherits_from_task_class(task):
+            publishes = task.publishes if hasattr(task, 'publishes') else []
         self.publishes = publishes
         self.expects = expects
         self.reduce = reduce
@@ -37,6 +37,11 @@ class BaseTaskSpec(DependencyMixin, ABC):
 
         # this will be overwritten later for expanded tasks (a unique expansion id is added)
         self._unique_name = self.name
+
+    @staticmethod
+    def _inherits_from_task_class(task: Union[Type[Task], Callable]) -> bool:
+        return (inspect.isclass(task)
+                and f'{task.__base__.__module__}.{task.__base__.__name__}' == f'{Task.__module__}.{Task.__name__}')
 
     @property
     def unique_name(self):
@@ -74,7 +79,7 @@ class TaskSpec(BaseTaskSpec):
                                                     Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
-        super().__init__(task, name, publishes, expects, reduce, additional_kwargs)
+        super().__init__(task, name, publishes, expects, reduce, additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
         self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}
 
@@ -140,7 +145,7 @@ class GridTaskSpec(BaseTaskSpec):
                                                        Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
-        super().__init__(task, name, publishes, expects, additional_kwargs)
+        super().__init__(task, name, publishes, expects, additional_kwargs=additional_kwargs)
 
         # we assure that the provided config is json serializable since we use json to later store the config
         gs_config = json.loads(json.dumps(gs_config))

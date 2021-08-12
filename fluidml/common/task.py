@@ -3,7 +3,7 @@ import contextlib
 from dataclasses import dataclass
 import inspect
 from multiprocessing import Lock
-from typing import Dict, List, Optional, Any, TYPE_CHECKING
+from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union
 
 from fluidml.common.dependency import DependencyMixin
 from fluidml.storage import ResultsStore, Promise, File
@@ -26,7 +26,7 @@ class Task(ABC, DependencyMixin):
         self.name: Optional[str] = None
         self.config_kwargs: Optional[Dict[str, Any]] = None
         self.publishes: Optional[List[str]] = None
-        self.expects: Optional[Dict[str, inspect.Parameter]] = None
+        self.expects: Optional[Union[List[str], Dict[str, inspect.Parameter]]] = None
         self.id_: Optional[int] = None
         self.unique_config: Optional[Dict] = None
         self.reduce: Optional[bool] = None
@@ -187,30 +187,43 @@ class Task(ABC, DependencyMixin):
         task.predecessors = task_spec.predecessors
         task.successors = task_spec.successors
 
-        # override publishes from task spec
-        task = Task._override_publishes(task_spec, task)
+        # set task publishes attribute based on user provided task spec or task values
+        #  set for both task and task_spec
+        task = Task._set_task_publishes(task_spec, task)
 
-        # set task expects attribute based on task type and user provided expected inputs
+        # set task expects attribute based on user provided task spec or task value and the run method signature
+        #  set for both task and task_spec
         task = Task._set_task_expects(task_spec, task, expected_inputs)
 
         return task
 
     @staticmethod
     def _set_task_expects(task_spec: 'TaskSpec', task: 'Task', expected_inputs: Dict[str, inspect.Parameter]) -> 'Task':
-        # if self.expects is set manually we add missing arguments to the expected_inputs dict
+        # if expects is provided to task_spec manually we add missing arguments to the expected_inputs dict
         if task_spec.expects is not None:
             for arg in task_spec.expects:
                 if arg not in expected_inputs:
                     expected_inputs[arg] = inspect.Parameter(name=arg, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
 
+        # if expects is provided to task manually we add missing arguments to the expected_inputs dict
+        if task.expects is not None:
+            for arg in task.expects:
+                if arg not in expected_inputs:
+                    expected_inputs[arg] = inspect.Parameter(name=arg, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
+
         task.expects = expected_inputs
+        task_spec.expects = expected_inputs
         return task
 
     @staticmethod
-    def _override_publishes(task_spec: 'TaskSpec', task: 'Task') -> 'Task':
+    def _set_task_publishes(task_spec: 'TaskSpec', task: 'Task') -> 'Task':
         if task_spec.publishes is not None:
             task.publishes = task_spec.publishes
 
-        elif task.publishes is None:
+        # elif task.publishes is not None:
+        #     task_spec.publishes = task.publishes
+
+        else:
             task.publishes = []
+            task_spec.publishes = []
         return task

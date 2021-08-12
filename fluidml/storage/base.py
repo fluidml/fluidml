@@ -78,3 +78,12 @@ class ResultsStore(ABC):
             results[item_name] = obj
 
         return results
+
+    def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
+        # try to load task completed object; if it is None we return None and re-run the task
+        completed: Optional[Any] = self.load(
+            name='.completed', task_name=task_name, task_unique_config=task_unique_config)
+        if not completed:
+            return False
+        return True
+
