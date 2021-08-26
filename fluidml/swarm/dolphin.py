@@ -1,7 +1,7 @@
 import logging
 from multiprocessing import Queue, Lock, Event
 from queue import Empty
-from typing import Dict, Any, List, Optional, Tuple, Union
+from typing import Dict, Any, List, Optional, Union
 
 from fluidml.common import Task, Resource
 from fluidml.flow.task_spec import TaskSpec
@@ -58,12 +58,6 @@ class Dolphin(Whale):
             completed = False
         else:
             with self._lock:
-                # # try to get results from results store
-                # results: Optional[Tuple[Dict, str]
-                #                   ] = self.results_store.is_finished(task_name=task.name,
-                #                                                      task_unique_config=task.unique_config,
-                #                                                      task_publishes=task.publishes)
-
                 # check if task was successfully completed before
                 completed: bool = self.results_store.is_finished(task_name=task.name,
                                                                  task_unique_config=task.unique_config)
