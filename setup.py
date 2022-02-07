@@ -6,7 +6,7 @@ from setuptools import setup, find_packages
 _PATH_ROOT = os.path.dirname(__file__)
 
 
-def _load_py_module(file_name: str, pkg="metadict"):
+def _load_py_module(file_name: str, pkg="fluidml"):
     spec = spec_from_file_location(os.path.join(pkg, file_name), os.path.join(_PATH_ROOT, pkg, file_name))
     py = module_from_spec(spec)
     spec.loader.exec_module(py)
