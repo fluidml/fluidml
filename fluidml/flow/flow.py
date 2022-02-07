@@ -5,6 +5,7 @@ import sys
 from typing import List, Any, Dict, Optional, Set, Union
 
 import networkx as nx
+from metadict import MetaDict
 from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 from rich.traceback import install as rich_install
@@ -291,6 +292,9 @@ class Flow:
                     task_spec.unique_name = f'{task_spec.name}-{expansion_id}'
                     final_task_specs.append(task_spec)
 
+        # convert task configs to DictConfig objects
+        for spec in final_task_specs:
+            spec.unique_config = MetaDict(spec.unique_config)
         return final_task_specs
 
     def create(self,

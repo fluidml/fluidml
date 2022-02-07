@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
 
+from metadict import MetaDict
+
 
 class Promise(ABC):
     @abstractmethod
@@ -12,13 +14,13 @@ class Promise(ABC):
 @dataclass
 class Sweep:
     value: Any
-    config: Dict
+    config: MetaDict
 
 
 @dataclass
 class LazySweep:
     value: Promise
-    config: Dict
+    config: MetaDict
 
 
 class ResultsStore(ABC):
@@ -86,4 +88,3 @@ class ResultsStore(ABC):
         if not completed:
             return False
         return True
-

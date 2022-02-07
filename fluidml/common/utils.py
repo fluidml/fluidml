@@ -1,5 +1,7 @@
 from typing import Any, Dict, Callable, Union, Tuple
 
+from metadict import MetaDict
+
 from fluidml.common.task import Task
 
 
@@ -8,8 +10,8 @@ class MyTask(Task):
 
     def __init__(self,
                  task: Callable,
-                 config_kwargs: Dict,
-                 additional_kwargs: Dict):
+                 config_kwargs: MetaDict,
+                 additional_kwargs: MetaDict):
         super().__init__()
         self.task = task
         self.config_kwargs = config_kwargs

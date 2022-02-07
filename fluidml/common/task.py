@@ -5,6 +5,8 @@ import inspect
 from multiprocessing import Lock
 from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union
 
+from metadict import MetaDict
+
 from fluidml.common.dependency import DependencyMixin
 from fluidml.storage import ResultsStore, Promise, File
 
@@ -28,7 +30,7 @@ class Task(ABC, DependencyMixin):
         self.publishes: Optional[List[str]] = None
         self.expects: Optional[Union[List[str], Dict[str, inspect.Parameter]]] = None
         self.id_: Optional[int] = None
-        self.unique_config: Optional[Dict] = None
+        self.unique_config: Optional[MetaDict] = None
         self.reduce: Optional[bool] = None
         self.force: Optional[str] = None
         self.unique_name: Optional[str] = None
@@ -91,13 +93,14 @@ class Task(ABC, DependencyMixin):
         """
         with self.lock:
             self.results_store.save(obj=obj, name=name, type_=type_,
-                                    task_name=self.name, task_unique_config=self.unique_config, **kwargs)
+                                    task_name=self.name, task_unique_config=self.unique_config,
+                                    **kwargs)
 
     def load(
             self,
             name: str,
             task_name: Optional[str] = None,
-            task_unique_config: Optional[Dict] = None,
+            task_unique_config: Optional[Union[Dict, MetaDict]] = None,
             **kwargs
     ) -> Any:
         """ Loads the given object from results store
@@ -114,7 +117,12 @@ class Task(ABC, DependencyMixin):
             return self.results_store.load(name=name, task_name=task_name,
                                            task_unique_config=task_unique_config, **kwargs)
 
-    def delete(self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None):
+    def delete(
+            self,
+            name: str,
+            task_name: Optional[str] = None,
+            task_unique_config: Optional[Union[Dict, MetaDict]] = None
+    ):
         """ Deletes object with specified name from results store """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
@@ -122,7 +130,11 @@ class Task(ABC, DependencyMixin):
         with self.lock:
             self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
 
-    def get_store_context(self, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None) -> Any:
+    def get_store_context(
+            self,
+            task_name: Optional[str] = None,
+            task_unique_config: Optional[Union[Dict, MetaDict]] = None
+    ) -> Any:
         """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
@@ -134,7 +146,7 @@ class Task(ABC, DependencyMixin):
             self,
             name: Optional[str] = None,
             task_name: Optional[str] = None,
-            task_unique_config: Optional[Dict] = None,
+            task_unique_config: Optional[Union[Dict, MetaDict]] = None,
             mode: Optional[str] = None,
             promise: Optional[Promise] = None,
             type_: Optional[str] = None,
@@ -149,6 +161,7 @@ class Task(ABC, DependencyMixin):
 
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+
         with self.lock:
             return self.results_store.open(name=name, task_name=task_name, task_unique_config=task_unique_config,
                                            mode=mode, type_=type_, sub_dir=sub_dir, **open_kwargs)
@@ -157,6 +170,10 @@ class Task(ABC, DependencyMixin):
     def from_spec(cls, task_spec: 'TaskSpec'):
         # avoid circular import
         from fluidml.common.utils import MyTask
+
+        # convert task config values to DictConfigs
+        task_spec.config_kwargs = MetaDict(task_spec.config_kwargs)
+        task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
 
         if inspect.isclass(task_spec.task):
             task = task_spec.task(**task_spec.config_kwargs, **task_spec.additional_kwargs)

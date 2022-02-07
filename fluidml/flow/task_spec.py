@@ -6,6 +6,8 @@ from itertools import product
 import json
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable, Sequence, Iterable, Type
 
+from metadict import MetaDict
+
 from fluidml.common import DependencyMixin
 from fluidml.common import Task
 from fluidml.common.exception import GridSearchExpansionError
@@ -19,7 +21,7 @@ class BaseTaskSpec(DependencyMixin, ABC):
                  publishes: Optional[List[str]] = None,
                  expects: Optional[List[str]] = None,
                  reduce: Optional[bool] = None,
-                 additional_kwargs: Optional[Dict[str, Any]] = None):
+                 additional_kwargs: Optional[Union[Dict[str, Any], MetaDict]] = None):
         DependencyMixin.__init__(self)
 
         # task has to be a class object which inherits Task or it has to be a function
@@ -33,6 +35,7 @@ class BaseTaskSpec(DependencyMixin, ABC):
         self.publishes = publishes
         self.expects = expects
         self.reduce = reduce
+
         self.additional_kwargs = additional_kwargs if additional_kwargs is not None else {}
 
         # this will be overwritten later for expanded tasks (a unique expansion id is added)
@@ -59,8 +62,8 @@ class BaseTaskSpec(DependencyMixin, ABC):
 class TaskSpec(BaseTaskSpec):
     def __init__(self,
                  task: Union[Type[Task], Callable],
-                 config: Optional[Dict[str, Any]] = None,
-                 additional_kwargs: Optional[Dict[str, Any]] = None,
+                 config: Optional[Union[Dict[str, Any], MetaDict]] = None,
+                 additional_kwargs: Optional[Union[Dict[str, Any], MetaDict]] = None,
                  name: Optional[str] = None,
                  reduce: Optional[bool] = None,
                  publishes: Optional[List[str]] = None,
@@ -81,6 +84,7 @@ class TaskSpec(BaseTaskSpec):
         """
         super().__init__(task, name, publishes, expects, reduce, additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
+
         self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}
 
         # set in Flow
@@ -127,8 +131,8 @@ class GridTaskSpec(BaseTaskSpec):
 
     def __init__(self,
                  task: Union[Type[Task], Callable],
-                 gs_config: Dict[str, Any],
-                 additional_kwargs: Optional[Dict[str, Any]] = None,
+                 gs_config: Optional[Union[Dict[str, Any], MetaDict]],
+                 additional_kwargs: Optional[Union[Dict[str, Any], MetaDict]] = None,
                  gs_expansion_method: Optional[str] = 'product',
                  name: Optional[str] = None,
                  publishes: Optional[List[str]] = None,
@@ -234,6 +238,8 @@ class GridTaskSpec(BaseTaskSpec):
         Recursively splits a dict on lists that contain (nested) dicts as list elements.
         """
         if isinstance(obj, dict):
+            if not obj:  # in case of empty dict -> return dict without expanding
+                return [obj]
             splits_per_key = {key: GridTaskSpec._split_config_groups(child_obj, method)
                               for key, child_obj in obj.items()}
             return GridTaskSpec._expand(splits_per_key, method)
@@ -255,7 +261,7 @@ class GridTaskSpec(BaseTaskSpec):
             param_grid = []
             param_grid = GridTaskSpec._find_list_in_dict(config_grid_search, param_grid)
 
-            # wrap empty parameter lists in a seperate list
+            # wrap empty parameter lists in a separate list
             # -> the outer list will be expanded and
             #    the inner empty list will be passed as a single argument to all task instances.
             param_grid = [x if x else [x] for x in param_grid]
