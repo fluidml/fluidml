@@ -122,6 +122,18 @@ class Task(ABC, DependencyMixin):
         with self.lock:
             self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
 
+    def delete_run(
+            self,
+            task_name: Optional[str] = None,
+            task_unique_config: Optional[Dict] = None
+    ):
+        """ Deletes run with specified name from results store """
+        task_name = task_name if task_name is not None else self.name
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+
+        with self.lock:
+            self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
+
     def get_store_context(self, task_name: Optional[str] = None, task_unique_config: Optional[Dict] = None) -> Any:
         """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
         task_name = task_name if task_name is not None else self.name

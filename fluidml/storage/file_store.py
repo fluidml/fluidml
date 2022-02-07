@@ -324,13 +324,28 @@ class LocalFileStore(ResultsStore):
         name = f'{name}.{type_info.extension}' if type_info.extension else name
         path_to_delete = os.path.join(obj_dir, name)
 
-        # remove the saved object and its load info file from the store
+        # remove the saved object/directory
         try:
             os.remove(path_to_delete)
         except FileNotFoundError:
             logger.warning(f'"{path_to_delete}" could not be deleted from store since it was not found.')
         except IsADirectoryError:
             shutil.rmtree(path_to_delete)
+
+        # remove its load info file from the store
+        os.remove(load_info_file_path)
+
+    def delete_run(self, task_name: str, task_unique_config: Dict):
+        task_dir = os.path.join(self.base_dir, task_name)
+
+        # try to get existing run dir
+        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        if run_dir is None:
+            logger.warning(f'No run directory for task "{task_name}" and the provided unique_config exists.')
+            return None
+
+        # delete retrieved run dir
+        shutil.rmtree(run_dir)
 
     def open(self,
              name: Optional[str] = None,

@@ -1,5 +1,5 @@
 import logging
-from multiprocessing import Manager, Lock
+from multiprocessing import Manager
 from typing import Dict, Optional, Any
 
 from fluidml.storage import ResultsStore
@@ -14,7 +14,6 @@ class InMemoryStore(ResultsStore):
     def __init__(self, manager: Manager):
         super().__init__()
         self._memory_store = manager.dict()
-        self._lock = Lock()
 
     def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
         if task_name not in self._memory_store:
@@ -34,42 +33,48 @@ class InMemoryStore(ResultsStore):
         """ In-memory save function.
         Adds individual object to in-memory store (multiprocessing manager dict).
         """
-        with self._lock:
-            if task_name not in self._memory_store:
-                self._memory_store[task_name] = []
 
-            existing_task_results = self._memory_store[task_name]
-            sweep_exists = False
-            for task_sweep in existing_task_results:
-                if task_sweep['config'] == task_unique_config:
-                    task_sweep['results'][name] = obj
-                    sweep_exists = True
-                    break
+        if task_name not in self._memory_store:
+            self._memory_store[task_name] = []
 
-            if not sweep_exists:
-                new_task_sweep = {'results': {name: obj},
-                                  'config': task_unique_config}
-                existing_task_results.append(new_task_sweep)
+        existing_task_results = self._memory_store[task_name]
+        sweep_exists = False
+        for task_sweep in existing_task_results:
+            if task_sweep['config'] == task_unique_config:
+                task_sweep['results'][name] = obj
+                sweep_exists = True
+                break
 
-            self._memory_store[task_name] = existing_task_results
+        if not sweep_exists:
+            new_task_sweep = {'results': {name: obj},
+                              'config': task_unique_config}
+            existing_task_results.append(new_task_sweep)
+
+        self._memory_store[task_name] = existing_task_results
 
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
-        with self._lock:
-            if task_name not in self._memory_store:
-                logger.warning(f'"{name}" could not be deleted. '
-                               f'Task {task_name} does not exist in InMemoryStore.')
+        if task_name not in self._memory_store:
+            logger.warning(f'"{name}" could not be deleted. '
+                           f'Task {task_name} does not exist in InMemoryStore.')
+            return None
+
+        existing_task_results = self._memory_store[task_name]
+
+        for task_sweep in existing_task_results:
+            if task_sweep["config"].items() <= task_unique_config.items():
+                try:
+                    del task_sweep['results'][name]
+                    self._memory_store[task_name] = existing_task_results
+                except KeyError:
+                    logger.warning(f'"{name}" could not be deleted from store since it was not found.')
                 return None
 
-            existing_task_results = self._memory_store[task_name]
+        logger.warning(f'"{name}" could not be deleted. '
+                       f'No matching unique_config for task "{task_name}" exists.')
 
-            for task_sweep in existing_task_results:
-                if task_sweep["config"].items() <= task_unique_config.items():
-                    try:
-                        del task_sweep['results'][name]
-                        self._memory_store[task_name] = existing_task_results
-                    except KeyError:
-                        logger.warning(f'"{name}" could not be deleted from store since it was not found.')
-                    return None
+    def delete_run(self, task_name: str, task_unique_config: Dict):
+        if task_name not in self._memory_store:
+            logger.warning(f'Task {task_name} does not exist in InMemoryStore.')
+            return None
 
-            logger.warning(f'"{name}" could not be deleted. '
-                           f'No matching unique_config for task "{task_name}" exists.')
+        del self._memory_store[task_name]
