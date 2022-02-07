@@ -40,6 +40,11 @@ class ResultsStore(ABC):
         """ Method to delete any artifact """
         raise NotImplementedError
 
+    @abstractmethod
+    def delete_run(self, task_name: str, task_unique_config: Dict):
+        """ Method to delete all task results from a given run config """
+        raise NotImplementedError
+
     def open(self,
              name: Optional[str] = None,
              task_name: Optional[str] = None,

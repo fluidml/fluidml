@@ -90,6 +90,20 @@ class MongoDBStore(ResultsStore):
         except KeyError:
             logger.warning(f'"{name}" could not be deleted from store since it was not found.')
 
+    @connection
+    def delete_run(self, task_name: str, task_unique_config: Dict):
+        """ Query method to delete a run document based on its task_name and task_config if it exists """
+        task_result_cls = self._get_task_result_class()
+        # try to get query run document based on task name and task unique config
+        try:
+            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
+        except me.DoesNotExist:
+            logger.warning(f'No document for task "{task_name}" and the provided unique_config exists.')
+            return None
+
+        # delete document
+        task_result.delete()
+
     def _get_task_result_class(self):
         # Hack to set the collection name dynamically from user input
         # Default is the document class name lower-cased, here: "task_result"
