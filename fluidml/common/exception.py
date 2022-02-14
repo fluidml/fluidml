@@ -28,3 +28,8 @@ class GridSearchExpansionError(Exception):
 class CyclicGraphError(Exception):
     """Exception raised when task spec graph contains circular dependencies."""
     pass
+
+
+class TmuxError(Exception):
+    """Exception raised when tmux bash command returns error"""
+    pass

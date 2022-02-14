@@ -1,21 +1,17 @@
 import logging.handlers
 import multiprocessing
-from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 import random
+from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 from types import TracebackType
-from typing import Optional, Type, List, Dict, Union, Any
+from typing import Optional, Type, List, Dict, Union, Any, Callable
 
-from rich.traceback import install as rich_install
-
-from fluidml.common.logging import LoggingListener
 from fluidml.common import Resource
+from fluidml.common.logging import LoggingListener, TmuxManager
 from fluidml.flow.task_spec import TaskSpec
-from fluidml.swarm import Dolphin
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.controller import pack_pipeline_results
+from fluidml.swarm import Dolphin
 
-
-rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
 
 
@@ -26,21 +22,29 @@ class Swarm:
                  results_store: Optional[ResultsStore] = None,
                  start_method: str = 'spawn',
                  exit_on_error: bool = True,
-                 return_results: bool = False):
-        """
-
-        Configure workers, resources, results_store which are used to run the tasks
+                 return_results: bool = False,
+                 log_to_tmux: bool = True,
+                 create_tmux_handler_fn: Optional[Callable] = None,
+                 max_panes_per_window: Optional[int] = None,
+                 run_name: Optional[str] = None):
+        """Configure workers, resources, results_store which are used to run the tasks
 
         Args:
             n_dolphins (Optional[int], optional): number of parallel workers. Defaults to None.
             resources (Optional[List[Resource]], optional): a list of resources that are assigned to workers.
-                    If len(resources) < n_dolphins, resources are assigned randomly to workers
-            results_store (Optional[ResultsStore], optional): an instance of results store for results management
-                    If nothing is provided, a non-persistent InMemoryStore store is used
+                    If len(resources) < n_dolphins, resources are assigned randomly to workers.
+            results_store (Optional[ResultsStore], optional): an instance of results store for results management.
+                    If nothing is provided, a non-persistent InMemoryStore store is used.
             start_method (str, optional): start method for multiprocessing. Defaults to 'spawn'.
-            exit_on_error (bool, optional): whether to exit when an error happens. Defaults to True.
-            return_results (bool, optional): return results dictionary after run(). Defaults to False.
+            exit_on_error (bool, optional): when an error happens all workers finish their current tasks
+                    and exit gracefully. Defaults to True.
+            return_results (bool, optional): return results-dictionary after run(). Defaults to False.
+            log_to_tmux (bool, optional): log to tmux session if True. Defaults to True
+            create_tmux_handler_fn
+            max_panes_per_window (Optional[int], optional): max number of panes per tmux window
+            run_name (Optional[str], optional): Name of fluidml run. Used as name for tmux session.
         """
+
         set_start_method(start_method, force=True)
 
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
@@ -52,15 +56,13 @@ class Swarm:
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
         self.logging_queue = Queue()
+        self.error_queue = Queue()
 
         self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
 
         self.exit_event = Event()
-        self.return_results = True if isinstance(
-            self.results_store, InMemoryStore) else return_results
+        self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, TaskSpec] = {}
-
-        self.logging_listener = LoggingListener(logging_queue=self.logging_queue)
 
         # dolphin workers for task execution
         self.dolphins = [Dolphin(resource=self.resources[i],
@@ -68,11 +70,28 @@ class Swarm:
                                  running_queue=self.running_queue,
                                  done_queue=self.done_queue,
                                  logging_queue=self.logging_queue,
+                                 error_queue=self.error_queue,
                                  lock=self.lock,
                                  tasks=self.tasks,
                                  exit_event=self.exit_event,
                                  exit_on_error=exit_on_error,
-                                 results_store=self.results_store) for i in range(self.n_dolphins)]
+                                 results_store=self.results_store)
+                         for i in range(self.n_dolphins)]
+
+        tmux_manager = None
+        if log_to_tmux and TmuxManager.is_tmux_installed():
+            tmux_manager = TmuxManager(worker_names=[dolphin.name for dolphin in self.dolphins],
+                                       session_name=run_name if run_name else 'fluidml',
+                                       max_panes_per_window=max_panes_per_window if max_panes_per_window else 4,
+                                       create_tmux_handler_fn=create_tmux_handler_fn)
+
+        # listener thread to handle stdout, stderr and logging from child processes
+        self.logging_listener = LoggingListener(logging_queue=self.logging_queue,
+                                                tmux_manager=tmux_manager,
+                                                exit_on_error=exit_on_error,
+                                                lock=self.lock,
+                                                error_queue=self.error_queue,
+                                                exit_event=self.exit_event)
 
     def __enter__(self):
         return self
@@ -141,7 +160,8 @@ class Swarm:
 
         # if an exception was raised by a child process, exit the parent process.
         if self.exit_event.is_set():
-            raise ChildProcessError
+            err = self.error_queue.get()
+            raise err
 
         # return all results
         return self._collect_results()
