@@ -20,6 +20,7 @@ class Dolphin(Whale):
                  running_queue: List[int],
                  done_queue: List[int],
                  logging_queue: Queue,
+                 error_queue: Queue,
                  lock: Lock,
                  tasks: Dict[int, TaskSpec],
                  exit_event: Event,
@@ -28,6 +29,7 @@ class Dolphin(Whale):
         super().__init__(exit_event=exit_event,
                          exit_on_error=exit_on_error,
                          logging_queue=logging_queue,
+                         error_queue=error_queue,
                          lock=lock)
         self.resource = resource
         self.scheduled_queue = scheduled_queue
@@ -53,14 +55,16 @@ class Dolphin(Whale):
         return results
 
     def _run_task(self, task: Task):
-        # if force is set to false, try to get task results, else set results to none
+        # if force is true, delete all task results and re-run task
         if task.force:
-            completed = False
-        else:
-            with self._lock:
-                # check if task was successfully completed before
-                completed: bool = self.results_store.is_finished(task_name=task.name,
-                                                                 task_unique_config=task.unique_config)
+            task.delete_run()
+
+        with self._lock:
+            # check if task was successfully completed before
+            completed: bool = self.results_store.is_finished(
+                task_name=task.name,
+                task_unique_config=task.unique_config
+            )
         # if task is not completed, run the task now
         if not completed:
             # extract predecessor results
@@ -72,6 +76,10 @@ class Dolphin(Whale):
         with self._lock:
             # put task in done_queue
             self.done_queue.append(task.id_)
+
+            # remove task from running_queue
+            idx = self.running_queue.index(task.id_)
+            del self.running_queue[idx]
 
             # Log task completion
             if completed:
@@ -103,7 +111,7 @@ class Dolphin(Whale):
         return task_id
 
     def _done(self) -> bool:
-        return self.exit_event.is_set() or (len(self.done_queue) == len(self.tasks))  # self.exception
+        return self.exit_event.is_set() or (len(self.done_queue) == len(self.tasks))
 
     def _work(self):
         while not self._done():
@@ -112,6 +120,10 @@ class Dolphin(Whale):
 
             # continue when there is a valid task to run
             if task_id is not None:
+
+                # add task id to running_queue if not present already (e.g. tasks scheduled by Swarm)
+                if task_id not in self.running_queue:
+                    self.running_queue.append(task_id)
 
                 # get current task_spec from task_id
                 task_spec = self.tasks[task_id]
