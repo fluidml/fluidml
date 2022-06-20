@@ -5,10 +5,9 @@ from typing import Dict, Any, List, Optional, Union
 
 from fluidml.common import Task, Resource
 from fluidml.flow.task_spec import TaskSpec
-from fluidml.swarm import Whale
 from fluidml.storage import ResultsStore
 from fluidml.storage.controller import TaskDataController
-
+from fluidml.swarm import Whale
 
 logger = logging.getLogger(__name__)
 
@@ -25,11 +24,13 @@ class Dolphin(Whale):
                  tasks: Dict[int, TaskSpec],
                  exit_event: Event,
                  exit_on_error: bool,
+                 logging_lvl: int,
                  results_store: Optional[ResultsStore] = None):
         super().__init__(exit_event=exit_event,
                          exit_on_error=exit_on_error,
                          logging_queue=logging_queue,
                          error_queue=error_queue,
+                         logging_lvl=logging_lvl,
                          lock=lock)
         self.resource = resource
         self.scheduled_queue = scheduled_queue
@@ -70,7 +71,7 @@ class Dolphin(Whale):
             # extract predecessor results
             pred_results = self._extract_results_from_predecessors(task)
 
-            logger.debug(f'Started task {task.unique_name}.')
+            logger.info(f'Started task {task.unique_name}.')
             task.run_wrapped(**pred_results)
 
         with self._lock:
@@ -120,10 +121,6 @@ class Dolphin(Whale):
 
             # continue when there is a valid task to run
             if task_id is not None:
-
-                # add task id to running_queue if not present already (e.g. tasks scheduled by Swarm)
-                if task_id not in self.running_queue:
-                    self.running_queue.append(task_id)
 
                 # get current task_spec from task_id
                 task_spec = self.tasks[task_id]

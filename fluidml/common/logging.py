@@ -172,6 +172,7 @@ class TmuxManager:
             stdout_pipe, stderr_pipe = TmuxManager._create_stdout_stderr_pipes(worker_name)
 
             # command enables tmux session to read from pipes to show stdout and stderr from child process
+            # read_from_pipe_cmd = f"cat {stdout_pipe} & cat {stderr_pipe}"
             read_from_pipe_cmd = f"cat {stdout_pipe} & cat {stderr_pipe}"
 
             # logic to create tmux command to start a session, add a new pane to the active window
@@ -204,24 +205,33 @@ class TmuxManager:
         return stdout_pipe, stderr_pipe
 
     def _create_tmux_cmd(self, read_from_pipe_cmd: str, pane_counter: int) -> str:
+        # todo: Investigate tmux "lost server" issue when underlying python process + subprocess crashes
         if not self.session_created:
             # create new tmux session with session name 'self.session_name', window name 'self._current_tmux_window'
             #  and with the command to continuously read from provided pipes
             #  also remain-on-exit keeps the session open after the fluidml main process is finished or exited
-            cmd = f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} '{read_from_pipe_cmd}' " \
-                  f"&& tmux set-option -t {self.session_name}: remain-on-exit"
+            cmd = f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} " \
+                  f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter"
+            # cmd = f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} '{read_from_pipe_cmd}' " \
+            #       f"&& tmux set-option -t {self.session_name}: remain-on-exit"
             self.session_created = True
         else:
             if pane_counter % self.max_panes_per_window == 0:
                 self._current_tmux_window += 1
                 # create a new window in the created session if the previous one holds `self.max_panes_per_window` panes
-                cmd = f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} '{read_from_pipe_cmd}' " \
-                      f"&& tmux set-option -t {self.session_name}:{self._current_tmux_window} remain-on-exit " \
+                cmd = f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} " \
+                      f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter " \
                       f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                # cmd = f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} '{read_from_pipe_cmd}' " \
+                #       f"&& tmux set-option -t {self.session_name}:{self._current_tmux_window} remain-on-exit " \
+                #       f"&& tmux select-layout -t {self.session_name}: even-vertical"
             else:
                 # split the active window vertically to create a new pane
-                cmd = f"tmux split-window -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' " \
+                cmd = f"tmux split-window -t {self.session_name}:{self._current_tmux_window} " \
+                      f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter" \
                       f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                # cmd = f"tmux split-window -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' " \
+                #       f"&& tmux select-layout -t {self.session_name}: even-vertical"
         return cmd
 
     @staticmethod
@@ -284,8 +294,9 @@ class LoggingListener(Thread):
         with ExitStack() as stack:
             pipes, handlers = None, None
             if self.tmux_manager:
-                pipes = {worker_name: {'stdout': stack.enter_context(open(pipe['stdout'], 'w', buffering=1)),
-                                       'stderr': stack.enter_context(open(pipe['stderr'], 'w', buffering=1))}
+                # TODO: Check effect of buffering
+                pipes = {worker_name: {'stdout': stack.enter_context(open(pipe['stdout'], 'w')),  # buffering=1
+                                       'stderr': stack.enter_context(open(pipe['stderr'], 'w'))}  # buffering=1
                          for worker_name, pipe in self.tmux_manager.pipes.items()}
                 handlers = self.tmux_manager.init_handlers(pipes)
 

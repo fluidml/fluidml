@@ -64,10 +64,8 @@ class ResultsStore(ABC):
         if not task_publishes:
             return None
 
-        # try to load task completed object; if it is None we return None and re-run the task
-        completed: Optional[Any] = self.load(
-            name='.completed', task_name=task_name, task_unique_config=task_unique_config)
-        if not completed:
+        # if a task is not yet finished, we again execute the task
+        if not self.is_finished(task_name=task_name, task_unique_config=task_unique_config):
             return None
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
@@ -88,7 +86,7 @@ class ResultsStore(ABC):
 
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
         # try to load task completed object; if it is None we return None and re-run the task
-        completed: Optional[Any] = self.load(
+        completed: Optional[str] = self.load(
             name='.completed', task_name=task_name, task_unique_config=task_unique_config)
         if not completed:
             return False

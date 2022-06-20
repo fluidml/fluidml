@@ -4,7 +4,6 @@ from typing import Dict, Optional, Any
 
 from fluidml.storage import ResultsStore
 
-
 logger = logging.getLogger(__name__)
 
 

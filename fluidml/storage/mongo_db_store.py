@@ -1,3 +1,4 @@
+import functools
 import logging
 import pickle
 from typing import Optional, Dict, Any
@@ -11,6 +12,8 @@ logger = logging.getLogger(__name__)
 
 def connection(func):
     """ Decorator to handle connecting and disconnecting to/from db """
+
+    @functools.wraps(func)
     def wrapper_connect_disconnect_db(self, *args, **kwargs):
         me.connect(db=self._db, host=self._host)
         result = func(self, *args, **kwargs)

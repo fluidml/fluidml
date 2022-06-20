@@ -15,6 +15,7 @@ class Whale(Process):
                  exit_on_error: bool,
                  logging_queue: Queue,
                  error_queue: Queue,
+                 logging_lvl: int,
                  lock: Lock):
         super().__init__(target=self.work,
                          args=())
@@ -23,12 +24,13 @@ class Whale(Process):
         self._logging_queue = logging_queue
         self._error_queue = error_queue
         self._lock = lock
+        self._logging_lvl = logging_lvl
 
     def _configure_logging(self):
         h = QueueHandler(self._logging_queue, self.name)
         root = logging.getLogger()
         root.addHandler(h)
-        root.setLevel(logging.DEBUG)
+        root.setLevel(self._logging_lvl)
 
     def _redirect_stdout_stderr(self):
         sys.stdout = StdoutHandler(self._logging_queue, self.name)

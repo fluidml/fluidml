@@ -1,9 +1,9 @@
+import inspect
+import json
 from abc import ABC, abstractmethod
 from collections import defaultdict
 from copy import deepcopy
-import inspect
 from itertools import product
-import json
 from typing import Dict, Any, Optional, List, Tuple, Union, Callable, Sequence, Iterable, Type
 
 from metadict import MetaDict
@@ -76,16 +76,21 @@ class TaskSpec(BaseTaskSpec):
             config (Optional[Dict[str, Any]], optional): task configuration parameters that are used
                                                          while instantiating. Defaults to None.
             additional_kwargs (Optional[Dict[str, Any]], optional): Additional kwargs provided to the task.
-            name (Optional[str], optional): an unique name of the class. Defaults to None.
+            name (Optional[str], optional): a unique name of the class. Defaults to None.
             reduce (Optional[bool], optional): a boolean indicating whether this is a reduce task. Defaults to None.
             publishes (Optional[List[str]], optional): a list of result names that this task publishes. 
                                                     Defaults to None.
             expects (Optional[List[str]], optional):  a list of result names that this task expects. Defaults to None.
         """
+        # TODO: Remove additional kwargs from config via prefix and add to additional kwargs dict
+        #  ...
         super().__init__(task, name, publishes, expects, reduce, additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
-
         self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}
+
+        # set in Swarm or manually
+        self._project_name: Optional[str] = None
+        self._run_name: Optional[str] = None
 
         # set in Flow
         self._id: Optional[int] = None
@@ -115,6 +120,22 @@ class TaskSpec(BaseTaskSpec):
     @force.setter
     def force(self, force: str):
         self._force = force
+
+    @property
+    def project_name(self):
+        return self._project_name
+
+    @project_name.setter
+    def project_name(self, project_name: str):
+        self._project_name = project_name
+
+    @property
+    def run_name(self):
+        return self._run_name
+
+    @run_name.setter
+    def run_name(self, run_name: str):
+        self._run_name = run_name
 
     def expand(self) -> List['TaskSpec']:
         # we don't return [self] since we have to return a copy without self.predecessors and self.successors

@@ -1,13 +1,12 @@
-from dataclasses import dataclass
 import json
 import logging
 import os
 import pickle
 import shutil
+from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO
 
 from fluidml.storage import ResultsStore, Promise
-
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +36,12 @@ class FilePromise(Promise):
     def load(self, **kwargs):
         kwargs = {**self.load_kwargs, **kwargs}
         try:
-            with File(self.path, self.mode, load_fn=self.load_fn, save_fn=self.save_fn, open_fn=self.open_fn,
-                      **self.open_kwargs) as file:
-                return file.load(**kwargs)
+            if self.mode is None:
+                return self.load_fn(self.path, **kwargs)
+            else:
+                with File(self.path, self.mode, load_fn=self.load_fn, save_fn=self.save_fn, open_fn=self.open_fn,
+                          **self.open_kwargs) as file:
+                    return file.load(**kwargs)
         except FileNotFoundError:
             logger.warning(f'"{self.name}" could not be found in store.')
             return None
@@ -152,10 +154,11 @@ class TypeInfo:
 
 
 class LocalFileStore(ResultsStore):
-    def __init__(self, base_dir: str):
+    def __init__(self, base_dir: str, run_name: Optional[str] = None):
         super().__init__()
 
         self.base_dir = base_dir
+        self.run_name = run_name
         self._type_registry = {
             'event': TypeInfo(self._save_event, self._load_event),
             'json': TypeInfo(json.dump, json.load, 'json'),
@@ -198,7 +201,7 @@ class LocalFileStore(ResultsStore):
         try:
             load_info = pickle.load(open(load_info_file_path, "rb"))
         except FileNotFoundError:
-            logger.warning(f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.')
+            logger.debug(f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.')
             return None
 
         # unpack load info
@@ -457,7 +460,7 @@ class LocalFileStore(ResultsStore):
 
         # create new run dir if run dir did not exist
         if run_dir is None:
-            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir)
+            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_name=self.run_name)
             json.dump(task_unique_config, open(os.path.join(run_dir, f'config.json'), 'w'))
         return run_dir
 
@@ -484,18 +487,25 @@ class LocalFileStore(ResultsStore):
         return None
 
     @staticmethod
-    def _make_run_dir(task_dir: str) -> str:
+    def _make_run_dir(task_dir: str, run_name: Optional[str] = None) -> str:
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
 
+        dir_names = [os.path.split(d)[-1] for d in exist_run_dirs]
+
+        if run_name is not None:
+            # find dirs that start with run_name and extract their suffix (usually a numeric counter)
+            dir_names = [name.split(run_name, 1)[-1].replace('-', '') for name in dir_names
+                         if name.startswith(run_name)]
+
         # get all numeric dir names in task dir and convert to ids
-        ids = [int(d_name)
-               for d_name in [os.path.split(d)[-1] for d in exist_run_dirs]
-               if d_name.isdigit()] if exist_run_dirs else []
+        ids = [int(d_name) for d_name in dir_names if d_name.isdigit()]
 
         # increment max id by 1 or start at 0
         new_id = max(ids) + 1 if ids else 0
+        new_id = str(new_id).zfill(3)
 
         # create new run dir
-        new_run_dir = os.path.join(task_dir, f'{str(new_id).zfill(3)}')
+        new_dir_name = new_id if run_name is None else f'{run_name}-{new_id}'
+        new_run_dir = os.path.join(task_dir, new_dir_name)
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir

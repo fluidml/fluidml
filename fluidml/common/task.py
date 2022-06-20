@@ -1,7 +1,7 @@
-from abc import ABC, abstractmethod
 import contextlib
-from dataclasses import dataclass
 import inspect
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from multiprocessing import Lock
 from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union
 
@@ -25,6 +25,8 @@ class Task(ABC, DependencyMixin):
     def __init__(self):
         DependencyMixin.__init__(self)
 
+        self.project_name: Optional[str] = None
+        self.run_name: Optional[str] = None
         self.name: Optional[str] = None
         self.config_kwargs: Optional[Dict[str, Any]] = None
         self.publishes: Optional[List[str]] = None
@@ -80,6 +82,12 @@ class Task(ABC, DependencyMixin):
     def run_wrapped(self, **results):
         """Calls run function to execute task and saves a 'completed' event file to signal successful execution."""
         self.run(**results)
+        # todo: if publishes is set, check that all non optional objects are present in saved_objects
+        # if self.publishes:
+        #     saved_objects: Optional[List] = self.load(name='.saved_objects')
+        #     required_objects = [name if not is_optional(annotation) for name, annotation in self.publishes.items()]
+        # else:
+        #     self.save('1', '.completed', type_='event', sub_dir='.load_info')
         self.save('1', '.completed', type_='event', sub_dir='.load_info')
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
@@ -95,6 +103,15 @@ class Task(ABC, DependencyMixin):
             self.results_store.save(obj=obj, name=name, type_=type_,
                                     task_name=self.name, task_unique_config=self.unique_config,
                                     **kwargs)
+
+            # todo: update saved objects file (separate fn)
+            # saved_objects: Optional[List] = self.load(
+            #     name='.saved_objects', task_name=self.name, task_unique_config=self.unique_config)
+            # if saved_objects is None:
+            #     saved_objects = []
+            # saved_objects.append(name)
+            # self.results_store.save(saved_objects, '.saved_objects', type_='json', sub_dir='.load_info',
+            #                         task_name=self.name, task_unique_config=self.unique_config)
 
     def load(
             self,
@@ -113,9 +130,8 @@ class Task(ABC, DependencyMixin):
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        with self.lock:
-            return self.results_store.load(name=name, task_name=task_name,
-                                           task_unique_config=task_unique_config, **kwargs)
+        return self.results_store.load(name=name, task_name=task_name,
+                                       task_unique_config=task_unique_config, **kwargs)
 
     def delete(
             self,
@@ -129,6 +145,14 @@ class Task(ABC, DependencyMixin):
 
         with self.lock:
             self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
+
+            # todo: update saved objects file (separate fn)
+            # saved_objects: Optional[List] = self.load(
+            #     name='.saved_objects', task_name=self.name, task_unique_config=self.unique_config)
+            # if saved_objects is not None and name in saved_objects:
+            #     del saved_objects[saved_objects.index(name)]
+            #     self.results_store.save(saved_objects, '.saved_objects', type_='json', sub_dir='.load_info',
+            #                             task_name=self.name, task_unique_config=self.unique_config)
 
     def delete_run(
             self,
@@ -207,6 +231,8 @@ class Task(ABC, DependencyMixin):
             # cannot be reached, check has been made in TaskSpec.
             raise TypeError
 
+        task.project_name = task_spec.project_name
+        task.run_name = task_spec.run_name
         task.name = task_spec.name
         task.unique_name = task_spec.unique_name
         task.id_ = task_spec.id_

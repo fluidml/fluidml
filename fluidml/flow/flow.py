@@ -1,7 +1,7 @@
-from collections import defaultdict
 import logging
-from itertools import product
 import sys
+from collections import defaultdict
+from itertools import product
 from typing import List, Any, Dict, Optional, Set, Union
 
 import networkx as nx
@@ -10,11 +10,10 @@ from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 from rich.traceback import install as rich_install
 
-from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
+from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict
 from fluidml.flow import BaseTaskSpec, TaskSpec, GridTaskSpec
 from fluidml.swarm import Swarm
-
 
 rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)

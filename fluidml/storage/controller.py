@@ -1,5 +1,5 @@
-from collections import defaultdict
 import inspect
+from collections import defaultdict
 from typing import Dict, Any, List, Optional
 
 from fluidml.common import Task

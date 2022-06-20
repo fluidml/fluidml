@@ -1,4 +1,4 @@
-from typing import Union, List, Any, TYPE_CHECKING
+from typing import Union, List, Tuple, Any, TYPE_CHECKING
 
 
 if TYPE_CHECKING:
@@ -10,9 +10,16 @@ class DependencyMixin:
         self._predecessors = []
         self._successors = []
 
-    def requires(self, predecessors: Union['BaseTaskSpec', List['BaseTaskSpec'], List['TaskSpec']]):
+    def requires(self, *predecessors: Union['BaseTaskSpec', List['BaseTaskSpec'], List['TaskSpec']]):
         """Adds predecessor task specs"""
-        predecessors = predecessors if isinstance(predecessors, List) else [predecessors]
+        if len(predecessors) == 1:
+            predecessors = predecessors[0] if isinstance(predecessors[0], List) else [predecessors[0]]
+        elif any(True if isinstance(task_spec, (List, Tuple)) else False for task_spec in predecessors):
+            raise TypeError(f'task_spec.requires() either takes a single list of predecessors, '
+                            f'task_spec.requires([a, b, c]) or a sequence of individual predecessor args'
+                            f'task_spec.requires(a, b, c)')
+        else:
+            predecessors = list(predecessors)
 
         self._predecessors.extend(predecessors)
 

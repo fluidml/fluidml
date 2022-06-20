@@ -26,6 +26,7 @@ class Swarm:
                  log_to_tmux: bool = True,
                  create_tmux_handler_fn: Optional[Callable] = None,
                  max_panes_per_window: Optional[int] = None,
+                 project_name: Optional[str] = None,
                  run_name: Optional[str] = None):
         """Configure workers, resources, results_store which are used to run the tasks
 
@@ -42,10 +43,14 @@ class Swarm:
             log_to_tmux (bool, optional): log to tmux session if True. Defaults to True
             create_tmux_handler_fn
             max_panes_per_window (Optional[int], optional): max number of panes per tmux window
-            run_name (Optional[str], optional): Name of fluidml run. Used as name for tmux session.
+            project_name (Optional[str], optional): Name of project.
+            run_name (Optional[str], optional): Name of run.
         """
 
         set_start_method(start_method, force=True)
+
+        self.project_name = project_name if project_name is not None else 'uncategorized'
+        self.run_name = run_name
 
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
@@ -64,6 +69,9 @@ class Swarm:
         self.return_results = True if isinstance(self.results_store, InMemoryStore) else return_results
         self.tasks: Dict[int, TaskSpec] = {}
 
+        # get effective logging lvl
+        logging_lvl = logger.getEffectiveLevel()
+
         # dolphin workers for task execution
         self.dolphins = [Dolphin(resource=self.resources[i],
                                  scheduled_queue=self.scheduled_queue,
@@ -75,13 +83,15 @@ class Swarm:
                                  tasks=self.tasks,
                                  exit_event=self.exit_event,
                                  exit_on_error=exit_on_error,
-                                 results_store=self.results_store)
+                                 results_store=self.results_store,
+                                 logging_lvl=logging_lvl)
                          for i in range(self.n_dolphins)]
 
         tmux_manager = None
         if log_to_tmux and TmuxManager.is_tmux_installed():
+            session_name = self.project_name if self.run_name is None else f'{self.project_name}--{self.run_name}'
             tmux_manager = TmuxManager(worker_names=[dolphin.name for dolphin in self.dolphins],
-                                       session_name=run_name if run_name else 'fluidml',
+                                       session_name=session_name,
                                        max_panes_per_window=max_panes_per_window if max_panes_per_window else 4,
                                        create_tmux_handler_fn=create_tmux_handler_fn)
 
@@ -133,8 +143,10 @@ class Swarm:
         # get entry point task ids
         entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)
 
-        # also update the current tasks
+        # also update the current tasks and assign project- and run name
         for task in tasks:
+            task.project_name = self.project_name
+            task.run_name = self.run_name
             self.tasks[task.id_] = task
 
         # start the listener thread to receive log messages from child processes
@@ -145,6 +157,10 @@ class Swarm:
         for task_id, task_name_unique in entry_point_tasks.items():
             logger.debug(f'Swarm scheduling task {task_name_unique}.')
             self.scheduled_queue.put(task_id)
+            self.running_queue.append(task_id)
+
+        # todo: enable for debug mode to turn off multiprocessing
+        # self.dolphins[0]._work()
 
         # start the workers
         for dolphin in self.dolphins:
