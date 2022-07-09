@@ -10,15 +10,16 @@ logger = logging.getLogger(__name__)
 
 
 class Whale(Process):
-    def __init__(self,
-                 exit_event: Event,
-                 exit_on_error: bool,
-                 logging_queue: Queue,
-                 error_queue: Queue,
-                 logging_lvl: int,
-                 lock: Lock):
-        super().__init__(target=self.work,
-                         args=())
+    def __init__(
+        self,
+        exit_event: Event,
+        exit_on_error: bool,
+        logging_queue: Queue,
+        error_queue: Queue,
+        logging_lvl: int,
+        lock: Lock,
+    ):
+        super().__init__(target=self.work, args=())
         self.exit_event = exit_event
         self._exit_on_error = exit_on_error
         self._logging_queue = logging_queue
@@ -53,5 +54,5 @@ class Whale(Process):
                     self.exit_event.set()
             raise
         finally:
-            sys.stdout = open(os.devnull, 'w')
-            sys.stderr = open(os.devnull, 'w')
+            sys.stdout = open(os.devnull, "w")
+            sys.stderr = open(os.devnull, "w")

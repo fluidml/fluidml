@@ -32,13 +32,7 @@ class AsciiCanvas:
 
     TIMEOUT = 10
 
-    def __init__(self,
-                 sug: 'SugiyamaLayout',
-                 cols: int,
-                 rows: int,
-                 chars: Dict[str, str],
-                 minx: int,
-                 miny: int):
+    def __init__(self, sug: "SugiyamaLayout", cols: int, rows: int, chars: Dict[str, str], minx: int, miny: int):
         assert cols > 1
         assert rows > 1
 
@@ -136,17 +130,17 @@ class AsciiCanvas:
         height -= 1
 
         for x in range(x0, x0 + width):
-            self.point(x, y0, self.chars['horizontal_box'])
-            self.point(x, y0 + height, self.chars['horizontal_box'])
+            self.point(x, y0, self.chars["horizontal_box"])
+            self.point(x, y0 + height, self.chars["horizontal_box"])
 
         for y in range(y0, y0 + height):
-            self.point(x0, y, self.chars['vertical_box'])
-            self.point(x0 + width, y, self.chars['vertical_box'])
+            self.point(x0, y, self.chars["vertical_box"])
+            self.point(x0 + width, y, self.chars["vertical_box"])
 
-        self.point(x0, y0, self.chars['top_left_box'])
-        self.point(x0 + width, y0, self.chars['top_right_box'])
-        self.point(x0, y0 + height, self.chars['bottom_left_box'])
-        self.point(x0 + width, y0 + height, self.chars['bottom_right_box'])
+        self.point(x0, y0, self.chars["top_left_box"])
+        self.point(x0 + width, y0, self.chars["top_right_box"])
+        self.point(x0, y0 + height, self.chars["bottom_left_box"])
+        self.point(x0 + width, y0 + height, self.chars["bottom_right_box"])
 
     def draw_edges(self):
         for edge in self.sug.g.sE:
@@ -165,7 +159,7 @@ class AsciiCanvas:
                 assert end_x >= 0
                 assert end_y >= 0
 
-                self.line(start_x, start_y, end_x, end_y, self.chars['line'])
+                self.line(start_x, start_y, end_x, end_y, self.chars["line"])
 
     def draw_nodes(self):
         for vertex in self.sug.g.sV:
@@ -180,9 +174,7 @@ class AsciiCanvas:
                 vertex.view.h,
             )
 
-            self.text(
-                int(round(x - self.minx)) + 1, int(round(y - self.miny)) + 1, vertex.data
-            )
+            self.text(int(round(x - self.minx)) + 1, int(round(y - self.miny)) + 1, vertex.data)
 
     def to_str(self) -> str:
         """Draws ASCII canvas on the screen."""
@@ -192,32 +184,37 @@ class AsciiCanvas:
 
 
 def _get_graph_char_set(use_unicode: bool) -> Dict[str, str]:
-    chars = {'line': '*',
-             'top_left_box': '+',
-             'top_right_box': '+',
-             'bottom_left_box': '+',
-             'bottom_right_box': '+',
-             'horizontal_box': '-',
-             'vertical_box': '|'}
+    chars = {
+        "line": "*",
+        "top_left_box": "+",
+        "top_right_box": "+",
+        "bottom_left_box": "+",
+        "bottom_right_box": "+",
+        "horizontal_box": "-",
+        "vertical_box": "|",
+    }
 
     if use_unicode:
         try:
             import sys
-            '╭╮╰╯·─|'.encode(sys.stdout.encoding).decode(sys.stdout.encoding)
-            chars = {'line': '·',
-                     'top_left_box': '╭',
-                     'top_right_box': '╮',
-                     'bottom_left_box': '╰',
-                     'bottom_right_box': '╯',
-                     'horizontal_box': '─',
-                     'vertical_box': '│'}
+
+            "╭╮╰╯·─|".encode(sys.stdout.encoding).decode(sys.stdout.encoding)
+            chars = {
+                "line": "·",
+                "top_left_box": "╭",
+                "top_right_box": "╮",
+                "bottom_left_box": "╰",
+                "bottom_right_box": "╯",
+                "horizontal_box": "─",
+                "vertical_box": "│",
+            }
 
         except UnicodeEncodeError:
-            logger.warning(f'Console does not support unicode chars. Defaulting to ascii.')
+            logger.warning(f"Console does not support unicode chars. Defaulting to ascii.")
     return chars
 
 
-def create_graph_in_ascii(graph: 'nx.DiGraph', use_unicode: bool = False) -> str:
+def create_graph_in_ascii(graph: "nx.DiGraph", use_unicode: bool = False) -> str:
     """Create ascii (or unicode) graph and return as str ready for printing.
     Args:
         graph (DiGraph): a networkx directed graph object

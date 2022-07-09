@@ -84,7 +84,7 @@ class QueueHandler(logging.Handler):
         # record.args = None
         # record.exc_info = None
         # record.exc_text = None
-        return 'log_msg', self.worker_name, record
+        return "log_msg", self.worker_name, record
 
     def emit(self, record: LogRecord):
         """
@@ -103,7 +103,7 @@ class StdoutHandler:
         self.worker_name = worker_name
 
     def write(self, msg):
-        self.queue.put(('stdout_msg', self.worker_name, msg))
+        self.queue.put(("stdout_msg", self.worker_name, msg))
 
     @staticmethod
     def flush():
@@ -116,7 +116,7 @@ class StderrHandler:
         self.worker_name = worker_name
 
     def write(self, msg):
-        self.queue.put(('stderr_msg', self.worker_name, msg))
+        self.queue.put(("stderr_msg", self.worker_name, msg))
 
     @staticmethod
     def flush():
@@ -126,14 +126,10 @@ class StderrHandler:
 def create_tmux_handler(stream: IO) -> logging.Handler:
     """Default function to create a stream handler used for tmux logging"""
 
-    console_ = Console(file=stream, color_system='standard')
-    formatter = logging.Formatter('%(processName)-13s%(message)s')
+    console_ = Console(file=stream, color_system="standard")
+    formatter = logging.Formatter("%(processName)-13s%(message)s")
     stream_handler = RichHandler(
-        console=console_,
-        rich_tracebacks=True,
-        tracebacks_extra_lines=2,
-        show_path=False,
-        omit_repeated_times=False
+        console=console_, rich_tracebacks=True, tracebacks_extra_lines=2, show_path=False, omit_repeated_times=False
     )
     stream_handler.setFormatter(formatter)
     return stream_handler
@@ -141,11 +137,11 @@ def create_tmux_handler(stream: IO) -> logging.Handler:
 
 class TmuxManager:
     def __init__(
-            self,
-            worker_names: List[str],
-            session_name: Optional[str] = 'fluidml',
-            max_panes_per_window: int = 4,
-            create_tmux_handler_fn: Optional[Callable] = None
+        self,
+        worker_names: List[str],
+        session_name: Optional[str] = "fluidml",
+        max_panes_per_window: int = 4,
+        create_tmux_handler_fn: Optional[Callable] = None,
     ):
         self.worker_names = worker_names
         self.session_name = session_name
@@ -159,10 +155,10 @@ class TmuxManager:
     @staticmethod
     def is_tmux_installed() -> bool:
         try:
-            subprocess.check_output('tmux -V', shell=True, stderr=subprocess.PIPE)
+            subprocess.check_output("tmux -V", shell=True, stderr=subprocess.PIPE)
             return True
         except subprocess.CalledProcessError:
-            logger_.warning('No tmux logging available since tmux is not installed.')
+            logger_.warning("No tmux logging available since tmux is not installed.")
             return False
 
     def _setup_tmux_logging(self) -> Dict[str, Dict[str, str]]:
@@ -183,14 +179,13 @@ class TmuxManager:
             TmuxManager._execute_tmux_cmd(tmux_cmd)
 
             # assign pipes to each worker
-            tmux_pipes[worker_name] = {'stdout': stdout_pipe,
-                                       'stderr': stderr_pipe}
+            tmux_pipes[worker_name] = {"stdout": stdout_pipe, "stderr": stderr_pipe}
         return tmux_pipes
 
     def init_handlers(self, pipes: Dict[str, Dict[str, IO]]) -> Dict[str, logging.Handler]:
         tmux_handlers = {}
         for worker_name, pipe in pipes.items():
-            stream = pipe['stderr']
+            stream = pipe["stderr"]
             handler = self._create_tmux_handler_fn(stream)
             tmux_handlers[worker_name] = handler
         return tmux_handlers
@@ -198,40 +193,38 @@ class TmuxManager:
     @staticmethod
     def _create_stdout_stderr_pipes(worker_name: str) -> Tuple[str, str]:
         process_dir = tempfile.mkdtemp(worker_name)
-        stdout_pipe = os.path.join(process_dir, 'stdout')
-        stderr_pipe = os.path.join(process_dir, 'stderr')
+        stdout_pipe = os.path.join(process_dir, "stdout")
+        stderr_pipe = os.path.join(process_dir, "stderr")
         os.mkfifo(stdout_pipe)
         os.mkfifo(stderr_pipe)
         return stdout_pipe, stderr_pipe
 
     def _create_tmux_cmd(self, read_from_pipe_cmd: str, pane_counter: int) -> str:
-        # todo: Investigate tmux "lost server" issue when underlying python process + subprocess crashes
         if not self.session_created:
             # create new tmux session with session name 'self.session_name', window name 'self._current_tmux_window'
             #  and with the command to continuously read from provided pipes
             #  also remain-on-exit keeps the session open after the fluidml main process is finished or exited
-            cmd = f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} " \
-                  f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter"
-            # cmd = f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} '{read_from_pipe_cmd}' " \
-            #       f"&& tmux set-option -t {self.session_name}: remain-on-exit"
+            cmd = (
+                f"tmux new-session -d -s {self.session_name} -n {self._current_tmux_window} "
+                f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter"
+            )
             self.session_created = True
         else:
             if pane_counter % self.max_panes_per_window == 0:
                 self._current_tmux_window += 1
                 # create a new window in the created session if the previous one holds `self.max_panes_per_window` panes
-                cmd = f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} " \
-                      f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter " \
-                      f"&& tmux select-layout -t {self.session_name}: even-vertical"
-                # cmd = f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} '{read_from_pipe_cmd}' " \
-                #       f"&& tmux set-option -t {self.session_name}:{self._current_tmux_window} remain-on-exit " \
-                #       f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                cmd = (
+                    f"tmux new-window -n {self._current_tmux_window} -t {self.session_name} "
+                    f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter "
+                    f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                )
             else:
                 # split the active window vertically to create a new pane
-                cmd = f"tmux split-window -t {self.session_name}:{self._current_tmux_window} " \
-                      f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter" \
-                      f"&& tmux select-layout -t {self.session_name}: even-vertical"
-                # cmd = f"tmux split-window -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' " \
-                #       f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                cmd = (
+                    f"tmux split-window -t {self.session_name}:{self._current_tmux_window} "
+                    f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter"
+                    f"&& tmux select-layout -t {self.session_name}: even-vertical"
+                )
         return cmd
 
     @staticmethod
@@ -243,22 +236,21 @@ class TmuxManager:
 
 
 class LoggingListener(Thread):
-    """ Listens to and handles child process log messages
+    """Listens to and handles child process log messages
     This class, when instantiated, listens to the logging queue to receive log messages from child processes
     and handles these messages using the configured root logger in the main process.
     """
 
     def __init__(
-            self,
-            logging_queue: Queue,
-            error_queue: Queue,
-            lock: Lock,
-            exit_event: Event,
-            exit_on_error: bool,
-            tmux_manager:  Optional[TmuxManager] = None
+        self,
+        logging_queue: Queue,
+        error_queue: Queue,
+        lock: Lock,
+        exit_event: Event,
+        exit_on_error: bool,
+        tmux_manager: Optional[TmuxManager] = None,
     ):
-        super().__init__(target=self.work,
-                         args=())
+        super().__init__(target=self.work, args=())
         self._logging_queue = logging_queue
         self.tmux_manager = tmux_manager
 
@@ -281,6 +273,7 @@ class LoggingListener(Thread):
         sys.stdout.flush()
         if tmux_pipe:
             tmux_pipe.write(record)
+            tmux_pipe.flush()
 
     @staticmethod
     def _handle_stderr_msg(record: str, tmux_pipe: Optional[IO] = None):
@@ -288,16 +281,20 @@ class LoggingListener(Thread):
         sys.stderr.flush()
         if tmux_pipe:
             tmux_pipe.write(record)
+            tmux_pipe.flush()
 
     def _work(self):
 
         with ExitStack() as stack:
             pipes, handlers = None, None
             if self.tmux_manager:
-                # TODO: Check effect of buffering
-                pipes = {worker_name: {'stdout': stack.enter_context(open(pipe['stdout'], 'w')),  # buffering=1
-                                       'stderr': stack.enter_context(open(pipe['stderr'], 'w'))}  # buffering=1
-                         for worker_name, pipe in self.tmux_manager.pipes.items()}
+                pipes = {
+                    worker_name: {
+                        "stdout": stack.enter_context(open(pipe["stdout"], "w")),
+                        "stderr": stack.enter_context(open(pipe["stderr"], "w")),
+                    }
+                    for worker_name, pipe in self.tmux_manager.pipes.items()
+                }
                 handlers = self.tmux_manager.init_handlers(pipes)
 
             while True:
@@ -313,14 +310,14 @@ class LoggingListener(Thread):
                 record_type, worker_name, record = record
 
                 tmux_handler = handlers[worker_name] if handlers else None
-                tmux_stdout_pipe = pipes[worker_name]['stdout'] if pipes else None
-                tmux_stderr_pipe = pipes[worker_name]['stderr'] if pipes else None
+                tmux_stdout_pipe = pipes[worker_name]["stdout"] if pipes else None
+                tmux_stderr_pipe = pipes[worker_name]["stderr"] if pipes else None
 
-                if record_type == 'log_msg':
+                if record_type == "log_msg":
                     self._handle_log_msg(record, tmux_handler=tmux_handler)
-                elif record_type == 'stdout_msg':
+                elif record_type == "stdout_msg":
                     self._handle_stdout_msg(record, tmux_pipe=tmux_stdout_pipe)
-                elif record_type == 'stderr_msg':
+                elif record_type == "stderr_msg":
                     self._handle_stderr_msg(record, tmux_pipe=tmux_stderr_pipe)
 
     def work(self):
@@ -334,19 +331,15 @@ class LoggingListener(Thread):
                     self.exit_event.set()
 
 
-def configure_logging(level: Union[str, int] = 'INFO'):
-    assert level in ['DEBUG', 'INFO', 'WARNING', 'WARN', 'ERROR', 'FATAL', 'CRITICAL',
-                     10, 20, 30, 40, 50]
+def configure_logging(level: Union[str, int] = "INFO"):
+    assert level in ["DEBUG", "INFO", "WARNING", "WARN", "ERROR", "FATAL", "CRITICAL", 10, 20, 30, 40, 50]
     logger = logging.getLogger()
     # formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(processName)-13s %(message)s',
     #                               datefmt='%Y-%m-%d %H:%M:%S')
     # stream_handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(processName)-13s%(message)s')
+    formatter = logging.Formatter("%(processName)-13s%(message)s")
     stream_handler = RichHandler(
-        rich_tracebacks=True,
-        tracebacks_extra_lines=2,
-        show_path=False,
-        omit_repeated_times=False
+        rich_tracebacks=True, tracebacks_extra_lines=2, show_path=False, omit_repeated_times=False
     )
     stream_handler.setLevel(level)
     stream_handler.setFormatter(formatter)

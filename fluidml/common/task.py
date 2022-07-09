@@ -88,7 +88,7 @@ class Task(ABC, DependencyMixin):
         #     required_objects = [name if not is_optional(annotation) for name, annotation in self.publishes.items()]
         # else:
         #     self.save('1', '.completed', type_='event', sub_dir='.load_info')
-        self.save('1', '.completed', type_='event', sub_dir='.load_info')
+        self.save("1", ".completed", type_="event", sub_dir=".load_info")
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
         """Saves the given object to the results store
@@ -100,9 +100,9 @@ class Task(ABC, DependencyMixin):
                                              (eg. json, which is to be passed to results store). Defaults to None.
         """
         with self.lock:
-            self.results_store.save(obj=obj, name=name, type_=type_,
-                                    task_name=self.name, task_unique_config=self.unique_config,
-                                    **kwargs)
+            self.results_store.save(
+                obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
+            )
 
             # todo: update saved objects file (separate fn)
             # saved_objects: Optional[List] = self.load(
@@ -114,13 +114,13 @@ class Task(ABC, DependencyMixin):
             #                         task_name=self.name, task_unique_config=self.unique_config)
 
     def load(
-            self,
-            name: str,
-            task_name: Optional[str] = None,
-            task_unique_config: Optional[Union[Dict, MetaDict]] = None,
-            **kwargs
+        self,
+        name: str,
+        task_name: Optional[str] = None,
+        task_unique_config: Optional[Union[Dict, MetaDict]] = None,
+        **kwargs
     ) -> Any:
-        """ Loads the given object from results store
+        """Loads the given object from results store
 
         Args:
             name (str): an unique name given to this object
@@ -130,16 +130,12 @@ class Task(ABC, DependencyMixin):
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        return self.results_store.load(name=name, task_name=task_name,
-                                       task_unique_config=task_unique_config, **kwargs)
+        return self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config, **kwargs)
 
     def delete(
-            self,
-            name: str,
-            task_name: Optional[str] = None,
-            task_unique_config: Optional[Union[Dict, MetaDict]] = None
+        self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None
     ):
-        """ Deletes object with specified name from results store """
+        """Deletes object with specified name from results store"""
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
@@ -154,12 +150,8 @@ class Task(ABC, DependencyMixin):
             #     self.results_store.save(saved_objects, '.saved_objects', type_='json', sub_dir='.load_info',
             #                             task_name=self.name, task_unique_config=self.unique_config)
 
-    def delete_run(
-            self,
-            task_name: Optional[str] = None,
-            task_unique_config: Optional[Union[Dict, MetaDict]] = None
-    ):
-        """ Deletes run with specified name from results store """
+    def delete_run(self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None):
+        """Deletes run with specified name from results store"""
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
@@ -167,11 +159,9 @@ class Task(ABC, DependencyMixin):
             self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
 
     def get_store_context(
-            self,
-            task_name: Optional[str] = None,
-            task_unique_config: Optional[Union[Dict, MetaDict]] = None
+        self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None
     ) -> Any:
-        """ Wrapper to get store specific storage context, e.g. the current run directory for Local File Store """
+        """Wrapper to get store specific storage context, e.g. the current run directory for Local File Store"""
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
@@ -179,17 +169,17 @@ class Task(ABC, DependencyMixin):
             return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
 
     def open(
-            self,
-            name: Optional[str] = None,
-            task_name: Optional[str] = None,
-            task_unique_config: Optional[Union[Dict, MetaDict]] = None,
-            mode: Optional[str] = None,
-            promise: Optional[Promise] = None,
-            type_: Optional[str] = None,
-            sub_dir: Optional[str] = None,
-            **open_kwargs
+        self,
+        name: Optional[str] = None,
+        task_name: Optional[str] = None,
+        task_unique_config: Optional[Union[Dict, MetaDict]] = None,
+        mode: Optional[str] = None,
+        promise: Optional[Promise] = None,
+        type_: Optional[str] = None,
+        sub_dir: Optional[str] = None,
+        **open_kwargs
     ) -> Optional[File]:
-        """ Wrapper to open a file from Local File Store (only available for Local File Store)."""
+        """Wrapper to open a file from Local File Store (only available for Local File Store)."""
 
         if promise:
             with self.lock:
@@ -199,15 +189,22 @@ class Task(ABC, DependencyMixin):
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
         with self.lock:
-            return self.results_store.open(name=name, task_name=task_name, task_unique_config=task_unique_config,
-                                           mode=mode, type_=type_, sub_dir=sub_dir, **open_kwargs)
+            return self.results_store.open(
+                name=name,
+                task_name=task_name,
+                task_unique_config=task_unique_config,
+                mode=mode,
+                type_=type_,
+                sub_dir=sub_dir,
+                **open_kwargs
+            )
 
     @classmethod
-    def from_spec(cls, task_spec: 'TaskSpec'):
+    def from_spec(cls, task_spec: "TaskSpec"):
         # avoid circular import
         from fluidml.common.utils import MyTask
 
-        # convert task config values to DictConfigs
+        # convert task config values to MetaDicts
         task_spec.config_kwargs = MetaDict(task_spec.config_kwargs)
         task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
 
@@ -215,24 +212,32 @@ class Task(ABC, DependencyMixin):
             task = task_spec.task(**task_spec.config_kwargs, **task_spec.additional_kwargs)
             task.config_kwargs = task_spec.config_kwargs
             task_all_arguments = dict(inspect.signature(task.run).parameters)
-            expected_inputs = {arg: value for arg, value in task_all_arguments.items()
-                               if value.kind.name not in ['VAR_POSITIONAL', 'VAR_KEYWORD']}
+            expected_inputs = {
+                arg: value
+                for arg, value in task_all_arguments.items()
+                if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
+            }
         elif inspect.isfunction(task_spec.task):
-            task = MyTask(task=task_spec.task,
-                          config_kwargs=task_spec.config_kwargs,
-                          additional_kwargs=task_spec.additional_kwargs)
+            task = MyTask(
+                task=task_spec.task,
+                config_kwargs=task_spec.config_kwargs,
+                additional_kwargs=task_spec.additional_kwargs,
+            )
 
             task_all_arguments = dict(inspect.signature(task_spec.task).parameters)
-            task_extra_arguments = list(task_spec.config_kwargs) + list(task_spec.additional_kwargs) + ['task']
-            expected_inputs = {arg: value for arg, value in task_all_arguments.items()
-                               if arg not in task_extra_arguments
-                               and value.kind.name not in ['VAR_POSITIONAL', 'VAR_KEYWORD']}
+            task_extra_arguments = list(task_spec.config_kwargs) + list(task_spec.additional_kwargs) + ["task"]
+            expected_inputs = {
+                arg: value
+                for arg, value in task_all_arguments.items()
+                if arg not in task_extra_arguments and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
+            }
         else:
             # cannot be reached, check has been made in TaskSpec.
             raise TypeError
 
         task.project_name = task_spec.project_name
         task.run_name = task_spec.run_name
+        task.results_store = task_spec.results_store
         task.name = task_spec.name
         task.unique_name = task_spec.unique_name
         task.id_ = task_spec.id_
@@ -253,7 +258,7 @@ class Task(ABC, DependencyMixin):
         return task
 
     @staticmethod
-    def _set_task_expects(task_spec: 'TaskSpec', task: 'Task', expected_inputs: Dict[str, inspect.Parameter]) -> 'Task':
+    def _set_task_expects(task_spec: "TaskSpec", task: "Task", expected_inputs: Dict[str, inspect.Parameter]) -> "Task":
         # if expects is provided to task_spec manually we add missing arguments to the expected_inputs dict
         if task_spec.expects is not None:
             for arg in task_spec.expects:
@@ -271,7 +276,7 @@ class Task(ABC, DependencyMixin):
         return task
 
     @staticmethod
-    def _set_task_publishes(task_spec: 'TaskSpec', task: 'Task') -> 'Task':
+    def _set_task_publishes(task_spec: "TaskSpec", task: "Task") -> "Task":
         if task_spec.publishes is not None:
             task.publishes = task_spec.publishes
 

@@ -1,11 +1,10 @@
 import logging
 from multiprocessing import Queue, Lock, Event
 from queue import Empty
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Union
 
 from fluidml.common import Task, Resource
 from fluidml.flow.task_spec import TaskSpec
-from fluidml.storage import ResultsStore
 from fluidml.storage.controller import TaskDataController
 from fluidml.swarm import Whale
 
@@ -13,31 +12,33 @@ logger = logging.getLogger(__name__)
 
 
 class Dolphin(Whale):
-    def __init__(self,
-                 resource: Resource,
-                 scheduled_queue: Queue,
-                 running_queue: List[int],
-                 done_queue: List[int],
-                 logging_queue: Queue,
-                 error_queue: Queue,
-                 lock: Lock,
-                 tasks: Dict[int, TaskSpec],
-                 exit_event: Event,
-                 exit_on_error: bool,
-                 logging_lvl: int,
-                 results_store: Optional[ResultsStore] = None):
-        super().__init__(exit_event=exit_event,
-                         exit_on_error=exit_on_error,
-                         logging_queue=logging_queue,
-                         error_queue=error_queue,
-                         logging_lvl=logging_lvl,
-                         lock=lock)
+    def __init__(
+        self,
+        resource: Resource,
+        scheduled_queue: Queue,
+        running_queue: List[int],
+        done_queue: List[int],
+        logging_queue: Queue,
+        error_queue: Queue,
+        lock: Lock,
+        tasks: Dict[int, TaskSpec],
+        exit_event: Event,
+        exit_on_error: bool,
+        logging_lvl: int,
+    ):
+        super().__init__(
+            exit_event=exit_event,
+            exit_on_error=exit_on_error,
+            logging_queue=logging_queue,
+            error_queue=error_queue,
+            logging_lvl=logging_lvl,
+            lock=lock,
+        )
         self.resource = resource
         self.scheduled_queue = scheduled_queue
         self.running_queue = running_queue
         self.done_queue = done_queue
         self.tasks = tasks
-        self.results_store = results_store
 
     @property
     def num_tasks(self):
@@ -62,16 +63,13 @@ class Dolphin(Whale):
 
         with self._lock:
             # check if task was successfully completed before
-            completed: bool = self.results_store.is_finished(
-                task_name=task.name,
-                task_unique_config=task.unique_config
-            )
+            completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
         # if task is not completed, run the task now
         if not completed:
             # extract predecessor results
             pred_results = self._extract_results_from_predecessors(task)
 
-            logger.info(f'Started task {task.unique_name}.')
+            logger.info(f"Started task {task.unique_name}.")
             task.run_wrapped(**pred_results)
 
         with self._lock:
@@ -84,15 +82,16 @@ class Dolphin(Whale):
 
             # Log task completion
             if completed:
-                msg = f'Task {task.unique_name} already executed'
+                msg = f"Task {task.unique_name} already executed"
             else:
-                msg = f'Finished task {task.unique_name}'
+                msg = f"Finished task {task.unique_name}"
 
-            logger.info(f'{msg} [{len(self.done_queue)}/{self.num_tasks} '
-                        f'- {round((len(self.done_queue) / self.num_tasks) * 100)}%]')
+            logger.info(
+                f"{msg} [{len(self.done_queue)}/{self.num_tasks} "
+                f"- {round((len(self.done_queue) / self.num_tasks) * 100)}%]"
+            )
 
     def _pack_task(self, task: Task) -> Task:
-        task.results_store = self.results_store
         task.resource = self.resource
         task.lock = self._lock
         return task
@@ -140,16 +139,14 @@ class Dolphin(Whale):
         for successor in task_spec.successors:
             # run task only if all dependencies are satisfied
             if not self._is_task_ready(task_spec=self.tasks[successor.id_]):
-                logger.debug(f'Dependencies are not satisfied yet for '
-                             f'task {successor.unique_name}')
+                logger.debug(f"Dependencies are not satisfied yet for " f"task {successor.unique_name}")
             # the done_queue check should not be necessary because tasks don't leave the running queue once they're
             # finished. we use the done_queue for progress measuring and running_queue to avoid tasks being executed
             # twice.
             elif successor.id_ in self.done_queue or successor.id_ in self.running_queue:
-                logger.debug(f'Task {successor.unique_name} '
-                             f'is currently running or already finished.')
+                logger.debug(f"Task {successor.unique_name} " f"is currently running or already finished.")
             else:
-                logger.debug(f'Is now scheduling {successor.unique_name}.')
+                logger.debug(f"Is now scheduling {successor.unique_name}.")
                 self.scheduled_queue.put(successor.id_)
                 # We have to add the successor id to the running queue here already
                 # Assume, 2 workers execute a task each in parallel, finish at the same time

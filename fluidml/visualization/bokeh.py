@@ -2,8 +2,17 @@ import networkx as nx
 
 from bokeh.io import output_file, show
 from bokeh.plotting import figure
-from bokeh.models import (BoxZoomTool, HoverTool,
-                          MultiLine, Plot, Range1d, ResetTool, BoxSelectTool, PanTool, WheelZoomTool)
+from bokeh.models import (
+    BoxZoomTool,
+    HoverTool,
+    MultiLine,
+    Plot,
+    Range1d,
+    ResetTool,
+    BoxSelectTool,
+    PanTool,
+    WheelZoomTool,
+)
 from bokeh.palettes import Spectral4
 from bokeh.plotting import from_networkx
 from bokeh.models import ColumnDataSource, LabelSet
@@ -38,7 +47,7 @@ def get_edges(sug_layout, height):
 
         # get corresponding start and end nodes
         start_node, end_node = edge.v[0].view.xy, edge.v[1].view.xy
-        
+
         # get computed multi-line edges
         node_x, node_y = [], []
         for index in range(1, len(edge.view._pts)):
@@ -48,9 +57,9 @@ def get_edges(sug_layout, height):
             node_x.append(end[0])
             node_y.append(height - start[1] - 1)
             node_y.append(height - end[1] - 1)
-            #node_y.append(start[1])
-            #node_y.append(end[1])
-        
+            # node_y.append(start[1])
+            # node_y.append(end[1])
+
         # in these, we first have to manipulate the first and last co-ordindates
         # so that they have extend upto node positions
         node_x[0], node_y[0] = start_node[0], (height - start_node[1] - 1)
@@ -61,9 +70,14 @@ def get_edges(sug_layout, height):
     return xs, ys
 
 
-def visualize_graph_interactive(graph: nx.Graph, plot_width: int = 500, plot_height: int = 500,
-                                node_width: int = 50, node_height: int = 50,
-                                scale_width: bool = True):
+def visualize_graph_interactive(
+    graph: nx.Graph,
+    plot_width: int = 500,
+    plot_height: int = 500,
+    node_width: int = 50,
+    node_height: int = 50,
+    scale_width: bool = True,
+):
     # reformat the graph with attributes
     reformatted_graph = reformat_graph(graph)
 
@@ -82,11 +96,19 @@ def visualize_graph_interactive(graph: nx.Graph, plot_width: int = 500, plot_hei
 
     # plot nodes
     x, y = zip(*positions.values())
-    node_labels = nx.get_node_attributes(reformatted_graph, 'task_name')
-    source = ColumnDataSource({'x': x, 'y': y,
-                             'task_name': list(positions.keys())})
-    labels = LabelSet(x='x', y='y', text='task_name', source=source, text_align="center",
-                      background_fill_color='white', text_font_size="12px", border_line_color="black", name="task_name")
+    node_labels = nx.get_node_attributes(reformatted_graph, "task_name")
+    source = ColumnDataSource({"x": x, "y": y, "task_name": list(positions.keys())})
+    labels = LabelSet(
+        x="x",
+        y="y",
+        text="task_name",
+        source=source,
+        text_align="center",
+        background_fill_color="white",
+        text_font_size="12px",
+        border_line_color="black",
+        name="task_name",
+    )
     plot.renderers.append(labels)
 
     # plot edges
