@@ -1,7 +1,7 @@
 import logging
 from multiprocessing import Queue, Lock, Event
 from queue import Empty
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Optional
 
 from fluidml.common import Task, Resource
 from fluidml.flow.task_spec import TaskSpec
@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 class Dolphin(Whale):
     def __init__(
         self,
-        resource: Resource,
         scheduled_queue: Queue,
         running_queue: List[int],
         done_queue: List[int],
@@ -25,6 +24,7 @@ class Dolphin(Whale):
         exit_event: Event,
         exit_on_error: bool,
         logging_lvl: int,
+        resource: Optional[Resource] = None,
     ):
         super().__init__(
             exit_event=exit_event,

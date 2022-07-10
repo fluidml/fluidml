@@ -41,6 +41,17 @@ def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
 
 
 def reformat_config(d: Dict) -> Dict:
+    """Recursively re-formats config dictionaries.
+
+    Converts nested lists to double lists, e.g. ``["a", "b"]`` to ``[["a", "b"]]`` and
+    nested tuples to normal lists, e.g. ``("a", "b")`` to ``["a", "b"]``.
+
+    Args:
+        d: A dictionary.
+
+    Returns:
+        A re-formatted dictionary.
+    """
     for key, value in d.items():
         if isinstance(value, list):
             d[key] = [value]
@@ -54,6 +65,15 @@ def reformat_config(d: Dict) -> Dict:
 
 
 def remove_none_from_dict(obj: Dict) -> Dict:
+    """Recursively removes ``None`` values from dictionary.
+
+    Args:
+        obj: A dictionary (e.g. a config) to be cleaned for ``None`` values.
+
+    Returns:
+        A dictionary where recursively all ``None`` values have been removed.
+    """
+
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
     elif isinstance(obj, dict):
@@ -63,6 +83,16 @@ def remove_none_from_dict(obj: Dict) -> Dict:
 
 
 def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = "@") -> Dict:
+    """Recursively removes key-value pairs that are prefixed.
+
+    Args:
+        obj: A dictionary.
+        prefix: A string prefix indicating which key-value pairs to remove.
+
+    Returns:
+        A dictionary where recursively all prefixed keys have been removed.
+    """
+
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_prefixed_keys_from_dict(x, prefix) for x in obj)
     elif isinstance(obj, dict):
@@ -76,6 +106,15 @@ def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = "@") -> Dict:
 
 
 def remove_prefix_from_dict(obj: Dict, prefix: str = "@") -> Dict:
+    """Recursively removes the prefix from keys in a dictionary.
+
+    Args:
+        obj: A dictionary.
+        prefix: A dictionary key prefix.
+
+    Returns:
+        A dictionary where recursively all prefixes have been removed.
+    """
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)
     elif isinstance(obj, dict):

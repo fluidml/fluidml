@@ -1,21 +1,7 @@
 import networkx as nx
-
-from bokeh.io import output_file, show
-from bokeh.plotting import figure
-from bokeh.models import (
-    BoxZoomTool,
-    HoverTool,
-    MultiLine,
-    Plot,
-    Range1d,
-    ResetTool,
-    BoxSelectTool,
-    PanTool,
-    WheelZoomTool,
-)
-from bokeh.palettes import Spectral4
-from bokeh.plotting import from_networkx
+from bokeh.io import show
 from bokeh.models import ColumnDataSource, LabelSet
+from bokeh.plotting import figure
 
 from fluidml.visualization import build_sugiyama_layout
 
@@ -33,9 +19,9 @@ def reformat_graph(graph):
     return reformatted_graph
 
 
-def flip_positions(positons, height):
+def flip_positions(positions, height):
     flipped = {}
-    for key, (x, y) in positons.items():
+    for key, (x, y) in positions.items():
         flipped[key] = (x, height - y - 1)
     return flipped
 
@@ -57,8 +43,6 @@ def get_edges(sug_layout, height):
             node_x.append(end[0])
             node_y.append(height - start[1] - 1)
             node_y.append(height - end[1] - 1)
-            # node_y.append(start[1])
-            # node_y.append(end[1])
 
         # in these, we first have to manipulate the first and last co-ordindates
         # so that they have extend upto node positions
@@ -96,7 +80,6 @@ def visualize_graph_interactive(
 
     # plot nodes
     x, y = zip(*positions.values())
-    node_labels = nx.get_node_attributes(reformatted_graph, "task_name")
     source = ColumnDataSource({"x": x, "y": y, "task_name": list(positions.keys())})
     labels = LabelSet(
         x="x",
