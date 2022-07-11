@@ -6,12 +6,17 @@ import pytest
 from fluidml.common import Task, Resource
 
 
+@dataclass
+class TaskResource(Resource):
+    device: str
+
+
 class DummyTaskA(Task):
     def __init__(self, x: int):
         super().__init__()
 
     def run(self):
-        self.save(obj={'a': 1}, name='a', type_='json')
+        self.save(obj={"a": 1}, name="a", type_="json")
 
 
 class DummyTaskB(Task):
@@ -19,7 +24,7 @@ class DummyTaskB(Task):
         super().__init__()
 
     def run(self, a: Dict):
-        self.save(obj={'b': 1}, name='b', type_='json')
+        self.save(obj={"b": 1}, name="b", type_="json")
 
 
 @pytest.fixture
@@ -30,11 +35,6 @@ def dummy_task_a():
 @pytest.fixture
 def dummy_task_b():
     return DummyTaskB
-
-
-@dataclass
-class TaskResource(Resource):
-    seed: int
 
 
 @pytest.fixture
