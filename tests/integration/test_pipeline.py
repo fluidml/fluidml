@@ -86,7 +86,7 @@ def test_pipeline(dummy_resource):
     tasks = [parse_task, preprocess_task, featurize_tokens_task, featurize_cells_task, train_task, evaluate_task]
 
     # devices = get_balanced_devices(count=num_workers, use_cuda=True)
-    resources = [dummy_resource(seed=42) for i in range(num_workers)]
+    resources = [dummy_resource(device="cpu") for i in range(num_workers)]
 
     flow = Flow()
     flow.create(task_specs=tasks)

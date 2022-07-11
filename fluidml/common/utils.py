@@ -19,6 +19,18 @@ class MyTask(Task):
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
+    """Recursively merges two dictionaries.
+
+    Conflicting keys won't be updated but expanded to a tuple.
+
+    Args:
+        d1: A dictionary.
+        d2: A second dictionary to be merged.
+
+    Returns:
+        A recursively merged dictionary.
+
+    """
     if isinstance(d1, dict) and isinstance(d2, dict):
         # Unwrap d1 and d2 in new dictionary to keep non-shared keys with **d1, **d2
         # Next unwrap a dict that treats shared keys
@@ -52,6 +64,7 @@ def reformat_config(d: Dict) -> Dict:
     Returns:
         A re-formatted dictionary.
     """
+
     for key, value in d.items():
         if isinstance(value, list):
             d[key] = [value]
@@ -115,6 +128,7 @@ def remove_prefix_from_dict(obj: Dict, prefix: str = "@") -> Dict:
     Returns:
         A dictionary where recursively all prefixes have been removed.
     """
+
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)
     elif isinstance(obj, dict):
