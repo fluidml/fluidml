@@ -32,7 +32,15 @@ class Flow:
     * Finally, it composes a list of tasks which are then run through the provided swarm.
     """
 
-    def __init__(self):
+    def __init__(self, tasks: List[BaseTaskSpec]):
+        """Creates the Flow (task graph) by expanding all GridTaskSpecs.
+
+        Reduce tasks, ``reduce = True``, tasks into account.
+
+        Args:
+            tasks: List of task specifications.
+        """
+
         # contains the expanded graph as list of Task objects -> used internally in swarm
         self._expanded_task_specs: Optional[List[TaskSpec]] = None
         # contains the expanded graph as networkx DiGraph -> accessible to the user for introspection and visualization
@@ -41,9 +49,24 @@ class Flow:
         # -> accessible to the user for introspection and visualization
         self.task_spec_graph: Optional[DiGraph] = None
 
+        # create expanded graph and set above attributes
+        self._create(task_specs=tasks)
+
     @property
     def num_tasks(self):
         return len(self._expanded_task_specs)
+
+    def _create(self, task_specs: List[BaseTaskSpec]):
+        if not task_specs:
+            raise NoTasksError("There are no tasks to run")
+
+        Flow._check_no_task_name_clash(task_specs=task_specs)
+
+        ordered_task_specs = self._order_task_specs(task_specs=task_specs)
+        self._expanded_task_specs: List[TaskSpec] = Flow._expand_and_link_task_specs(ordered_task_specs)
+        self.task_graph: DiGraph = Flow._create_graph_from_task_spec_list(
+            task_specs=self._expanded_task_specs, name="task graph"
+        )
 
     @staticmethod
     def _check_acyclic(graph: DiGraph) -> None:
@@ -305,24 +328,6 @@ class Flow:
         for spec in final_task_specs:
             spec.unique_config = MetaDict(spec.unique_config)
         return final_task_specs
-
-    def create(self, task_specs: List[BaseTaskSpec]):
-        """Creates the task graph by expanding all GridTaskSpecs and taking reduce=True tasks into account.
-
-        Args:
-            task_specs: List of task specifications.
-        """
-
-        if not task_specs:
-            raise NoTasksError("There are no tasks to run")
-
-        Flow._check_no_task_name_clash(task_specs=task_specs)
-
-        ordered_task_specs = self._order_task_specs(task_specs=task_specs)
-        self._expanded_task_specs: List[TaskSpec] = Flow._expand_and_link_task_specs(ordered_task_specs)
-        self.task_graph: DiGraph = Flow._create_graph_from_task_spec_list(
-            task_specs=self._expanded_task_specs, name="task graph"
-        )
 
     def run(
         self,

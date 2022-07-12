@@ -88,8 +88,7 @@ def test_pipeline(dummy_resource):
     resources = [dummy_resource(device="cpu") for i in range(num_workers)]
 
     # create flow -> expand task graphs -> execute graph
-    flow = Flow()
-    flow.create(task_specs=tasks)
+    flow = Flow(tasks)
     results = flow.run(num_workers=num_workers, resources=resources)
 
     num_expanded_tasks = 0
