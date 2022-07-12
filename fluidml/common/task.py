@@ -20,7 +20,7 @@ class Resource(ABC):
 
 
 class Task(ABC, DependencyMixin):
-    """Abstract class for task"""
+    """Base class for a task."""
 
     def __init__(self):
         DependencyMixin.__init__(self)
@@ -72,10 +72,10 @@ class Task(ABC, DependencyMixin):
 
     @abstractmethod
     def run(self, **results):
-        """Implementation of core logic of task
+        """Implementation of core logic of task.
 
         Args:
-            results (Dict[str, Any]): results from predecessors (automatically passed by swarm)
+            **results: results from predecessors (automatically passed by flow or swarm (multiprocessing))
         """
         raise NotImplementedError
 
@@ -91,13 +91,14 @@ class Task(ABC, DependencyMixin):
         self.save("1", ".completed", type_="event", sub_dir=".load_info")
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
-        """Saves the given object to the results store
+        """Saves the given object to the results store.
 
         Args:
-            obj (Any): any object that is to be saved
-            name (str): an unique name given to this object
-            type_ (Optional[str], optional): additional type specification
-                                             (eg. json, which is to be passed to results store). Defaults to None.
+            obj: Any object that is to be saved
+            name: A unique name given to this object
+            type_: Additional type specification (eg. json, which is to be passed to results store).
+                Defaults to ``None``.
+            **kwargs: Additional keyword args.
         """
         with self.lock:
             self.results_store.save(
@@ -120,12 +121,13 @@ class Task(ABC, DependencyMixin):
         task_unique_config: Optional[Union[Dict, MetaDict]] = None,
         **kwargs
     ) -> Any:
-        """Loads the given object from results store
+        """Loads the given object from results store.
 
         Args:
-            name (str): an unique name given to this object
-            task_name (str): task name which saved the loaded object
-            task_unique_config (Dict): unique config which specifies the run of the loaded object
+            name: An unique name given to this object.
+            task_name: Task name which saved the loaded object.
+            task_unique_config: Unique config which specifies the run of the loaded object.
+            **kwargs: Additional keyword args.
         """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
@@ -238,6 +240,7 @@ class Task(ABC, DependencyMixin):
         task.project_name = task_spec.project_name
         task.run_name = task_spec.run_name
         task.results_store = task_spec.results_store
+        task.resource = task_spec.resource
         task.name = task_spec.name
         task.unique_name = task_spec.unique_name
         task.id_ = task_spec.id_
@@ -279,10 +282,6 @@ class Task(ABC, DependencyMixin):
     def _set_task_publishes(task_spec: "TaskSpec", task: "Task") -> "Task":
         if task_spec.publishes is not None:
             task.publishes = task_spec.publishes
-
-        # elif task.publishes is not None:
-        #     task_spec.publishes = task.publishes
-
         else:
             task.publishes = []
             task_spec.publishes = []

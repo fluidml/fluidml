@@ -81,12 +81,13 @@ class FluidPager(Pager):
 
 def visualize_graph_in_console(graph: "nx.DiGraph", use_pager: bool = True, use_unicode: bool = False):
     """Visualizes the task graph by rendering it to the console via a pager
+
     -> keyboard input ":q" required to continue.
 
     Args:
-        graph (DiGraph): a networkx directed graph object
-        use_pager (bool): if true: tries rendering via pager (defaulting to print), if false: print
-        use_unicode (bool): renders the graph in unicode if console supports it
+        graph: a networkx directed graph object
+        use_pager: if true: tries rendering via pager (defaulting to print), if false: print
+        use_unicode: renders the graph in unicode if console supports it
     """
 
     console_graph = f"{graph.name}\n" if graph.name else "Graph"

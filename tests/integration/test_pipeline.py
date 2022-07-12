@@ -3,7 +3,6 @@ from typing import List, Dict
 from fluidml.common import Task
 from fluidml.flow import Flow
 from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.swarm import Swarm
 from fluidml.storage import Sweep
 
 
@@ -88,20 +87,16 @@ def test_pipeline(dummy_resource):
     # devices = get_balanced_devices(count=num_workers, use_cuda=True)
     resources = [dummy_resource(device="cpu") for i in range(num_workers)]
 
+    # create flow -> expand task graphs -> execute graph
     flow = Flow()
     flow.create(task_specs=tasks)
+    results = flow.run(num_workers=num_workers, resources=resources)
 
-    # run tasks in parallel (GridTaskSpecs are expanded based on grid search arguments)
-    with Swarm(n_dolphins=num_workers, resources=resources) as swarm:
-
-        results = flow.run(swarm=swarm, force=None, results_store=None)
-
-        num_expanded_tasks = 0
-        for name, gs_runs in results.items():
-            if isinstance(gs_runs, List):
-                for run in gs_runs:
-                    num_expanded_tasks += 1
-            else:
+    num_expanded_tasks = 0
+    for name, gs_runs in results.items():
+        if isinstance(gs_runs, List):
+            for run in gs_runs:
                 num_expanded_tasks += 1
-
-        assert num_expanded_tasks == 14
+        else:
+            num_expanded_tasks += 1
+    assert num_expanded_tasks == 14

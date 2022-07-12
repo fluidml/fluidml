@@ -20,19 +20,22 @@ logger = logging.getLogger(__name__)
 
 
 class AsciiCanvas:
-    """Class for drawing graph in ASCII.
-    Args:
-        sug (SugiyamaLayout): calculated sugiyama layout for the input graph
-        cols (int): number of columns in the canvas. Should be > 1.
-        rows (int): number of rows in the canvas. Should be > 1.
-        chars (Dict): character set used for graph rendering (can be ascii or unicode)
-        minx (int): minimum x coordinate drawn on canvas.
-        miny (int): minimum y coordinate drawn on canvas.
-    """
+    """Class for drawing graph in ASCII."""
 
     TIMEOUT = 10
 
     def __init__(self, sug: "SugiyamaLayout", cols: int, rows: int, chars: Dict[str, str], minx: int, miny: int):
+        """Initializes class for drawing graph in ASCII.
+
+        Args:
+            sug: Calculated sugiyama layout for the input graph.
+            cols: Number of columns in the canvas. Should be > 1.
+            rows: Number of rows in the canvas. Should be > 1.
+            chars: Character set used for graph rendering (can be ascii or unicode).
+            minx: Minimum x coordinate drawn on canvas.
+            miny: Minimum y coordinate drawn on canvas.
+        """
+
         assert cols > 1
         assert rows > 1
 
@@ -49,12 +52,9 @@ class AsciiCanvas:
     def point(self, x: int, y: int, char: str):
         """Create a point on ASCII canvas.
         Args:
-            x (int): x coordinate. Should be >= 0 and < number of columns in
-                the canvas.
-            y (int): y coordinate. Should be >= 0 an < number of lines in the
-                canvas.
-            char (str): character to place in the specified point on the
-                canvas.
+            x: x coordinate. Should be >= 0 and < number of columns in the canvas.
+            y: y coordinate. Should be >= 0 an < number of lines in the canvas.
+            char: character to place in the specified point on the canvas.
         """
         assert len(char) == 1
         assert x >= 0
@@ -67,11 +67,11 @@ class AsciiCanvas:
     def line(self, x0: int, y0: int, x1: int, y1: int, char: str):
         """Create a line on ASCII canvas.
         Args:
-            x0 (int): x coordinate where the line should start.
-            y0 (int): y coordinate where the line should start.
-            x1 (int): x coordinate where the line should end.
-            y1 (int): y coordinate where the line should end.
-            char (str): character to draw the line with.
+            x0: x coordinate where the line should start.
+            y0: y coordinate where the line should start.
+            x1: x coordinate where the line should end.
+            y1: y coordinate where the line should end.
+            char: character to draw the line with.
         """
 
         if x0 > x1:
@@ -108,9 +108,9 @@ class AsciiCanvas:
     def text(self, x: int, y: int, text: str):
         """Print a text on ASCII canvas.
         Args:
-            x (int): x coordinate where the text should start.
-            y (int): y coordinate where the text should start.
-            text (str): string that should be printed.
+            x: x coordinate where the text should start.
+            y: y coordinate where the text should start.
+            text: string that should be printed.
         """
         for i, char in enumerate(text):
             self.point(x + i, y, char)
@@ -118,10 +118,10 @@ class AsciiCanvas:
     def box(self, x0: int, y0: int, width: int, height: int):
         """Create a box on ASCII canvas.
         Args:
-            x0 (int): x coordinate of the box corner.
-            y0 (int): y coordinate of the box corner.
-            width (int): box width.
-            height (int): box height.
+            x0: x coordinate of the box corner.
+            y0: y coordinate of the box corner.
+            width: box width.
+            height: box height.
         """
         assert width > 1
         assert height > 1

@@ -1,8 +1,9 @@
 import logging
+import multiprocessing
 import sys
 from collections import defaultdict
 from itertools import product
-from typing import List, Any, Dict, Optional, Set, Union
+from typing import List, Any, Dict, Optional, Set, Union, Callable
 
 import networkx as nx
 from metadict import MetaDict
@@ -325,7 +326,13 @@ class Flow:
 
     def run(
         self,
-        swarm: Optional[Swarm] = None,
+        num_workers: Optional[int] = None,
+        resources: Optional[Union[Resource, List[Resource]]] = None,
+        start_method: str = "spawn",
+        exit_on_error: bool = True,
+        log_to_tmux: bool = False,
+        create_tmux_handler_fn: Optional[Callable] = None,
+        max_panes_per_window: Optional[int] = None,
         force: Optional[Union[str, List[str]]] = None,
         project_name: str = "uncategorized",
         run_name: Optional[str] = None,
@@ -335,45 +342,81 @@ class Flow:
         """Runs the specified tasks in parallel via Swarm (multiprocessing) and returns the results.
 
         Args:
-            swarm: Swarm object, to run task graph in parallel using multiprocessing.
-            force: Forcefully re-run tasks
-                Possible options are:
-                   1)  "all" - All the tasks are re-run
-                   2)  a task name (eg. "PreProcessTask")
-                       or list of task names (eg. ``["PreProcessTask1", "PreProcessTask2]``)
-                       Additionally, each task name can have the suffix "+2 to re-run also its successors
-                       (eg. "PreProcessTask+")
-            project_name: Name of project.
+            num_workers: Number of parallel processes (dolphins) used. Defaults to ``None``.
+            resources: A single ``Resource`` object or a list of resources that are assigned to workers. Resources can
+                hold arbitrary data, e.g. gpu or cpu device information, making sure that each worker has access to a
+                dedicated device
+                If ``num_workers > 1`` and ``len(resources) == num_workers`` resources are assigned to each worker.
+                If ``len(resources) < num_workers`` resources are assigned randomly to workers.
+                If ``num_workers == 1`` the first resource ``resources[0]`` is assigned to all tasks (not workers).
+                Defaults to ``None``.
+            start_method: Start method for multiprocessing. Defaults to ``"spawn"``. Only used when ``num_workers > 1``.
+            exit_on_error: When an error happens all workers finish their current tasks and exit gracefully.
+                Defaults to True. Only used when ``num_workers > 1``.
+            log_to_tmux: If ``True`` a new tmux session is created (given tmux is installed) and each worker (process)
+                logs to a dedicated pane to avoid garbled logging output. The session's name equals the combined
+                ``f"{project_name}--{run-name}"``. Defaults to ``False``. Only used when ``num_workers > 1``.
+            create_tmux_handler_fn: Callable to create a stream handler and formatter used for tmux logging.
+                Only used when ``num_workers > 1``.
+            max_panes_per_window: Max number of panes per tmux window. Requires ``log_to_tmux`` being set to ``True``.
+                Defaults to ``4``. Only used when ``num_workers > 1``.
+            force: Forcefully re-run tasks. Possible options are:
+                1) ``"all"`` - All the tasks are re-run.
+                2) A task name (e.g. "PreProcessTask")
+                   or list of task names (e.g. ``["PreProcessTask1", "PreProcessTask2]``). Additionally, each task name
+                   can have the suffix "+" to re-run also its successors (e.g. "PreProcessTask+").
+            project_name: Name of project. Defaults to ``"uncategorized"``.
             run_name: Name of run.
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
-            return_results: Return results-dictionary after run(). Defaults to False.
+            return_results: Return results-dictionary after run(). Defaults to ``False``.
 
         Returns:
             A nested dict of results.
         """
+
         if self._expanded_task_specs is None:
             raise NoTasksError('Execute "flow.create(tasks)" to build the task graph before calling "flow.run()".')
 
         if force is not None:
             self._register_tasks_to_force_execute(force=force)
 
-        # if swarm is provided execute task graph in parallel with swarm
-        if swarm is not None:
-            results = swarm.work(
-                tasks=self._expanded_task_specs,
-                project_name=project_name,
-                run_name=run_name,
-                results_store=results_store,
-                return_results=return_results,
-            )
+        # get maximum number of available workers
+        max_num_workers = multiprocessing.cpu_count()
+        if num_workers is None or num_workers > max_num_workers:
+            num_workers = max_num_workers
+
+        # convert resources to list if a single resource was provided
+        resources = resources if resources is None or isinstance(resources, List) else [resources]
+
+        # if multiple workers are used execute task graph in parallel with swarm
+        if num_workers > 1:
+            logger.debug("Execute task graph in parallel using Swarm (multiprocessing).")
+            with Swarm(
+                n_dolphins=num_workers,
+                resources=resources,
+                start_method=start_method,
+                exit_on_error=exit_on_error,
+                log_to_tmux=log_to_tmux,
+                create_tmux_handler_fn=create_tmux_handler_fn,
+                max_panes_per_window=max_panes_per_window,
+            ) as swarm:
+                results = swarm.work(
+                    tasks=self._expanded_task_specs,
+                    project_name=project_name,
+                    run_name=run_name,
+                    results_store=results_store,
+                    return_results=return_results,
+                )
         # else run the topologically sorted graph sequentially
         else:
+            logger.debug("Execute task graph sequentially (no multiprocessing).")
             results = self._run_linear(
                 project_name=project_name,
                 run_name=run_name,
                 results_store=results_store,
                 return_results=return_results,
+                resource=resources[0],  # assign first resource object to all tasks (see doc-string)
             )
 
         return results
@@ -384,7 +427,9 @@ class Flow:
         run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
         return_results: bool = False,
+        resource: Optional[Resource] = None,
     ) -> Dict[str, Union[List[Dict], Dict]]:
+
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore()
 
@@ -392,6 +437,8 @@ class Flow:
             task_spec.project_name = project_name
             task_spec.run_name = run_name
             task_spec.results_store = results_store
+            if resource:
+                task_spec.resource = resource
 
             # instantiate task obj
             task = Task.from_spec(task_spec)
@@ -416,7 +463,6 @@ class Flow:
                 msg = f"Task {task.unique_name} already executed"
             else:
                 msg = f"Finished task {task.unique_name}"
-
             logger.info(f"{msg} [{i}/{self.num_tasks} " f"- {round((i / self.num_tasks) * 100)}%]")
 
         # collect published results from all tasks

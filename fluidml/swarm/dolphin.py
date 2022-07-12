@@ -64,11 +64,13 @@ class Dolphin(Whale):
         with self._lock:
             # check if task was successfully completed before
             completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
+
         # if task is not completed, run the task now
         if not completed:
             # extract predecessor results
             pred_results = self._extract_results_from_predecessors(task)
 
+            # run the task
             logger.info(f"Started task {task.unique_name}.")
             task.run_wrapped(**pred_results)
 

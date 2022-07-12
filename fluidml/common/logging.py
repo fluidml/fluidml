@@ -16,17 +16,8 @@ from tblib import pickling_support
 
 from fluidml.common.exception import TmuxError
 
-# console = Console(stderr=True)
-# logging.lastResort = RichHandler(console=console,
-#                                  level='WARNING',
-#                                  rich_tracebacks=True,
-#                                  tracebacks_extra_lines=2,
-#                                  show_path=False)
-# logging.lastResort = logging.StreamHandler()
 
 pickling_support.install()
-
-
 logger_ = logging.getLogger(__name__)
 
 

@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, List, Tuple, Union, Callable, Sequence, 
 
 from metadict import MetaDict
 
-from fluidml.common import DependencyMixin, Task
+from fluidml.common import DependencyMixin, Task, Resource
 from fluidml.common.exception import GridSearchExpansionError
 from fluidml.storage import ResultsStore
 
@@ -74,6 +74,7 @@ class TaskSpec(BaseTaskSpec):
         reduce: Optional[bool] = None,
         publishes: Optional[List[str]] = None,
         expects: Optional[List[str]] = None,
+        resource: Optional[Resource] = None,
     ):
         """A class to hold specification of a plain task.
 
@@ -85,6 +86,8 @@ class TaskSpec(BaseTaskSpec):
             reduce: A boolean indicating whether this is a reduce task. Defaults to None.
             publishes: A list of result names that this task publishes. Defaults to None.
             expects: A list of result names that this task expects. Defaults to None.
+            resource: An optional ``Resource`` object assigned to a task.
+                If resources are assigned to workers via ``Swarm`` this argument has no effect.
         """
         # todo: Remove additional kwargs from config via prefix and add to additional kwargs dict
         #  ...
@@ -96,6 +99,7 @@ class TaskSpec(BaseTaskSpec):
         self._project_name: Optional[str] = None
         self._run_name: Optional[str] = None
         self._results_store: Optional[ResultsStore] = None
+        self._resource: Optional[Resource] = resource
 
         # set in Flow
         self._id: Optional[int] = None
@@ -150,6 +154,14 @@ class TaskSpec(BaseTaskSpec):
     def results_store(self, results_store: ResultsStore):
         self._results_store = results_store
 
+    @property
+    def resource(self):
+        return self._resource
+
+    @resource.setter
+    def resource(self, resource: Resource):
+        self._resource = resource
+
     def expand(self) -> List["TaskSpec"]:
         # we don't return [self] since we have to return a copy without self.predecessors and self.successors
         return [
@@ -161,6 +173,7 @@ class TaskSpec(BaseTaskSpec):
                 reduce=self.reduce,
                 publishes=self.publishes,
                 expects=self.expects,
+                resource=self.resource,
             )
         ]
 
@@ -175,6 +188,7 @@ class GridTaskSpec(BaseTaskSpec):
         name: Optional[str] = None,
         publishes: Optional[List[str]] = None,
         expects: Optional[List[str]] = None,
+        resource: Optional[Resource] = None,
     ):
         """A class to hold specification of a grid-search expandable task
 
@@ -185,6 +199,8 @@ class GridTaskSpec(BaseTaskSpec):
             name: A unique name of the class. Defaults to None.
             publishes: A list of result names that this task publishes. Defaults to None.
             expects: A list of result names that this task expects. Defaults to None.
+            resource: An optional ``Resource`` object assigned to a task.
+                If resources are assigned to workers via ``Swarm`` this argument has no effect.
         """
         super().__init__(task, name, publishes, expects, additional_kwargs=additional_kwargs)
 
@@ -193,6 +209,8 @@ class GridTaskSpec(BaseTaskSpec):
         self.task_configs: List[Dict] = GridTaskSpec._split_gs_config(
             config_grid_search=gs_config, method=gs_expansion_method
         )
+
+        self.resource = resource
 
     def expand(self) -> List["TaskSpec"]:
         return [
@@ -203,6 +221,7 @@ class GridTaskSpec(BaseTaskSpec):
                 name=self.name,
                 publishes=self.publishes,
                 expects=self.expects,
+                resource=self.resource,
             )
             for config in self.task_configs
         ]

@@ -24,7 +24,7 @@ class Swarm:
         exit_on_error: bool = True,
         log_to_tmux: bool = False,
         create_tmux_handler_fn: Optional[Callable] = None,
-        max_panes_per_window: Optional[int] = None,
+        max_panes_per_window: int = 4,
     ):
         """Configure workers, resources, results_store which are used to run the tasks.
 
@@ -91,7 +91,7 @@ class Swarm:
             tmux_manager = TmuxManager(
                 worker_names=[dolphin.name for dolphin in self.dolphins],
                 session_name=session_name,
-                max_panes_per_window=self.max_panes_per_window if self.max_panes_per_window else 4,
+                max_panes_per_window=self.max_panes_per_window,
                 create_tmux_handler_fn=self.create_tmux_handler_fn,
             )
 
