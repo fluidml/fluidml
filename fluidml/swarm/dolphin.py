@@ -50,10 +50,12 @@ class Dolphin(Whale):
                 return False
         return True
 
-    def _extract_results_from_predecessors(self, task: Task) -> Dict[str, Any]:
-        with self._lock:
-            controller = TaskDataController(task)
-            results: Dict = controller.pack_predecessor_results()
+    @staticmethod
+    def _extract_results_from_predecessors(task: Task) -> Dict[str, Any]:
+        # TODO (LH): This lock is probably obsolete. Needs testing.
+        # with self._lock:
+        controller = TaskDataController(task)
+        results: Dict = controller.pack_predecessor_results()
         return results
 
     def _run_task(self, task: Task):
@@ -61,9 +63,10 @@ class Dolphin(Whale):
         if task.force:
             task.delete_run()
 
-        with self._lock:
-            # check if task was successfully completed before
-            completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
+        # TODO (LH): This lock is probably obsolete. Needs testing.
+        # with self._lock:
+        # check if task was successfully completed before
+        completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
 
         # if task is not completed, run the task now
         if not completed:
@@ -160,6 +163,6 @@ class Dolphin(Whale):
                 # which previously put the id in the running queue, the second worker puts
                 # the successor id again in the schedule queue.
                 # That leads to the task being executed more than once.
-                # Hence, we have to add the successor ids to the running queue in the moment they are
+                # Hence, we have to add the successor ids to the running queue at the moment they are
                 # added to the schedule queue.
                 self.running_queue.append(successor.id_)

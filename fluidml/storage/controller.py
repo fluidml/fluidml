@@ -41,7 +41,7 @@ class TaskDataController:
                     results[item_name] = obj
         return results
 
-    def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
+    def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Optional[Dict]:
 
         if self._task_expects:
             # get only expected results by the task from predecessor tasks

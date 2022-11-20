@@ -5,7 +5,7 @@ from metadict import MetaDict
 from fluidml.common.task import Task
 
 
-class MyTask(Task):
+class _MyTask(Task):
     """A constructor class that creates a task object from a callable."""
 
     def __init__(self, task: Callable, config_kwargs: MetaDict, additional_kwargs: MetaDict):

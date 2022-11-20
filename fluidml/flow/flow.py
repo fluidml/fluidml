@@ -35,8 +35,6 @@ class Flow:
     def __init__(self, tasks: List[BaseTaskSpec]):
         """Creates the Flow (task graph) by expanding all GridTaskSpecs.
 
-        Reduce tasks, ``reduce = True``, tasks into account.
-
         Args:
             tasks: List of task specifications.
         """
@@ -58,7 +56,7 @@ class Flow:
 
     def _create(self, task_specs: List[BaseTaskSpec]):
         if not task_specs:
-            raise NoTasksError("There are no tasks to run")
+            raise NoTasksError("There are no tasks to run.")
 
         Flow._check_no_task_name_clash(task_specs=task_specs)
 
@@ -67,6 +65,38 @@ class Flow:
         self.task_graph: DiGraph = Flow._create_graph_from_task_spec_list(
             task_specs=self._expanded_task_specs, name="task graph"
         )
+
+    def _infer_optimal_number_of_workers_from_graph(self) -> int:
+        """Analyzes the graphs layout and finds the maximal number of tasks executed in parallel."""
+        # get root tasks
+        root_tasks = [task.unique_name for task in self._expanded_task_specs if len(task.predecessors) == 0]
+
+        # assign to each node the node's level in the directed graph
+        node_to_lvl = {}
+        for root in root_tasks:
+            # assign lvl 0 to all root nodes
+            lvl = 0
+            node_to_lvl[root] = lvl
+            # assign lvl to all successor nodes recursively
+            Flow._assign_lvl_to_node_recursively(root, self.task_graph, lvl, node_to_lvl)
+
+        # get the amount of nodes per lvl in the graph
+        lvl_to_num = defaultdict(int)
+        for node, lvl in node_to_lvl.items():
+            lvl_to_num[lvl] += 1
+
+        # return the maximum amount of nodes on the same level
+        # if possible this equals the optimal amount of processes for parallelization
+        optimal_num_workers = max([num for num in lvl_to_num.values()])
+        return optimal_num_workers
+
+    @staticmethod
+    def _assign_lvl_to_node_recursively(node: str, graph: nx.DiGraph, lvl: int, node_to_lvl: Dict[str, int]):
+        lvl += 1
+        for successor in graph.successors(node):
+            if successor not in node_to_lvl or node_to_lvl[successor] < lvl:
+                node_to_lvl[successor] = lvl
+            Flow._assign_lvl_to_node_recursively(successor, graph, lvl, node_to_lvl)
 
     @staticmethod
     def _check_acyclic(graph: DiGraph) -> None:
@@ -275,8 +305,7 @@ class Flow:
             task_spec_combinations = Flow._get_predecessor_product(expanded_task_specs_by_name, spec)
 
             if spec.reduce:
-                # if it is a reduce task, just add the predecessor task
-                # combinations as parents
+                # if it is a reduce task, just add the predecessor task combinations as parents
                 expanded_task_specs = spec.expand()
 
                 for task_spec in expanded_task_specs:
@@ -332,23 +361,26 @@ class Flow:
     def run(
         self,
         num_workers: Optional[int] = None,
-        resources: Optional[Union[Resource, List[Resource]]] = None,
+        resources: Optional[Union[Any, List[Any]]] = None,
         start_method: str = "spawn",
         exit_on_error: bool = True,
         log_to_tmux: bool = False,
         create_tmux_handler_fn: Optional[Callable] = None,
-        max_panes_per_window: Optional[int] = None,
+        max_panes_per_window: int = 4,
         force: Optional[Union[str, List[str]]] = None,
         project_name: str = "uncategorized",
         run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
         return_results: bool = False,
     ) -> Dict[str, Dict[str, Any]]:
-        """Runs the specified tasks in parallel via Swarm (multiprocessing) and returns the results.
+        """Runs the specified tasks sequentially or in parallel via Swarm (multiprocessing) and returns the results.
 
         Args:
-            num_workers: Number of parallel processes (dolphins) used. Defaults to ``None``.
-            resources: A single ``Resource`` object or a list of resources that are assigned to workers. Resources can
+            num_workers: Number of parallel processes (dolphins) used. Internally, the optimal number of processes
+                ``optimal_num_workers`` is inferred from the task graph. If ``num_workers is None``
+                or ``num_workers > optimal_num_workers``, ``num_workers`` is overwritten to ``optimal_num_workers``.
+                Defaults to ``None``.
+            resources: A single resource object or a list of resources that are assigned to workers. Resources can
                 hold arbitrary data, e.g. gpu or cpu device information, making sure that each worker has access to a
                 dedicated device
                 If ``num_workers > 1`` and ``len(resources) == num_workers`` resources are assigned to each worker.
@@ -374,25 +406,28 @@ class Flow:
             run_name: Name of run.
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
-            return_results: Return results-dictionary after run(). Defaults to ``False``.
+            return_results: Return results-dictionary after ``run()``. Defaults to ``False``.
 
         Returns:
             A nested dict of results.
         """
 
-        if self._expanded_task_specs is None:
-            raise NoTasksError('Execute "flow.create(tasks)" to build the task graph before calling "flow.run()".')
-
         if force is not None:
             self._register_tasks_to_force_execute(force=force)
 
         # get maximum number of available workers
+        # and infer optimal number of workers given the expanded graph to process
         max_num_workers = multiprocessing.cpu_count()
-        if num_workers is None or num_workers > max_num_workers:
-            num_workers = max_num_workers
+        optimal_num_workers = self._infer_optimal_number_of_workers_from_graph()
+        optimal_num_workers = optimal_num_workers if optimal_num_workers <= max_num_workers else max_num_workers
+        if num_workers is None or num_workers > optimal_num_workers:
+            num_workers = optimal_num_workers
 
         # convert resources to list if a single resource was provided
+        # and trim list of resources to actual number of used workers
         resources = resources if resources is None or isinstance(resources, List) else [resources]
+        if isinstance(resources, List):
+            resources = resources[:num_workers]
 
         # if multiple workers are used execute task graph in parallel with swarm
         if num_workers > 1:
@@ -416,12 +451,13 @@ class Flow:
         # else run the topologically sorted graph sequentially
         else:
             logger.debug("Execute task graph sequentially (no multiprocessing).")
+            resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
             results = self._run_linear(
                 project_name=project_name,
                 run_name=run_name,
                 results_store=results_store,
                 return_results=return_results,
-                resource=resources[0],  # assign first resource object to all tasks (see doc-string)
+                resource=resource,  # assign first resource object to all tasks (see doc-string)
             )
 
         return results

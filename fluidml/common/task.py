@@ -82,7 +82,7 @@ class Task(ABC, DependencyMixin):
     def run_wrapped(self, **results):
         """Calls run function to execute task and saves a 'completed' event file to signal successful execution."""
         self.run(**results)
-        # todo: if publishes is set, check that all non optional objects are present in saved_objects
+        # TODO (LH): if publishes is set, check that all non optional objects are present in saved_objects
         # if self.publishes:
         #     saved_objects: Optional[List] = self.load(name='.saved_objects')
         #     required_objects = [name if not is_optional(annotation) for name, annotation in self.publishes.items()]
@@ -96,7 +96,7 @@ class Task(ABC, DependencyMixin):
         Args:
             obj: Any object that is to be saved
             name: A unique name given to this object
-            type_: Additional type specification (eg. json, which is to be passed to results store).
+            type_: Additional type specification (e.g. json, which is to be passed to results store).
                 Defaults to ``None``.
             **kwargs: Additional keyword args.
         """
@@ -104,15 +104,6 @@ class Task(ABC, DependencyMixin):
             self.results_store.save(
                 obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
             )
-
-            # todo: update saved objects file (separate fn)
-            # saved_objects: Optional[List] = self.load(
-            #     name='.saved_objects', task_name=self.name, task_unique_config=self.unique_config)
-            # if saved_objects is None:
-            #     saved_objects = []
-            # saved_objects.append(name)
-            # self.results_store.save(saved_objects, '.saved_objects', type_='json', sub_dir='.load_info',
-            #                         task_name=self.name, task_unique_config=self.unique_config)
 
     def load(
         self,
@@ -143,14 +134,6 @@ class Task(ABC, DependencyMixin):
 
         with self.lock:
             self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
-
-            # todo: update saved objects file (separate fn)
-            # saved_objects: Optional[List] = self.load(
-            #     name='.saved_objects', task_name=self.name, task_unique_config=self.unique_config)
-            # if saved_objects is not None and name in saved_objects:
-            #     del saved_objects[saved_objects.index(name)]
-            #     self.results_store.save(saved_objects, '.saved_objects', type_='json', sub_dir='.load_info',
-            #                             task_name=self.name, task_unique_config=self.unique_config)
 
     def delete_run(self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None):
         """Deletes run with specified name from results store"""
@@ -204,11 +187,13 @@ class Task(ABC, DependencyMixin):
     @classmethod
     def from_spec(cls, task_spec: "TaskSpec"):
         # avoid circular import
-        from fluidml.common.utils import MyTask
+        from fluidml.common.utils import _MyTask
 
         # convert task config values to MetaDicts
         task_spec.config_kwargs = MetaDict(task_spec.config_kwargs)
         task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
+
+        # TODO (LH): Deep merge config kwargs and additional kwargs (to preserve original config structure of arguments)
 
         if inspect.isclass(task_spec.task):
             task = task_spec.task(**task_spec.config_kwargs, **task_spec.additional_kwargs)
@@ -220,7 +205,7 @@ class Task(ABC, DependencyMixin):
                 if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
             }
         elif inspect.isfunction(task_spec.task):
-            task = MyTask(
+            task = _MyTask(
                 task=task_spec.task,
                 config_kwargs=task_spec.config_kwargs,
                 additional_kwargs=task_spec.additional_kwargs,

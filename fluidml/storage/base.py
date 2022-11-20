@@ -1,3 +1,4 @@
+import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Any
@@ -23,18 +24,107 @@ class LazySweep:
     config: MetaDict
 
 
-class ResultsStore(ABC):
+class InheritDecoratorsMixin:
+    def __init_subclass__(cls, *args, **kwargs):
+        super().__init_subclass__(*args, **kwargs)
+        decorator_registry = getattr(cls, "_decorator_registry", {}).copy()
+        cls._decorator_registry = decorator_registry
+        # Check for decorated objects in the mixin itself (optional):
+        for name, obj in __class__.__dict__.items():
+            if getattr(obj, "inherit_decorator", False) and name not in decorator_registry:
+                decorator_registry[name] = obj.inherit_decorator
+        # annotate newly decorated methods in the current class/subclass:
+        for name, obj in cls.__dict__.items():
+            if getattr(obj, "inherit_decorator", False) and name not in decorator_registry:
+                decorator_registry[name] = obj.inherit_decorator
+        # finally, decorate all methods annotated in the registry:
+        for name, decorator in decorator_registry.items():
+            if name in cls.__dict__ and getattr(getattr(cls, name), "inherit_decorator", None) != decorator:
+                setattr(cls, name, decorator(cls.__dict__[name]))
+
+
+# TODO (LH): Add decorators to save and delete fn
+def _save_object_names(func):
+    """Decorator to save names of saved objects.
+
+    The resulting ".saved_objects" name list is used to check if any or all to-be-published objects of a task
+    have been saved before.
+    """
+
+    @functools.wraps(func)
+    def wrapper(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+        # save actual object
+        res = func(self, obj, name, type_, task_name, task_unique_config, **kwargs)
+
+        # log name of saved object
+        saved_objects: Optional[Dict[str, None]] = self.load(
+            name=".saved_objects", task_name=task_name, task_unique_config=task_unique_config
+        )
+        if saved_objects is None:
+            saved_objects = {}
+        if name not in saved_objects:
+            saved_objects[name] = None
+        func(
+            self,
+            obj=saved_objects,
+            name=".saved_objects",
+            type_="json",
+            sub_dir=".load_info",
+            task_name=task_name,
+            task_unique_config=task_unique_config,
+        )
+        return res
+
+    # necessary for the decorator inheritance to work
+    wrapper.inherit_decorator = _save_object_names
+    return wrapper
+
+
+def _delete_object_names(func):
+    """Decorator to delete names of previously saved but now deleted objects."""
+
+    @functools.wraps(func)
+    def wrapper(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+        # delete actual object
+        res = func(self, obj, name, type_, task_name, task_unique_config, **kwargs)
+
+        # load saved object names
+        saved_objects: Optional[Dict[str, None]] = self.load(
+            name=".saved_objects", task_name=task_name, task_unique_config=task_unique_config
+        )
+        # delete name from registry and save registry
+        if saved_objects is not None and name in saved_objects:
+            del saved_objects[name]
+            func(
+                self,
+                obj=saved_objects,
+                name=".saved_objects",
+                type_="json",
+                sub_dir=".load_info",
+                task_name=task_name,
+                task_unique_config=task_unique_config,
+            )
+        return res
+
+    # necessary for the decorator inheritance to work
+    wrapper.inherit_decorator = _delete_object_names
+    return wrapper
+
+
+class ResultsStore(ABC, InheritDecoratorsMixin):
     @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
         """Query method to load an object based on its name, task_name and task_config if it exists"""
         raise NotImplementedError
 
     @abstractmethod
+    # @_save_object_names
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """Method to save/update any artifact"""
         raise NotImplementedError
 
     @abstractmethod
+    # @_delete_object_names
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
         """Method to delete any artifact"""
         raise NotImplementedError
@@ -84,6 +174,7 @@ class ResultsStore(ABC):
 
         return results
 
+    # TODO: determine best functionality to decide whether a task can be skipped
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
         # try to load task completed object; if it is None we return None and re-run the task
         completed: Optional[str] = self.load(

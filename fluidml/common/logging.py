@@ -213,7 +213,7 @@ class TmuxManager:
                 # split the active window vertically to create a new pane
                 cmd = (
                     f"tmux split-window -t {self.session_name}:{self._current_tmux_window} "
-                    f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter"
+                    f"&& tmux send-keys -t {self.session_name}:{self._current_tmux_window} '{read_from_pipe_cmd}' Enter "
                     f"&& tmux select-layout -t {self.session_name}: even-vertical"
                 )
         return cmd
