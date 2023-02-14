@@ -13,7 +13,7 @@ from rich.traceback import install as rich_install
 
 from fluidml.common import Task, Resource
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
-from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict
+from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict, generate_run_name
 from fluidml.flow import BaseTaskSpec, TaskSpec, GridTaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.controller import TaskDataController, pack_pipeline_results
@@ -156,6 +156,13 @@ class Flow:
         return task_spec_graph
 
     def _register_tasks_to_force_execute(self, force: Union[str, List[str]]) -> None:
+        # make sure that "all" is provided in the correct way, either as str or as str in a list of length 1
+        if isinstance(force, List):
+            if len(force) == 1 and force[0] == "all":
+                force = force[0]
+            elif "all" in force:
+                raise TypeError('"all" must be provided as str or list of length 1 to the "force" argument.')
+
         # if force == 'all' set force to True for all tasks
         if force == "all":
             for task in self._expanded_task_specs:
@@ -309,7 +316,9 @@ class Flow:
                 expanded_task_specs = spec.expand()
 
                 for task_spec in expanded_task_specs:
-                    # predecessor config
+                    # merge configs from all predecessors to get a single reduced predecessor config
+                    # note: this config might differ from the original grid config since original grid lists
+                    #  containing dicts can not be recovered when merging expanded configs
                     predecessor_config = Flow._merge_task_spec_combination_configs(task_spec_combinations, specs)
 
                     # add dependencies
@@ -318,6 +327,13 @@ class Flow:
 
                     task_spec.id_ = task_id
                     expanded_task_specs_by_name[task_spec.name].append(task_spec)
+                    # TODO:
+                    #  1. Create relevant config from config_kwargs (no mutation -> new object)
+                    #    a) remove none from dict
+                    #    b) remove prefixed keys from dict
+                    #  2. Remove prefix from config_kwargs (mutation)
+                    #  3. Create unique config to add relevant config to predecessor config
+
                     task_spec.unique_config = {
                         **predecessor_config,
                         **{task_spec.name: remove_none_from_dict(task_spec.config_kwargs)},
@@ -415,6 +431,9 @@ class Flow:
         if force is not None:
             self._register_tasks_to_force_execute(force=force)
 
+        if run_name is None:
+            run_name = generate_run_name()
+
         # get maximum number of available workers
         # and infer optimal number of workers given the expanded graph to process
         max_num_workers = multiprocessing.cpu_count()
@@ -473,6 +492,7 @@ class Flow:
 
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore()
+        results_store.run_name = run_name
 
         for i, task_spec in enumerate(self._expanded_task_specs, 1):
             task_spec.project_name = project_name
@@ -483,6 +503,15 @@ class Flow:
 
             # instantiate task obj
             task = Task.from_spec(task_spec)
+
+            # # try to load existing run info
+            # # set run_info attribute to task
+            # run_info = task.load(".run_info")
+            # if run_info:
+            #     task.run_info = run_info
+            # else:
+            #     # create new run info object
+            #     task.run_info = RunInfo(run_name=run_name, project_name=project_name)
 
             # if force is true, delete all task results and re-run task
             if task.force:

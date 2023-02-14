@@ -160,6 +160,7 @@ class Swarm:
         """
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore(self.manager)
+        results_store.run_name = run_name
 
         # setup logging
         logging_listener = self._init_logging(project_name, run_name)

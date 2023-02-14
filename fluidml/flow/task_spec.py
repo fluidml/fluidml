@@ -82,8 +82,6 @@ class TaskSpec(BaseTaskSpec):
             resource: An optional ``Resource`` object assigned to a task.
                 If resources are assigned to workers via ``Swarm`` this argument has no effect.
         """
-        # todo: Remove additional kwargs from config via prefix and add to additional kwargs dict
-        #  ...
         super().__init__(task, name, publishes, expects, reduce, additional_kwargs=additional_kwargs)
         # we assure that the provided config is json serializable since we use json to later store the config
         self.config_kwargs = json.loads(json.dumps(config)) if config is not None else {}

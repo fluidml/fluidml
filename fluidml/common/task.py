@@ -3,7 +3,7 @@ import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Lock
-from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union
+from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union, Callable
 
 from metadict import MetaDict
 
@@ -186,8 +186,6 @@ class Task(ABC, DependencyMixin):
 
     @classmethod
     def from_spec(cls, task_spec: "TaskSpec"):
-        # avoid circular import
-        from fluidml.common.utils import _MyTask
 
         # convert task config values to MetaDicts
         task_spec.config_kwargs = MetaDict(task_spec.config_kwargs)
@@ -205,7 +203,7 @@ class Task(ABC, DependencyMixin):
                 if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
             }
         elif inspect.isfunction(task_spec.task):
-            task = _MyTask(
+            task = _TaskFromCallable(
                 task=task_spec.task,
                 config_kwargs=task_spec.config_kwargs,
                 additional_kwargs=task_spec.additional_kwargs,
@@ -271,3 +269,16 @@ class Task(ABC, DependencyMixin):
             task.publishes = []
             task_spec.publishes = []
         return task
+
+
+class _TaskFromCallable(Task):
+    """A wrapper class that wraps a callable as a Task."""
+
+    def __init__(self, task: Callable, config_kwargs: MetaDict, additional_kwargs: MetaDict):
+        super().__init__()
+        self.task = task
+        self.config_kwargs = config_kwargs
+        self.additional_kwargs = additional_kwargs
+
+    def run(self, **results: Dict[str, Any]):
+        self.task(**results, **self.config_kwargs, **self.additional_kwargs, task=self)

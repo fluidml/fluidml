@@ -62,6 +62,13 @@ class TaskDataController:
 
                 results = self._get_results_from_predecessor(predecessor=predecessor)
 
+                if results is None:
+                    raise TaskResultObjectMissing(
+                        f"Some or all results from task {predecessor.name} could not be retrieved. "
+                        f"Either the task did not publish any results, some published results are missing, "
+                        f"or the task was not finished, yet."
+                    )
+
                 for name, obj in results.items():
                     if isinstance(obj, Promise):
                         sweep = LazySweep(value=obj, config=predecessor.unique_config)
@@ -72,6 +79,13 @@ class TaskDataController:
             predecessor_results = {}
             for predecessor in self._predecessor_tasks:
                 results = self._get_results_from_predecessor(predecessor=predecessor)
+
+                if results is None:
+                    raise TaskResultObjectMissing(
+                        f"Some or all results from task {predecessor.name} could not be retrieved. "
+                        f"Either the task did not publish any results, some published results are missing, "
+                        f"or the task was not finished, yet."
+                    )
 
                 for name, obj in results.items():
                     if name in predecessor_results.keys():

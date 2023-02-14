@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO
 
-from fluidml.storage import ResultsStore, Promise
+from fluidml.storage.base import ResultsStore, Promise
 
 logger = logging.getLogger(__name__)
 
@@ -157,23 +157,35 @@ class TypeInfo:
 
 
 class LocalFileStore(ResultsStore):
-    def __init__(self, base_dir: str, run_name: Optional[str] = None):
+    def __init__(self, base_dir: str):
         super().__init__()
 
         self.base_dir = base_dir
-        self.run_name = run_name
+
         self._type_registry = {
-            "event": TypeInfo(self._save_event, self._load_event),
+            "event": TypeInfo(self._write, self._read),
             "json": TypeInfo(json.dump, json.load, "json"),
             "pickle": TypeInfo(pickle.dump, pickle.load, "p", is_binary=True),
+            "text": TypeInfo(self._write, self._read, "txt"),
         }
 
+        # can be set externally. if set, it is used for naming newly created directories
+        self.run_name: Optional[str] = None
+
+    @property
+    def run_name(self):
+        return self._run_name
+
+    @run_name.setter
+    def run_name(self, run_name: str):
+        self._run_name = run_name
+
     @staticmethod
-    def _save_event(obj: str, file: IO):
+    def _write(obj: str, file: IO):
         file.write(obj)
 
     @staticmethod
-    def _load_event(file: IO) -> str:
+    def _read(file: IO) -> str:
         return file.read()
 
     @staticmethod
