@@ -1,12 +1,17 @@
+import contextlib
 import json
 import logging
 import os
 import pickle
 import shutil
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO
+from multiprocessing import Lock
+from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO, TYPE_CHECKING
 
 from fluidml.storage.base import ResultsStore, Promise
+
+if TYPE_CHECKING:
+    from fluidml.common.task import RunInfo
 
 logger = logging.getLogger(__name__)
 
@@ -170,15 +175,15 @@ class LocalFileStore(ResultsStore):
         }
 
         # can be set externally. if set, it is used for naming newly created directories
-        self.run_name: Optional[str] = None
+        self.run_info: Optional["RunInfo"] = None
 
     @property
-    def run_name(self):
-        return self._run_name
+    def run_info(self):
+        return self._run_info
 
-    @run_name.setter
-    def run_name(self, run_name: str):
-        self._run_name = run_name
+    @run_info.setter
+    def run_info(self, run_info: "RunInfo"):
+        self._run_info = run_info
 
     @staticmethod
     def _write(obj: str, file: IO):
@@ -298,7 +303,8 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        with self.lock:
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
 
@@ -353,7 +359,8 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        with self.lock:
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             logger.warning(
                 f'"{name}" could not be deleted. '
@@ -388,7 +395,8 @@ class LocalFileStore(ResultsStore):
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
-        run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        with self.lock:
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             logger.warning(f'No run directory for task "{task_name}" and the provided unique_config exists.')
             return None
@@ -432,7 +440,8 @@ class LocalFileStore(ResultsStore):
             task_dir = os.path.join(self.base_dir, task_name)
 
             # try to get existing run dir
-            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+            with self.lock:
+                run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
             if run_dir is None:
                 raise FileNotFoundError
 
@@ -509,16 +518,18 @@ class LocalFileStore(ResultsStore):
     def get_context(self, task_name: str, task_unique_config: Dict):
         """Method to get the current task's storage context.
         E.g. the current run directory in case of LocalFileStore.
+        Creates a new run dir if none exists.
         """
         task_dir = os.path.join(self.base_dir, task_name)
 
-        # try to get existing run dir
-        run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+        with self.lock:
+            # try to get existing run dir
+            run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
 
-        # create new run dir if run dir did not exist
-        if run_dir is None:
-            run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_name=self.run_name)
-            json.dump(task_unique_config, open(os.path.join(run_dir, f"config.json"), "w"))
+            # create new run dir if run dir does not exist
+            if run_dir is None:
+                run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_info=self.run_info)
+                json.dump(task_unique_config, open(os.path.join(run_dir, f"config.json"), "w"), indent=4)
         return run_dir
 
     @staticmethod
@@ -542,26 +553,34 @@ class LocalFileStore(ResultsStore):
         return None
 
     @staticmethod
-    def _make_run_dir(task_dir: str, run_name: Optional[str] = None) -> str:
-        exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
+    def _make_run_dir(task_dir: str, run_info: Optional["RunInfo"] = None) -> str:
+        if run_info is not None:
+            run_name = run_info.run_name
+            unique_id = run_info.unique_id
+            new_dir_name = f"{run_name}__{unique_id}"
 
-        dir_names = [os.path.split(d)[-1] for d in exist_run_dirs]
+        else:
+            exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
 
-        if run_name is not None:
-            # find dirs that start with run_name and extract their suffix (usually a numeric counter)
-            dir_names = [
-                name.split(run_name, 1)[-1].replace("-", "") for name in dir_names if name.startswith(run_name)
-            ]
+            dir_names = [os.path.split(d)[-1] for d in exist_run_dirs]
 
-        # get all numeric dir names in task dir and convert to ids
-        ids = [int(d_name) for d_name in dir_names if d_name.isdigit()]
+            # if run_info is not None:
+            #     run_name = run_info.run_name
+            #     # find dirs that start with run_name and extract their suffix (usually a numeric counter)
+            #     dir_names = [
+            #         name.split(run_name, 1)[-1].replace("-", "") for name in dir_names if name.startswith(run_name)
+            #     ]
 
-        # increment max id by 1 or start at 0
-        new_id = max(ids) + 1 if ids else 0
-        new_id = str(new_id).zfill(3)
+            # get all numeric dir names in task dir and convert to ids
+            ids = [int(d_name) for d_name in dir_names if d_name.isdigit()]
+
+            # increment max id by 1 or start at 0
+            new_id = max(ids) + 1 if ids else 0
+            new_id = str(new_id).zfill(3)
+
+            new_dir_name = new_id  # if run_info is None else f"{run_info.run_name}-{new_id}"
 
         # create new run dir
-        new_dir_name = new_id if run_name is None else f"{run_name}-{new_id}"
         new_run_dir = os.path.join(task_dir, new_dir_name)
         os.makedirs(new_run_dir, exist_ok=True)
         return new_run_dir

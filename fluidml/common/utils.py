@@ -1,6 +1,9 @@
-from typing import Any, Dict, Union, Tuple
-import random
+import hashlib
+import json
 import os
+import random
+import string
+from typing import Any, Union, Tuple, Dict
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
@@ -173,3 +176,62 @@ def generate_run_name() -> str:
 
     run_name = f"{adjective}-{noun}"
     return run_name
+
+
+def is_optional(obj: Any):
+    """Check if a type annotation is Optional
+
+    Make sure that the annotation has the keys __module__, __args__ and __origin__
+    1. __origin__ value is equal to typing.Union
+    2. __args__ must be a tuple which contains the NoneType (type(None))
+    3. __module__ must be set to 'typing'. If not, the annotation is not an object defined by the typing module
+    """
+    return (
+        getattr(obj, "__origin__", None) is Union
+        and type(None) in getattr(obj, "__args__", ())
+        and getattr(obj, "__module__", None) == "typing"
+    )
+
+
+def hash_config(cfg: Dict) -> str:
+    """Creates md5 hash in hex of config dictionary.
+
+    Args:
+        cfg: Json serializable unique config.
+
+    Returns:
+        Hashed config (md5 hash in hex)
+    """
+    return hashlib.md5(json.dumps(cfg, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def encode_base36(number: int) -> str:
+    """Encodes an integer in base36
+
+    Args:
+        number: Any integer
+
+    Returns:
+        Base36 encoded integer (contains a-z,0-9)
+    """
+    alphabet, base36 = string.digits + string.ascii_lowercase, ""
+    while number:
+        number, i = divmod(number, 36)
+        base36 = alphabet[i] + base36
+    return base36 or alphabet[0]
+
+
+def create_unique_run_id_from_config(cfg: Dict, length: int = 8) -> str:
+    """Creates an 8 char long unique id for input config dict.
+    Uses md5 hashing and base36 encoding to be filename compatible.
+
+    Args:
+        cfg: Config dictionary.
+        length: Char length of unique run id.
+
+    Returns:
+        Unique run id in base36, based on input config.
+    """
+    hashed_cfg = hash_config(cfg)
+    encoded_cfg = encode_base36(int(hashed_cfg, base=16))
+    return encoded_cfg[:length]

@@ -1,9 +1,13 @@
+import contextlib
 import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Optional, List, Dict, Any
+from multiprocessing import Lock
+from typing import Optional, Dict, Any
 
 from metadict import MetaDict
+
+from fluidml.common.utils import is_optional
 
 
 class Promise(ABC):
@@ -112,6 +116,21 @@ def _delete_object_names(func):
 
 
 class ResultsStore(ABC, InheritDecoratorsMixin):
+    def __init__(self):
+        self._lock: Optional[Lock] = None
+
+    @property
+    def lock(self):
+        # if no lock was provided we return a dummy contextmanager that does nothing
+        if self._lock is None:
+            null_context = contextlib.suppress()
+            return null_context
+        return self._lock
+
+    @lock.setter
+    def lock(self, lock: Lock):
+        self._lock = lock
+
     @abstractmethod
     def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
         """Query method to load an object based on its name, task_name and task_config if it exists"""
@@ -150,7 +169,7 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
     def get_context(self, task_name: str, task_unique_config: Dict):
         """Method to get store specific storage context, e.g. the current run directory for Local File Store"""
 
-    def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: List[str]) -> Optional[Dict]:
+    def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: Dict[str, Any]) -> Optional[Dict]:
         # if a task publishes no results, we always execute the task
         if not task_publishes:
             return None
@@ -161,20 +180,23 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
         results = {}
-        for item_name in task_publishes:
+        for item_name, type_annotation in task_publishes.items():
             # load object
             obj: Optional[Any] = self.load(name=item_name, task_name=task_name, task_unique_config=task_unique_config)
 
-            # if at least one expected result object of the task cannot be loaded, return None and re-run the task.
-            if obj is None:
+            # if at least one expected and non-optional result object of the task cannot be loaded,
+            # return None and re-run the task.
+            if not is_optional(type_annotation) and obj is None:
                 return None
+            # if obj is None:
+            #     return None
 
             # store object in results
             results[item_name] = obj
 
         return results
 
-    # TODO: determine best functionality to decide whether a task can be skipped
+    # TODO(LH): determine best functionality to decide whether a task can be skipped
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
         # try to load task completed object; if it is None we return None and re-run the task
         completed: Optional[str] = self.load(

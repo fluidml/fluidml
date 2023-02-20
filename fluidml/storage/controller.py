@@ -29,6 +29,7 @@ class TaskDataController:
                 f"{self._task_name} expects {list(self._task_expects)} but predecessor " f"did not publish any results."
             )
 
+        # TODO: Ignore optional objects, if they cannot be found (see is_optional() in utils)
         results = {}
         for item_name in predecessor.publishes:
             if item_name in self._task_expects:
@@ -95,6 +96,7 @@ class TaskDataController:
                     else:
                         predecessor_results[name] = obj
 
+        # TODO: Ignore optional objects, if they cannot be found (see is_optional() in utils)
         # Assertion to check that all expected results are retrieved
         if self._task_expects:
             retrieved_inputs = set(predecessor_results.keys())
@@ -114,18 +116,27 @@ class TaskDataController:
 
 
 def pack_pipeline_results(
-    all_tasks: List[TaskSpec], results_store: ResultsStore, return_results: bool = True
+    all_tasks: List[TaskSpec], results_store: ResultsStore, return_results: Optional[str] = "all"
 ) -> Dict[str, Any]:
     pipeline_results = defaultdict(list)
-    if return_results:
+    if return_results is None:
+        pass
+    elif return_results == "all":
         for task in all_tasks:
             results = results_store.get_results(
                 task_name=task.name, task_unique_config=task.unique_config, task_publishes=task.publishes
             )
             pipeline_results[task.name].append({"results": results, "config": task.unique_config})
-    else:
+    elif return_results == "latest":
         for task in all_tasks:
-            pipeline_results[task.name].append(task.unique_config)
+            if not task.successors:
+                results = results_store.get_results(
+                    task_name=task.name, task_unique_config=task.unique_config, task_publishes=task.publishes
+                )
+                pipeline_results[task.name].append({"results": results, "config": task.unique_config})
+    else:
+        choices = ", ".join(['"all"', '"latest"', "None"])
+        raise ValueError(f"return_results must be set to one of: {choices}.")
 
     return _simplify_results(pipeline_results=pipeline_results)
 

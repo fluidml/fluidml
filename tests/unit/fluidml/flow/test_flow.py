@@ -18,8 +18,8 @@ def test_flow_with_no_tasks():
 
 
 def test_flow_with_dummy(dummy_task_a, dummy_task_b):
-    task_spec_a = TaskSpec(name="A", task=dummy_task_a, config={"x": 1}, publishes=["a"])
-    task_spec_b = TaskSpec(name="B", task=dummy_task_b, config={"x": 1}, publishes=[])
+    task_spec_a = TaskSpec(name="A", task=dummy_task_a, config={"x": 1})
+    task_spec_b = TaskSpec(name="B", task=dummy_task_b, config={"x": 1})
     task_spec_b.requires(task_spec_a)
     flow = Flow(tasks=[task_spec_a, task_spec_b])
     results = flow.run()

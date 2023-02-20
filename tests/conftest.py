@@ -3,11 +3,11 @@ from typing import Dict
 
 import pytest
 
-from fluidml.common import Task, Resource
+from fluidml import Task, publishes
 
 
 @dataclass
-class TaskResource(Resource):
+class TaskResource:
     device: str
 
 
@@ -15,6 +15,7 @@ class DummyTaskA(Task):
     def __init__(self, x: int):
         super().__init__()
 
+    @publishes(a=Dict)
     def run(self):
         self.save(obj={"a": 1}, name="a", type_="json")
 

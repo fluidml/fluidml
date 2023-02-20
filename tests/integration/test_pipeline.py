@@ -1,40 +1,45 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 
-from fluidml.common import Task
-from fluidml.flow import Flow
-from fluidml.flow import GridTaskSpec, TaskSpec
-from fluidml.storage import Sweep
+from fluidml import Flow, Task, publishes
+from fluidml.flow import TaskSpec
+from fluidml.storage import Sweep, LocalFileStore
+import pathlib
 
 
 class Parsing(Task):
-    publishes = ["res1"]
-
     def __init__(self, in_dir: str, z: int):
         super().__init__()
 
         self.in_dir = in_dir
         self.z = z
 
+    @publishes(res1=Dict)
     def run(self):
-        self.save(obj={}, name="res1")
+        self.save(obj={}, name="res1", type_="json")
 
 
+@publishes(res2=Dict)
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
     task.save(obj={}, name="res2", type_="pickle")
 
 
+@publishes("res3")
 def featurize_tokens(res2: Dict, type_: str, batch_size: int, task: Task):
-    task.save(obj={}, name="res3", type_="pickle")
+    pass
+    # task.save(obj={}, name="res3", type_="pickle")
 
 
+@publishes("res4")
 def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
     task.save(obj={}, name="res4", type_="pickle")
 
 
-def train(res3: Dict, res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task):
+@publishes(res5=Dict)
+def train(res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task, res3: Optional[Dict] = None):
     task.save(obj={}, name="res5", type_="pickle")
 
 
+@publishes(res6=Dict)
 def evaluate(res5: List[Sweep], metric: str, task: Task):
     task.save(obj={}, name="res6", type_="pickle")
 
@@ -55,24 +60,21 @@ parse --> preprocess_1 -> featurize_tokens_1 ----> train -> evaluate (reduce gri
 """
 
 
-def test_pipeline(dummy_resource):
+def test_pipeline(dummy_resource, tmp_path: pathlib.Path):
     num_workers = 4
 
     # initialize all task specs
-    parse_task = GridTaskSpec(task=Parsing, gs_config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1})
-    preprocess_task = GridTaskSpec(task=preprocess, gs_config={"pipeline": ["a", "b"], "abc": 1}, publishes=["res2"])
-    featurize_tokens_task = GridTaskSpec(
-        task=featurize_tokens, gs_config={"type_": "flair", "batch_size": [2, 3]}, publishes=["res3"]
+    parse_task = TaskSpec(task=Parsing, config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1})
+    preprocess_task = TaskSpec(task=preprocess, config={"pipeline": ["a", "b"], "abc": 1}, expand="product")
+    featurize_tokens_task = TaskSpec(
+        task=featurize_tokens, config={"type_": "flair", "batch_size": [2, 3]}, expand="product"
     )
-    featurize_cells_task = GridTaskSpec(
-        task=featurize_cells, gs_config={"type_": "glove", "batch_size": 4}, publishes=["res4"]
-    )
-    train_task = GridTaskSpec(
+    featurize_cells_task = TaskSpec(task=featurize_cells, config={"type_": "glove", "batch_size": 4})
+    train_task = TaskSpec(
         task=train,
-        gs_config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
-        publishes=["res5"],
+        config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
     )
-    evaluate_task = TaskSpec(task=evaluate, reduce=True, config={"metric": "accuracy"}, expects=["res5"])
+    evaluate_task = TaskSpec(task=evaluate, reduce=True, config={"metric": "accuracy"})
 
     # dependencies between tasks
     preprocess_task.requires(parse_task)
@@ -87,9 +89,12 @@ def test_pipeline(dummy_resource):
     # devices = get_balanced_devices(count=num_workers, use_cuda=True)
     resources = [dummy_resource(device="cpu") for i in range(num_workers)]
 
+    # create local file storage used for versioning
+    results_store = LocalFileStore(base_dir=str(tmp_path.resolve()))
+
     # create flow -> expand task graphs -> execute graph
     flow = Flow(tasks)
-    results = flow.run(num_workers=num_workers, resources=resources)
+    results = flow.run(num_workers=num_workers, resources=resources, results_store=results_store, return_results="all")
 
     num_expanded_tasks = 0
     for name, gs_runs in results.items():

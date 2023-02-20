@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Optional, Union, Any, List
 
 import pytest
 
@@ -81,3 +81,16 @@ def test_remove_prefix_from_dict(dict_1: Dict):
 def test_generate_run_name():
     run_name = utils.generate_run_name()
     assert len(run_name.split("-")) > 1 and isinstance(run_name, str)
+
+
+@pytest.mark.parametrize(
+    "type_annotation, optional",
+    [
+        (List[int], False),
+        (Optional[str], True),
+        (Union[str, None], True),
+        (Dict, False),
+    ],
+)
+def test_is_optional(type_annotation: Any, optional: bool):
+    assert utils.is_optional(type_annotation) == optional

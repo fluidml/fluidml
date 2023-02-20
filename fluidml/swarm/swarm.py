@@ -5,7 +5,6 @@ from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any, Callable
 
-from fluidml.common import Resource
 from fluidml.common.logging import LoggingListener, TmuxManager
 from fluidml.flow.task_spec import TaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
@@ -19,7 +18,7 @@ class Swarm:
     def __init__(
         self,
         n_dolphins: Optional[int] = None,
-        resources: Optional[List[Resource]] = None,
+        resources: Optional[List[Any]] = None,
         start_method: str = "spawn",
         exit_on_error: bool = True,
         log_to_tmux: bool = False,
@@ -115,7 +114,7 @@ class Swarm:
         self.close()
 
     @staticmethod
-    def _allocate_resources(n_dolphins: int, resources: List[Resource]) -> List[Resource]:
+    def _allocate_resources(n_dolphins: int, resources: List[Any]) -> List[Any]:
         if not resources:
             resources = [None] * n_dolphins
         elif len(resources) != n_dolphins:
@@ -135,10 +134,8 @@ class Swarm:
     def work(
         self,
         tasks: List[TaskSpec],
-        project_name: Optional[str] = None,
-        run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
-        return_results: bool = False,
+        return_results: Optional[str] = None,
     ) -> Dict[str, Union[List[Dict], Dict]]:
         """Handles the parallel execution of a list of tasks.
 
@@ -147,11 +144,12 @@ class Swarm:
 
         Args:
             tasks: A list of expanded TaskSpec objects.
-            project_name: Name of project.
-            run_name: Name of run.
+            # project_name: Name of project.
+            # run_name: Name of run.
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
-            return_results: Return results-dictionary after run(). Defaults to False.
+            results_store: An instance of results store for results management.
+                If nothing is provided, a non-persistent InMemoryStore store is used.
 
         Returns:
             A Dict if tasks containing their respective configs and their published results
@@ -160,18 +158,18 @@ class Swarm:
         """
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore(self.manager)
-        results_store.run_name = run_name
+        # results_store.run_name = run_name
 
         # setup logging
+        project_name = tasks[0].run_info.project_name
+        run_name = tasks[0].run_info.run_name
         logging_listener = self._init_logging(project_name, run_name)
 
         # get entry point task ids
         entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)
 
-        # also update the current tasks and assign project- and run name
+        # also update the current tasks and assign results store
         for task in tasks:
-            task.project_name = project_name
-            task.run_name = run_name
             task.results_store = results_store
             self.tasks[task.id_] = task
 

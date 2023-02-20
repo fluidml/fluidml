@@ -11,13 +11,20 @@ from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 from rich.traceback import install as rich_install
 
-from fluidml.common import Task, Resource
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
-from fluidml.common.utils import update_merge, reformat_config, remove_none_from_dict, generate_run_name
-from fluidml.flow import BaseTaskSpec, TaskSpec, GridTaskSpec
+from fluidml.common.task import Task, RunInfo
+from fluidml.common.utils import (
+    update_merge,
+    reformat_config,
+    remove_none_from_dict,
+    generate_run_name,
+    create_unique_run_id_from_config,
+)
+from fluidml.flow import TaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
-from fluidml.storage.controller import TaskDataController, pack_pipeline_results
+from fluidml.storage.controller import pack_pipeline_results
 from fluidml.swarm import Swarm
+from fluidml.swarm.dolphin import run_task
 
 rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
@@ -32,7 +39,7 @@ class Flow:
     * Finally, it composes a list of tasks which are then run through the provided swarm.
     """
 
-    def __init__(self, tasks: List[BaseTaskSpec]):
+    def __init__(self, tasks: List[TaskSpec]):
         """Creates the Flow (task graph) by expanding all GridTaskSpecs.
 
         Args:
@@ -54,7 +61,7 @@ class Flow:
     def num_tasks(self):
         return len(self._expanded_task_specs)
 
-    def _create(self, task_specs: List[BaseTaskSpec]):
+    def _create(self, task_specs: List[TaskSpec]):
         if not task_specs:
             raise NoTasksError("There are no tasks to run.")
 
@@ -117,7 +124,7 @@ class Flow:
         raise CyclicGraphError(msg)
 
     @staticmethod
-    def _check_no_task_name_clash(task_specs: List[BaseTaskSpec]) -> None:
+    def _check_no_task_name_clash(task_specs: List[TaskSpec]) -> None:
         from importlib import import_module
 
         for task_spec in task_specs:
@@ -135,7 +142,7 @@ class Flow:
                 )
 
     @staticmethod
-    def _create_graph_from_task_spec_list(task_specs: List[BaseTaskSpec], name: Optional[str] = None) -> DiGraph:
+    def _create_graph_from_task_spec_list(task_specs: List[TaskSpec], name: Optional[str] = None) -> DiGraph:
         """Creates nx.DiGraph object of the list of defined tasks with registered dependencies."""
         graph = DiGraph()
         for task_spec in task_specs:
@@ -147,7 +154,7 @@ class Flow:
             graph.name = name
         return graph
 
-    def _create_task_spec_graph(self, task_specs: List[BaseTaskSpec]) -> DiGraph:
+    def _create_task_spec_graph(self, task_specs: List[TaskSpec]) -> DiGraph:
         task_spec_graph = Flow._create_graph_from_task_spec_list(task_specs=task_specs, name="task spec graph")
 
         # assure that task spec graph contains no cyclic dependencies
@@ -211,8 +218,8 @@ class Flow:
 
     def _order_task_specs(
         self,
-        task_specs: List[BaseTaskSpec],
-    ) -> List[BaseTaskSpec]:
+        task_specs: List[TaskSpec],
+    ) -> List[TaskSpec]:
         # task spec graph holding the user defined dependency structure
         task_spec_graph: DiGraph = self._create_task_spec_graph(task_specs=task_specs)
 
@@ -259,7 +266,7 @@ class Flow:
 
     @staticmethod
     def _get_predecessor_product(
-        expanded_specs_by_name: Dict[str, List[TaskSpec]], spec: BaseTaskSpec
+        expanded_specs_by_name: Dict[str, List[TaskSpec]], spec: TaskSpec
     ) -> List[List[TaskSpec]]:
         predecessor_specs = [expanded_specs_by_name[predecessor.name] for predecessor in spec.predecessors]
         spec_combinations = [list(item) for item in product(*predecessor_specs)] if predecessor_specs else [[]]
@@ -277,7 +284,7 @@ class Flow:
 
     @staticmethod
     def _merge_task_spec_combination_configs(
-        task_spec_combinations: List[List[TaskSpec]], task_specs: List[BaseTaskSpec]
+        task_spec_combinations: List[List[TaskSpec]], task_specs: List[TaskSpec]
     ) -> Dict:
 
         task_configs = [task.unique_config for combination in task_spec_combinations for task in combination]
@@ -287,7 +294,9 @@ class Flow:
 
         if task_configs:
             # get all task names that were specified as GridTaskSpec
-            grid_task_names = [spec.name for spec in task_specs if isinstance(spec, GridTaskSpec)]
+            grid_task_names = [
+                spec.name for spec in task_specs if spec.expand_fn is not None
+            ]  # isinstance(spec, GridTaskSpec)]
 
             # split merged_config in grid_task_config and normal_task_config
             grid_task_config = {key: value for key, value in merged_config.items() if key in grid_task_names}
@@ -301,7 +310,7 @@ class Flow:
         return merged_config
 
     @staticmethod
-    def _expand_and_link_task_specs(specs: List[BaseTaskSpec]) -> List[TaskSpec]:
+    def _expand_and_link_task_specs(specs: List[TaskSpec]) -> List[TaskSpec]:
         # keep track of expanded task_specs by their names
         expanded_task_specs_by_name = defaultdict(list)
         task_id = 0
@@ -336,7 +345,7 @@ class Flow:
 
                     task_spec.unique_config = {
                         **predecessor_config,
-                        **{task_spec.name: remove_none_from_dict(task_spec.config_kwargs)},
+                        **{task_spec.name: remove_none_from_dict(task_spec.config)},
                     }
                     task_id += 1
             else:
@@ -353,7 +362,7 @@ class Flow:
                         task_spec.requires(task_spec_combination)
                         task_spec.unique_config = {
                             **predecessor_config,
-                            **{task_spec.name: remove_none_from_dict(task_spec.config_kwargs)},
+                            **{task_spec.name: remove_none_from_dict(task_spec.config)},
                         }
                         expanded_task_specs_by_name[task_spec.name].append(task_spec)
                         task_id += 1
@@ -387,7 +396,7 @@ class Flow:
         project_name: str = "uncategorized",
         run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
-        return_results: bool = False,
+        return_results: Optional[str] = None,
     ) -> Dict[str, Dict[str, Any]]:
         """Runs the specified tasks sequentially or in parallel via Swarm (multiprocessing) and returns the results.
 
@@ -416,13 +425,14 @@ class Flow:
             force: Forcefully re-run tasks. Possible options are:
                 1) ``"all"`` - All the tasks are re-run.
                 2) A task name (e.g. "PreProcessTask")
-                   or list of task names (e.g. ``["PreProcessTask1", "PreProcessTask2]``). Additionally, each task name
+                   or list of task names (e.g. ``["PreProcessTask1", "PreProcessTask2"]``). Additionally, each task name
                    can have the suffix "+" to re-run also its successors (e.g. "PreProcessTask+").
             project_name: Name of project. Defaults to ``"uncategorized"``.
             run_name: Name of run.
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
-            return_results: Return results-dictionary after ``run()``. Defaults to ``False``.
+            return_results: Return results-dictionary after ``run()``. Defaults to ``all``.
+                Choices: "all", "latest", None
 
         Returns:
             A nested dict of results.
@@ -431,8 +441,21 @@ class Flow:
         if force is not None:
             self._register_tasks_to_force_execute(force=force)
 
+        # generate random run name in the form of "adjective-noun"
         if run_name is None:
             run_name = generate_run_name()
+
+        # if InMemoryStore is used, return the latest pipeline results
+        if results_store is None or isinstance(results_store, InMemoryStore):
+            return_results = "latest"
+
+        # create run info objects
+        for spec in self._expanded_task_specs:
+            spec.run_info = RunInfo(
+                run_name=run_name,
+                project_name=project_name,
+                unique_id=create_unique_run_id_from_config(spec.unique_config),
+            )
 
         # get maximum number of available workers
         # and infer optimal number of workers given the expanded graph to process
@@ -450,7 +473,7 @@ class Flow:
 
         # if multiple workers are used execute task graph in parallel with swarm
         if num_workers > 1:
-            logger.debug("Execute task graph in parallel using Swarm (multiprocessing).")
+            logger.info(f"Execute task graph in parallel using multiprocessing with {num_workers} workers.")
             with Swarm(
                 n_dolphins=num_workers,
                 resources=resources,
@@ -462,18 +485,14 @@ class Flow:
             ) as swarm:
                 results = swarm.work(
                     tasks=self._expanded_task_specs,
-                    project_name=project_name,
-                    run_name=run_name,
                     results_store=results_store,
                     return_results=return_results,
                 )
         # else run the topologically sorted graph sequentially
         else:
-            logger.debug("Execute task graph sequentially (no multiprocessing).")
+            logger.info("Execute task graph sequentially (no multiprocessing).")
             resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
             results = self._run_linear(
-                project_name=project_name,
-                run_name=run_name,
                 results_store=results_store,
                 return_results=return_results,
                 resource=resource,  # assign first resource object to all tasks (see doc-string)
@@ -483,50 +502,24 @@ class Flow:
 
     def _run_linear(
         self,
-        project_name: str = "uncategorized",
-        run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
-        return_results: bool = False,
-        resource: Optional[Resource] = None,
+        return_results: Optional[str] = None,
+        resource: Optional[Any] = None,
     ) -> Dict[str, Union[List[Dict], Dict]]:
 
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore()
-        results_store.run_name = run_name
 
         for i, task_spec in enumerate(self._expanded_task_specs, 1):
-            task_spec.project_name = project_name
-            task_spec.run_name = run_name
+
             task_spec.results_store = results_store
-            if resource:
-                task_spec.resource = resource
+            task_spec.resource = resource
 
             # instantiate task obj
             task = Task.from_spec(task_spec)
 
-            # # try to load existing run info
-            # # set run_info attribute to task
-            # run_info = task.load(".run_info")
-            # if run_info:
-            #     task.run_info = run_info
-            # else:
-            #     # create new run info object
-            #     task.run_info = RunInfo(run_name=run_name, project_name=project_name)
-
-            # if force is true, delete all task results and re-run task
-            if task.force:
-                task.delete_run()
-
-            # check if task was successfully completed before
-            completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
-            # if task is not completed, run the task now
-            if not completed:
-                # extract predecessor results
-                controller = TaskDataController(task)
-                pred_results: Dict = controller.pack_predecessor_results()
-
-                logger.info(f"Started task {task.unique_name}.")
-                task.run_wrapped(**pred_results)
+            # run the task
+            completed: bool = run_task(task)
 
             # Log task completion
             if completed:

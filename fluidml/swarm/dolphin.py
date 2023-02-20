@@ -3,7 +3,7 @@ from multiprocessing import Queue, Lock, Event
 from queue import Empty
 from typing import Dict, Any, List, Union, Optional
 
-from fluidml.common import Task, Resource
+from fluidml.common import Task, RunInfo
 from fluidml.flow.task_spec import TaskSpec
 from fluidml.storage.controller import TaskDataController
 from fluidml.swarm import Whale
@@ -24,7 +24,7 @@ class Dolphin(Whale):
         exit_event: Event,
         exit_on_error: bool,
         logging_lvl: int,
-        resource: Optional[Resource] = None,
+        resource: Optional[Any] = None,
     ):
         super().__init__(
             exit_event=exit_event,
@@ -50,32 +50,14 @@ class Dolphin(Whale):
                 return False
         return True
 
-    @staticmethod
-    def _extract_results_from_predecessors(task: Task) -> Dict[str, Any]:
-        # TODO (LH): This lock is probably obsolete. Needs testing.
-        # with self._lock:
-        controller = TaskDataController(task)
-        results: Dict = controller.pack_predecessor_results()
-        return results
+    def _execute_task(self, task: Task):
 
-    def _run_task(self, task: Task):
-        # if force is true, delete all task results and re-run task
-        if task.force:
-            task.delete_run()
+        # provide resource and lock
+        task.resource = self.resource
+        task.results_store.lock = self._lock
 
-        # TODO (LH): This lock is probably obsolete. Needs testing.
-        # with self._lock:
-        # check if task was successfully completed before
-        completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
-
-        # if task is not completed, run the task now
-        if not completed:
-            # extract predecessor results
-            pred_results = self._extract_results_from_predecessors(task)
-
-            # run the task
-            logger.info(f"Started task {task.unique_name}.")
-            task.run_wrapped(**pred_results)
+        # run the task
+        completed: bool = run_task(task)
 
         with self._lock:
             # put task in done_queue
@@ -95,18 +77,6 @@ class Dolphin(Whale):
                 f"{msg} [{len(self.done_queue)}/{self.num_tasks} "
                 f"- {round((len(self.done_queue) / self.num_tasks) * 100)}%]"
             )
-
-    def _pack_task(self, task: Task) -> Task:
-        task.resource = self.resource
-        task.lock = self._lock
-        return task
-
-    def _execute_task(self, task: Task):
-        # pack the task
-        task = self._pack_task(task)
-
-        # run the task
-        self._run_task(task)
 
     def _fetch_next_task(self) -> Union[int, None]:
         try:
@@ -166,3 +136,36 @@ class Dolphin(Whale):
                 # Hence, we have to add the successor ids to the running queue at the moment they are
                 # added to the schedule queue.
                 self.running_queue.append(successor.id_)
+
+
+def run_task(task: Task) -> bool:
+    # store run path history
+    task.run_info.run_path = {task.name: f"{task.run_info.run_name}__{task.run_info.unique_id}"}
+    for pred in task.predecessors:
+        task.run_info.run_path.update(pred.run_info.run_path)
+
+    # try to load existing run info object
+    # if run info object was found, overwrite run info attribute with cached run info
+    stored_run_info = task.load("fluidml_run_info")
+    if stored_run_info:
+        task.run_info = RunInfo(**stored_run_info)
+
+    # provide task's result store with run info -> needed to properly name new run dirs
+    task.results_store.run_info = task.run_info
+
+    # if force is true, delete all task results and re-run task
+    if task.force:
+        task.delete_run()
+
+    # check if task was successfully completed before
+    completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
+    # if task is not completed, run the task now
+    if not completed:
+        # extract predecessor results
+        controller = TaskDataController(task)
+        pred_results: Dict = controller.pack_predecessor_results()
+
+        logger.info(f"Started task {task.unique_name}.")
+        task.run_wrapped(**pred_results)
+
+    return completed

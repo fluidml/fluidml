@@ -1,8 +1,6 @@
-import contextlib
 import inspect
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from multiprocessing import Lock
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union, Callable
 
 from metadict import MetaDict
@@ -14,9 +12,16 @@ if TYPE_CHECKING:
     from fluidml.flow import TaskSpec
 
 
+# TODO (LH): Change to Pydantic in the future for easier json serialization
 @dataclass
-class Resource(ABC):
-    """Dataclass used to register resources, made available to all tasks, e.g. cuda device ids"""
+class RunInfo:
+    project_name: str
+    run_name: str
+    unique_id: Optional[str] = None
+    run_path: Dict = field(default_factory=dict)
+
+    def dict(self) -> Dict:
+        return self.__dict__
 
 
 class Task(ABC, DependencyMixin):
@@ -25,8 +30,7 @@ class Task(ABC, DependencyMixin):
     def __init__(self):
         DependencyMixin.__init__(self)
 
-        self.project_name: Optional[str] = None
-        self.run_name: Optional[str] = None
+        self.run_info: Optional[RunInfo] = None
         self.name: Optional[str] = None
         self.config_kwargs: Optional[Dict[str, Any]] = None
         self.publishes: Optional[List[str]] = None
@@ -39,8 +43,7 @@ class Task(ABC, DependencyMixin):
 
         # set in Dolphin or manually
         self._results_store: Optional[ResultsStore] = None
-        self._resource: Optional[Resource] = None
-        self._lock: Optional[Lock] = None
+        self._resource: Optional[Any] = None
 
     @property
     def results_store(self):
@@ -55,20 +58,8 @@ class Task(ABC, DependencyMixin):
         return self._resource
 
     @resource.setter
-    def resource(self, resource: Resource):
+    def resource(self, resource: Any):
         self._resource = resource
-
-    @property
-    def lock(self):
-        # if no lock was provided we return a dummy contextmanager that does nothing
-        if self._lock is None:
-            null_context = contextlib.suppress()
-            return null_context
-        return self._lock
-
-    @lock.setter
-    def lock(self, lock: Lock):
-        self._lock = lock
 
     @abstractmethod
     def run(self, **results):
@@ -81,6 +72,7 @@ class Task(ABC, DependencyMixin):
 
     def run_wrapped(self, **results):
         """Calls run function to execute task and saves a 'completed' event file to signal successful execution."""
+        self.save(self.run_info.dict(), "fluidml_run_info", type_="json", indent=4)
         self.run(**results)
         # TODO (LH): if publishes is set, check that all non optional objects are present in saved_objects
         # if self.publishes:
@@ -100,17 +92,16 @@ class Task(ABC, DependencyMixin):
                 Defaults to ``None``.
             **kwargs: Additional keyword args.
         """
-        with self.lock:
-            self.results_store.save(
-                obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
-            )
+        self.results_store.save(
+            obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
+        )
 
     def load(
         self,
         name: str,
         task_name: Optional[str] = None,
         task_unique_config: Optional[Union[Dict, MetaDict]] = None,
-        **kwargs
+        **kwargs,
     ) -> Any:
         """Loads the given object from results store.
 
@@ -132,16 +123,14 @@ class Task(ABC, DependencyMixin):
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        with self.lock:
-            self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
+        self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
 
     def delete_run(self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None):
         """Deletes run with specified name from results store"""
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        with self.lock:
-            self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
+        self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
 
     def get_store_context(
         self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None
@@ -150,8 +139,7 @@ class Task(ABC, DependencyMixin):
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        with self.lock:
-            return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
+        return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
 
     def open(
         self,
@@ -162,66 +150,49 @@ class Task(ABC, DependencyMixin):
         promise: Optional[Promise] = None,
         type_: Optional[str] = None,
         sub_dir: Optional[str] = None,
-        **open_kwargs
+        **open_kwargs,
     ) -> Optional[File]:
         """Wrapper to open a file from Local File Store (only available for Local File Store)."""
 
         if promise:
-            with self.lock:
-                return self.results_store.open(promise=promise, mode=mode)
+            return self.results_store.open(promise=promise, mode=mode)
 
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        with self.lock:
-            return self.results_store.open(
-                name=name,
-                task_name=task_name,
-                task_unique_config=task_unique_config,
-                mode=mode,
-                type_=type_,
-                sub_dir=sub_dir,
-                **open_kwargs
-            )
+        return self.results_store.open(
+            name=name,
+            task_name=task_name,
+            task_unique_config=task_unique_config,
+            mode=mode,
+            type_=type_,
+            sub_dir=sub_dir,
+            **open_kwargs,
+        )
 
     @classmethod
     def from_spec(cls, task_spec: "TaskSpec"):
 
         # convert task config values to MetaDicts
-        task_spec.config_kwargs = MetaDict(task_spec.config_kwargs)
+        task_spec.config = MetaDict(task_spec.config)
         task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
 
         # TODO (LH): Deep merge config kwargs and additional kwargs (to preserve original config structure of arguments)
 
         if inspect.isclass(task_spec.task):
-            task = task_spec.task(**task_spec.config_kwargs, **task_spec.additional_kwargs)
-            task.config_kwargs = task_spec.config_kwargs
-            task_all_arguments = dict(inspect.signature(task.run).parameters)
-            expected_inputs = {
-                arg: value
-                for arg, value in task_all_arguments.items()
-                if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
-            }
+            task = task_spec.task(**task_spec.config, **task_spec.additional_kwargs)
+            task.config = task_spec.config
         elif inspect.isfunction(task_spec.task):
             task = _TaskFromCallable(
                 task=task_spec.task,
-                config_kwargs=task_spec.config_kwargs,
+                config_kwargs=task_spec.config,
                 additional_kwargs=task_spec.additional_kwargs,
             )
-
-            task_all_arguments = dict(inspect.signature(task_spec.task).parameters)
-            task_extra_arguments = list(task_spec.config_kwargs) + list(task_spec.additional_kwargs) + ["task"]
-            expected_inputs = {
-                arg: value
-                for arg, value in task_all_arguments.items()
-                if arg not in task_extra_arguments and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
-            }
         else:
             # cannot be reached, check has been made in TaskSpec.
             raise TypeError
 
-        task.project_name = task_spec.project_name
-        task.run_name = task_spec.run_name
+        task.run_info = task_spec.run_info
         task.results_store = task_spec.results_store
         task.resource = task_spec.resource
         task.name = task_spec.name
@@ -232,42 +203,9 @@ class Task(ABC, DependencyMixin):
         task.force = task_spec.force
         task.predecessors = task_spec.predecessors
         task.successors = task_spec.successors
+        task.expects = task_spec.expects
+        task.publishes = task_spec.publishes
 
-        # set task publishes attribute based on user provided task spec or task values
-        #  set for both task and task_spec
-        task = Task._set_task_publishes(task_spec, task)
-
-        # set task expects attribute based on user provided task spec or task value and the run method signature
-        #  set for both task and task_spec
-        task = Task._set_task_expects(task_spec, task, expected_inputs)
-
-        return task
-
-    @staticmethod
-    def _set_task_expects(task_spec: "TaskSpec", task: "Task", expected_inputs: Dict[str, inspect.Parameter]) -> "Task":
-        # if expects is provided to task_spec manually we add missing arguments to the expected_inputs dict
-        if task_spec.expects is not None:
-            for arg in task_spec.expects:
-                if arg not in expected_inputs:
-                    expected_inputs[arg] = inspect.Parameter(name=arg, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
-
-        # if expects is provided to task manually we add missing arguments to the expected_inputs dict
-        if task.expects is not None:
-            for arg in task.expects:
-                if arg not in expected_inputs:
-                    expected_inputs[arg] = inspect.Parameter(name=arg, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD)
-
-        task.expects = expected_inputs
-        task_spec.expects = expected_inputs
-        return task
-
-    @staticmethod
-    def _set_task_publishes(task_spec: "TaskSpec", task: "Task") -> "Task":
-        if task_spec.publishes is not None:
-            task.publishes = task_spec.publishes
-        else:
-            task.publishes = []
-            task_spec.publishes = []
         return task
 
 

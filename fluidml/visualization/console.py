@@ -1,11 +1,9 @@
 import logging
-import pydoc
 import os
+import pydoc
 import sys
 import tempfile
 from typing import TYPE_CHECKING
-
-from rich.pager import Pager
 
 from fluidml.visualization import create_graph_in_ascii
 
@@ -16,7 +14,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class FluidPager(Pager):
+class FluidPager:
     """Uses the pager installed on the system."""
 
     IDEAL_PAGER = "less --chop-long-lines --clear-screen --RAW-CONTROL-CHARS"
