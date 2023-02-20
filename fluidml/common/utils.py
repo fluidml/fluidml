@@ -3,7 +3,7 @@ import json
 import os
 import random
 import string
-from typing import Any, Union, Tuple, Dict
+from typing import Any, Union, Tuple, Dict, Optional
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
@@ -76,7 +76,7 @@ def remove_none_from_dict(obj: Dict) -> Dict:
         obj: A dictionary (e.g. a config) to be cleaned for ``None`` values.
 
     Returns:
-        A dictionary where recursively all ``None`` values have been removed.
+        A new dictionary where recursively all ``None`` values have been removed.
     """
 
     if isinstance(obj, (list, tuple, set)):
@@ -95,7 +95,7 @@ def remove_value_from_dict(obj: Dict, value: Any) -> Dict:
         value: The value to be removed.
 
     Returns:
-        A dictionary where the provided value is recursively removed.
+        A new dictionary where the provided value is recursively removed.
     """
 
     if isinstance(obj, (list, tuple, set)):
@@ -106,7 +106,7 @@ def remove_value_from_dict(obj: Dict, value: Any) -> Dict:
         return obj
 
 
-def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = "@") -> Dict:
+def remove_prefixed_keys_from_dict(obj: Dict, prefix: Optional[str] = None) -> Dict:
     """Recursively removes key-value pairs that are prefixed.
 
     Args:
@@ -114,8 +114,10 @@ def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = "@") -> Dict:
         prefix: A string prefix indicating which key-value pairs to remove.
 
     Returns:
-        A dictionary where recursively all prefixed keys have been removed.
+        A new dictionary where recursively all prefixed keys have been removed.
     """
+    if prefix is None:
+        return obj
 
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_prefixed_keys_from_dict(x, prefix) for x in obj)
@@ -129,7 +131,7 @@ def remove_prefixed_keys_from_dict(obj: Dict, prefix: str = "@") -> Dict:
         return obj
 
 
-def remove_prefix_from_dict(obj: Dict, prefix: str = "@") -> Dict:
+def remove_prefix_from_dict(obj: Dict, prefix: Optional[str] = None) -> Dict:
     """Recursively removes the prefix from keys in a dictionary.
 
     Args:
@@ -137,8 +139,10 @@ def remove_prefix_from_dict(obj: Dict, prefix: str = "@") -> Dict:
         prefix: A dictionary key prefix.
 
     Returns:
-        A dictionary where recursively all prefixes have been removed.
+        A new dictionary where recursively all prefixes have been removed.
     """
+    if prefix is None:
+        return obj
 
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)

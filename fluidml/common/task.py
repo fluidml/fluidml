@@ -178,7 +178,6 @@ class Task(ABC, DependencyMixin):
         task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
 
         # TODO (LH): Deep merge config kwargs and additional kwargs (to preserve original config structure of arguments)
-
         if inspect.isclass(task_spec.task):
             task = task_spec.task(**task_spec.config, **task_spec.additional_kwargs)
             task.config = task_spec.config

@@ -9,6 +9,7 @@ from fluidml.common import (
     get_published_args_from_run_decorator,
 )
 from fluidml.common.task import RunInfo
+from fluidml.common.utils import remove_prefixed_keys_from_dict, remove_prefix_from_dict, remove_none_from_dict
 from fluidml.flow.config_expansion import expand_config
 from fluidml.storage import ResultsStore
 
@@ -22,6 +23,8 @@ class TaskSpec(DependencyMixin):
         name: Optional[str] = None,
         reduce: Optional[bool] = None,
         expand: Optional[str] = None,
+        config_ignore_prefix: Optional[str] = None,
+        config_group_prefix: Optional[str] = None,
     ):
         """A class to hold specification of a plain task.
 
@@ -32,6 +35,17 @@ class TaskSpec(DependencyMixin):
             name: A unique name of the class. Defaults to None.
             reduce: A boolean indicating whether this is a reduce task. Defaults to None.
             expand: Config expansion method, choose between "zip" and "product".
+            config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
+                "unique_config", which is used to determine whether a run has been executed or not.
+            config_group_prefix: A config grouping prefix, to indicate that to parameters are grouped and expanded
+                using the "zip" method. The grouping prefix enables the "zip" expansion of specific parameters, while
+                all remaining grid parameters are expanded via "product".
+                Example:
+                    cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]
+
+                    Without grouping "product" expansion would yield: 2 * 2 * 3 = 12 configs.
+                    With grouping "product" expansion yields : 2 * 3 = 6 configs, since the grouped parameters are
+                    "zip" expanded.
         """
         super().__init__()
 
@@ -61,6 +75,8 @@ class TaskSpec(DependencyMixin):
         self.task = task
         self.reduce = reduce
         self.expand_fn = expand
+        self.config_group_prefix = config_group_prefix
+        self.config_ignore_prefix = config_ignore_prefix
 
         # dynamically retrieve expected and published arguments from task implementation
         self.publishes = get_published_args_from_run_decorator(task)
@@ -75,9 +91,6 @@ class TaskSpec(DependencyMixin):
         self.results_store: Optional[ResultsStore] = None
         self.resource: Optional[Any] = None
 
-        self.config_group_prefix: Optional[str] = None
-        # self.config_ignore_prefix = "_"
-
     def expand(self) -> List["TaskSpec"]:
         return [
             TaskSpec(
@@ -86,6 +99,20 @@ class TaskSpec(DependencyMixin):
                 additional_kwargs=self.additional_kwargs,
                 name=self.name,
                 reduce=self.reduce,
+                config_group_prefix=self.config_group_prefix,
+                config_ignore_prefix=self.config_ignore_prefix,
             )
             for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix)
         ]
+
+    def prepare_config(self):
+        # remove keys with None values as well as prefixed keys to ignore from config
+        # creates a new relevant_config object
+        relevant_config = remove_prefixed_keys_from_dict(
+            remove_none_from_dict(self.config), prefix=self.config_ignore_prefix
+        )
+
+        # mutate self.config object by removing the ignore prefix from all keys
+        self.config = remove_prefix_from_dict(self.config, prefix=self.config_ignore_prefix)
+
+        return relevant_config

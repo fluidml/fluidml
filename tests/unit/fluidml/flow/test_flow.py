@@ -22,5 +22,5 @@ def test_flow_with_dummy(dummy_task_a, dummy_task_b):
     task_spec_b = TaskSpec(name="B", task=dummy_task_b, config={"x": 1})
     task_spec_b.requires(task_spec_a)
     flow = Flow(tasks=[task_spec_a, task_spec_b])
-    results = flow.run()
+    results = flow.run(return_results="all")
     assert len(results) == 2

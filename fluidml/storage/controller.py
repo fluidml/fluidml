@@ -116,7 +116,7 @@ class TaskDataController:
 
 
 def pack_pipeline_results(
-    all_tasks: List[TaskSpec], results_store: ResultsStore, return_results: Optional[str] = "all"
+    all_tasks: List[TaskSpec], results_store: ResultsStore, return_results: Optional[str] = None
 ) -> Dict[str, Any]:
     pipeline_results = defaultdict(list)
     if return_results is None:

@@ -16,7 +16,6 @@ from fluidml.common.task import Task, RunInfo
 from fluidml.common.utils import (
     update_merge,
     reformat_config,
-    remove_none_from_dict,
     generate_run_name,
     create_unique_run_id_from_config,
 )
@@ -39,12 +38,35 @@ class Flow:
     * Finally, it composes a list of tasks which are then run through the provided swarm.
     """
 
-    def __init__(self, tasks: List[TaskSpec]):
+    def __init__(
+        self,
+        tasks: List[TaskSpec],
+        config_ignore_prefix: Optional[str] = None,
+        config_group_prefix: Optional[str] = None,
+    ):
         """Creates the Flow (task graph) by expanding all GridTaskSpecs.
 
         Args:
             tasks: List of task specifications.
+            config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
+                "unique_config", which is used to determine whether a run has been executed or not.
+            config_group_prefix: A config grouping prefix, to indicate that to parameters are grouped and expanded
+                using the "zip" method. The grouping prefix enables the "zip" expansion of specific parameters, while
+                all remaining grid parameters are expanded via "product".
+                Example:
+                    cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]
+
+                    Without grouping "product" expansion would yield: 2 * 2 * 3 = 12 configs.
+                    With grouping "product" expansion yields : 2 * 3 = 6 configs, since the grouped parameters are
+                    "zip" expanded.
         """
+
+        # assign config_ignore_prefix and config_group_prefix to all tasks if the task has no prefix assigned, yet
+        for task_spec in tasks:
+            if config_group_prefix is not None and task_spec.config_group_prefix is None:
+                task_spec.config_group_prefix = config_group_prefix
+            if config_ignore_prefix is not None and task_spec.config_ignore_prefix is None:
+                task_spec.config_ignore_prefix = config_ignore_prefix
 
         # contains the expanded graph as list of Task objects -> used internally in swarm
         self._expanded_task_specs: Optional[List[TaskSpec]] = None
@@ -336,16 +358,13 @@ class Flow:
 
                     task_spec.id_ = task_id
                     expanded_task_specs_by_name[task_spec.name].append(task_spec)
-                    # TODO:
-                    #  1. Create relevant config from config_kwargs (no mutation -> new object)
-                    #    a) remove none from dict
-                    #    b) remove prefixed keys from dict
-                    #  2. Remove prefix from config_kwargs (mutation)
-                    #  3. Create unique config to add relevant config to predecessor config
+
+                    # remove None value keys and prefixed keys to ignore
+                    relevant_config = task_spec.prepare_config()
 
                     task_spec.unique_config = {
                         **predecessor_config,
-                        **{task_spec.name: remove_none_from_dict(task_spec.config)},
+                        **{task_spec.name: relevant_config},
                     }
                     task_id += 1
             else:
@@ -360,9 +379,13 @@ class Flow:
                     for task_spec in expanded_task_specs:
                         task_spec.id_ = task_id
                         task_spec.requires(task_spec_combination)
+
+                        # remove None value keys and prefixed keys to ignore
+                        relevant_config = task_spec.prepare_config()
+
                         task_spec.unique_config = {
                             **predecessor_config,
-                            **{task_spec.name: remove_none_from_dict(task_spec.config)},
+                            **{task_spec.name: relevant_config},
                         }
                         expanded_task_specs_by_name[task_spec.name].append(task_spec)
                         task_id += 1
@@ -446,7 +469,7 @@ class Flow:
             run_name = generate_run_name()
 
         # if InMemoryStore is used, return the latest pipeline results
-        if results_store is None or isinstance(results_store, InMemoryStore):
+        if return_results is None and (results_store is None or isinstance(results_store, InMemoryStore)):
             return_results = "latest"
 
         # create run info objects

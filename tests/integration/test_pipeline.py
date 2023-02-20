@@ -44,20 +44,20 @@ def evaluate(res5: List[Sweep], metric: str, task: Task):
     task.save(obj={}, name="res6", type_="pickle")
 
 
-"""
-# task pipeline
-parse -> preprocess -> featurize_tokens -> train -> evaluate
-                    \- featurize_cells  -/
-
-# task pipeline once grid search specs are expanded
-parse --> preprocess_1 -> featurize_tokens_1 ----> train -> evaluate (reduce grid search)
-                       \- featurize_tokens_2 --\/
-                       \- featurize_cells    --/\> train -/
-
-      \-> preprocess_2 -> featurize_tokens_1 ----> train -/
-                       \- featurize_tokens_2 --\/
-                       \- featurize_cells    --/\> train -/
-"""
+# """
+# # task pipeline
+# parse -> preprocess -> featurize_tokens -> train -> evaluate
+#                     \- featurize_cells  -/
+#
+# # task pipeline once grid search specs are expanded
+# parse --> preprocess_1 -> featurize_tokens_1 ----> train -> evaluate (reduce grid search)
+#                        \- featurize_tokens_2 --\/
+#                        \- featurize_cells    --/\> train -/
+#
+#       \-> preprocess_2 -> featurize_tokens_1 ----> train -/
+#                        \- featurize_tokens_2 --\/
+#                        \- featurize_cells    --/\> train -/
+# """
 
 
 def test_pipeline(dummy_resource, tmp_path: pathlib.Path):

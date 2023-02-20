@@ -60,7 +60,7 @@ def test_remove_none_from_dict(dict_1: Dict, dict_2: Dict):
 
 
 def test_remove_prefixed_keys_from_dict(dict_1: Dict):
-    new_d1 = utils.remove_prefixed_keys_from_dict(dict_1)
+    new_d1 = utils.remove_prefixed_keys_from_dict(dict_1, prefix="@")
     assert new_d1 == {
         "A": None,
         "B": {"hello": [1, 2, 3], "dream": True, "blub": None, "hi": {"C": False}},
@@ -69,7 +69,7 @@ def test_remove_prefixed_keys_from_dict(dict_1: Dict):
 
 
 def test_remove_prefix_from_dict(dict_1: Dict):
-    new_d1 = utils.remove_prefix_from_dict(dict_1)
+    new_d1 = utils.remove_prefix_from_dict(dict_1, prefix="@")
     assert new_d1 == {
         "A": None,
         "B": {"hello": [1, 2, 3], "dream": True, "blub": None, "hi": {"C": False, "D": "test"}},

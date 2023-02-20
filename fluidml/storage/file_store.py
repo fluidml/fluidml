@@ -1,11 +1,9 @@
-import contextlib
 import json
 import logging
 import os
 import pickle
 import shutil
 from dataclasses import dataclass
-from multiprocessing import Lock
 from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO, TYPE_CHECKING
 
 from fluidml.storage.base import ResultsStore, Promise
@@ -564,6 +562,7 @@ class LocalFileStore(ResultsStore):
 
             dir_names = [os.path.split(d)[-1] for d in exist_run_dirs]
 
+            # TODO (LH): Can be deleted if new approach is kept
             # if run_info is not None:
             #     run_name = run_info.run_name
             #     # find dirs that start with run_name and extract their suffix (usually a numeric counter)
