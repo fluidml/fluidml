@@ -144,12 +144,10 @@ class Swarm:
 
         Args:
             tasks: A list of expanded TaskSpec objects.
-            # project_name: Name of project.
-            # run_name: Name of run.
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
-            results_store: An instance of results store for results management.
-                If nothing is provided, a non-persistent InMemoryStore store is used.
+            return_results: Return results-dictionary after ``run()``. Defaults to ``all``.
+                Choices: "all", "latest", None
 
         Returns:
             A Dict if tasks containing their respective configs and their published results
