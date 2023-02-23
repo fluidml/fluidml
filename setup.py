@@ -35,11 +35,10 @@ setup(
     copyright=about.__copyright__,
     keywords=["pipelines", "machine-learning", "parallel", "deep-learning"],
     packages=find_packages(),
-    python_requires=">=3.6",
+    python_requires=">=3.7",
     package_data={"": ["*.txt"]},
     install_requires=[
         "bokeh",  # enables interactive graph rendering in jupyter
-        'dataclasses;python_version<"3.7"',  # backport for python versions without dataclasses
         "grandalf",  # for console graph visualization
         "metadict",  # enables attribute access for dicts (converted to MetaDict objects)
         "networkx",  # creation of task graph

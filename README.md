@@ -77,9 +77,7 @@ For real machine learning examples, check the "Examples" section below.
 First, we import necessary classes from FluidML.
 
 ```Python
-from fluidml import Task, Flow, Swarm
-from fluidml.common import Resource
-from fluidml.flow import GridTaskSpec, TaskSpec
+from fluidml import Task, publishes, TaskSpec, Flow
 from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
 from fluidml.visualization import visualize_graph_in_console
 ```

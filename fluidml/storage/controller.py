@@ -23,37 +23,16 @@ class TaskDataController:
         else:
             return False
 
-    def _get_filtered_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
-        if not predecessor.publishes:
-            raise TaskResultObjectMissing(
-                f"{self._task_name} expects {list(self._task_expects)} but predecessor " f"did not publish any results."
-            )
-
-        # TODO: Ignore optional objects, if they cannot be found (see is_optional() in utils)
+    def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
         results = {}
-        for item_name in predecessor.publishes:
-            if item_name in self._task_expects:
-                param: inspect.Parameter = self._task_expects[item_name]
-                lazy: bool = self._is_lazy(param)
-                obj: Optional[Any] = self._results_store.load(
-                    name=item_name, task_name=predecessor.name, task_unique_config=predecessor.unique_config, lazy=lazy
-                )
-                if obj is not None:
-                    results[item_name] = obj
-        return results
-
-    def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Optional[Dict]:
-
-        if self._task_expects:
-            # get only expected results by the task from predecessor tasks
-            results = self._get_filtered_results_from_predecessor(predecessor=predecessor)
-        else:
-            # get all published results from predecessor task
-            results = self._results_store.get_results(
-                task_name=predecessor.name,
-                task_unique_config=predecessor.unique_config,
-                task_publishes=predecessor.publishes,
+        for item_name in self._task_expects:
+            param: inspect.Parameter = self._task_expects[item_name]
+            lazy: bool = self._is_lazy(param)
+            obj: Optional[Any] = self._results_store.load(
+                name=item_name, task_name=predecessor.name, task_unique_config=predecessor.unique_config, lazy=lazy
             )
+            if obj is not None:
+                results[item_name] = obj
         return results
 
     def pack_predecessor_results(self) -> Dict[str, Any]:
@@ -96,22 +75,20 @@ class TaskDataController:
                     else:
                         predecessor_results[name] = obj
 
-        # TODO: Ignore optional objects, if they cannot be found (see is_optional() in utils)
         # Assertion to check that all expected results are retrieved
-        if self._task_expects:
-            retrieved_inputs = set(predecessor_results.keys())
-            if retrieved_inputs != set(self._task_expects.keys()):
-                missing_inputs = list(set(self._task_expects).difference(retrieved_inputs))
+        retrieved_inputs = set(predecessor_results.keys())
+        if retrieved_inputs != set(self._task_expects.keys()):
+            missing_inputs = list(set(self._task_expects).difference(retrieved_inputs))
 
-                # remove args from missing inputs if a default value is registered in the task run signature
-                missing_inputs = [
-                    arg for arg in missing_inputs if self._task_expects[arg].default is self._task_expects[arg].empty
-                ]
-                if missing_inputs:
-                    raise TaskResultObjectMissing(
-                        f"{self._task_name}: Result objects {missing_inputs} "
-                        f"are required but could not be collected from predecessor tasks."
-                    )
+            # remove args from missing inputs if a default value is registered in the task run signature
+            missing_inputs = [
+                arg for arg in missing_inputs if self._task_expects[arg].default is self._task_expects[arg].empty
+            ]
+            if missing_inputs:
+                raise TaskResultObjectMissing(
+                    f"{self._task_name}: Result objects {missing_inputs} "
+                    f"are required but could not be collected from predecessor tasks."
+                )
         return predecessor_results
 
 

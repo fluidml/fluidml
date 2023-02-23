@@ -1,3 +1,4 @@
+import copy
 import logging
 import os
 import subprocess
@@ -8,10 +9,11 @@ from logging import LogRecord
 from multiprocessing import Queue, Lock, Event
 from queue import Empty
 from threading import Thread
-from typing import Tuple, Union, List, Optional, Dict, IO, Callable
+from typing import Tuple, Union, List, Optional, Dict, IO
 
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.traceback import install as rich_install
 from tblib import pickling_support
 
 from fluidml.common.exception import TmuxError
@@ -19,6 +21,46 @@ from fluidml.common.exception import TmuxError
 
 pickling_support.install()
 logger_ = logging.getLogger(__name__)
+
+
+def configure_logging(level: Union[str, int] = "INFO", rich_logging: bool = True, rich_traceback: bool = True):
+    """Convenience function to configure logging.
+
+    Args:
+        level: Logging level to use, e.g. "DEBUG", "INFO", etc.
+        rich_logging: Whether to use the `rich` library to prettify logging.
+        rich_traceback: Whether to use the `rich` library to prettify error tracebacks.
+    """
+
+    assert level in ["DEBUG", "INFO", "WARNING", "WARN", "ERROR", "FATAL", "CRITICAL", 10, 20, 30, 40, 50]
+    if rich_traceback:
+        rich_install(extra_lines=2)
+    logger = logging.getLogger()
+    stream_handler = create_stream_handler(rich_logging=rich_logging)
+    stream_handler.setLevel(level)
+    logger.addHandler(stream_handler)
+    logger.setLevel(level)
+
+
+def create_stream_handler(stream: Optional[IO] = None, rich_logging: bool = True) -> logging.Handler:
+    if rich_logging:
+        console_ = Console(file=stream, color_system="standard") if stream else None
+        formatter = logging.Formatter("%(processName)-13s%(message)s")
+        stream_handler = RichHandler(
+            console=console_,
+            rich_tracebacks=True,
+            tracebacks_extra_lines=2,
+            show_path=False,
+            omit_repeated_times=False,
+        )
+    else:
+        formatter = logging.Formatter(
+            fmt="%(asctime)s %(levelname)-8s %(processName)-13s %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        )
+        stream_handler = logging.StreamHandler(stream) if stream else logging.StreamHandler()
+
+    stream_handler.setFormatter(formatter)
+    return stream_handler
 
 
 class QueueHandler(logging.Handler):
@@ -115,15 +157,39 @@ class StderrHandler:
 
 
 def create_tmux_handler(stream: IO) -> logging.Handler:
-    """Default function to create a stream handler used for tmux logging"""
+    """Creates a stream handler to handle tmux logging.
 
-    console_ = Console(file=stream, color_system="standard")
-    formatter = logging.Formatter("%(processName)-13s%(message)s")
-    stream_handler = RichHandler(
-        console=console_, rich_tracebacks=True, tracebacks_extra_lines=2, show_path=False, omit_repeated_times=False
-    )
-    stream_handler.setFormatter(formatter)
-    return stream_handler
+    First, we try to copy an existing console stream handler from the root logger and use that for tmux logging.
+    If no handler exists we create a new one.
+
+    Args:
+        stream: The input stream for the handler. In tmux logging this is a fifo.
+
+    Returns:
+        A tmux logging handler.
+    """
+
+    # retrieve root logger
+    root_logger = logging.getLogger()
+
+    # iterate all existing handlers and retrieve a stream handler logging to the console (stdout, stderr)
+    # if a handler is found, copy the handler and alter its stream input to use it for tmux logging
+    tmux_handler = None
+    for handler in root_logger.handlers:
+        if isinstance(handler, logging.StreamHandler) and handler.stream.name in ["<stderr>", "<stdout>"]:
+            tmux_handler = copy.copy(handler)
+            tmux_handler.setStream(stream)
+            break
+        elif isinstance(handler, RichHandler) and handler.console.file.name in ["<stderr>", "<stdout>"]:
+            tmux_handler = copy.copy(handler)
+            console_ = Console(file=stream, color_system="standard")
+            tmux_handler.console = console_
+            break
+
+    # if no console handler is attached to root logger, we create a new default tmux handler
+    if tmux_handler is None:
+        tmux_handler = create_stream_handler(stream=stream, rich_logging=False)
+    return tmux_handler
 
 
 class TmuxManager:
@@ -132,14 +198,12 @@ class TmuxManager:
         worker_names: List[str],
         session_name: Optional[str] = "fluidml",
         max_panes_per_window: int = 4,
-        create_tmux_handler_fn: Optional[Callable] = None,
     ):
         self.worker_names = worker_names
         self.session_name = session_name
         self.session_created = False
         self.max_panes_per_window = max_panes_per_window
         self._current_tmux_window = 0
-        self._create_tmux_handler_fn = create_tmux_handler_fn if create_tmux_handler_fn else create_tmux_handler
 
         self.pipes = self._setup_tmux_logging()
 
@@ -173,11 +237,12 @@ class TmuxManager:
             tmux_pipes[worker_name] = {"stdout": stdout_pipe, "stderr": stderr_pipe}
         return tmux_pipes
 
-    def init_handlers(self, pipes: Dict[str, Dict[str, IO]]) -> Dict[str, logging.Handler]:
+    @staticmethod
+    def init_handlers(pipes: Dict[str, Dict[str, IO]]) -> Dict[str, logging.Handler]:
         tmux_handlers = {}
         for worker_name, pipe in pipes.items():
             stream = pipe["stderr"]
-            handler = self._create_tmux_handler_fn(stream)
+            handler = create_tmux_handler(stream)
             tmux_handlers[worker_name] = handler
         return tmux_handlers
 
@@ -320,19 +385,3 @@ class LoggingListener(Thread):
                     logger_.exception(e)
                     self._error_queue.put(e)
                     self.exit_event.set()
-
-
-def configure_logging(level: Union[str, int] = "INFO"):
-    assert level in ["DEBUG", "INFO", "WARNING", "WARN", "ERROR", "FATAL", "CRITICAL", 10, 20, 30, 40, 50]
-    logger = logging.getLogger()
-    # formatter = logging.Formatter(fmt='%(asctime)s %(levelname)-8s %(processName)-13s %(message)s',
-    #                               datefmt='%Y-%m-%d %H:%M:%S')
-    # stream_handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(processName)-13s%(message)s")
-    stream_handler = RichHandler(
-        rich_tracebacks=True, tracebacks_extra_lines=2, show_path=False, omit_repeated_times=False
-    )
-    stream_handler.setLevel(level)
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
-    logger.setLevel(level)

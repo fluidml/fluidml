@@ -1,5 +1,6 @@
 import contextlib
 import functools
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from multiprocessing import Lock
@@ -8,6 +9,9 @@ from typing import Optional, Dict, Any
 from metadict import MetaDict
 
 from fluidml.common.utils import is_optional
+
+
+logger = logging.getLogger(__name__)
 
 
 class Promise(ABC):
@@ -56,9 +60,21 @@ def _save_object_names(func):
     """
 
     @functools.wraps(func)
-    def wrapper(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def wrapper(self, task_name: str, task_unique_config: Dict, **kwargs):
         # save actual object
-        res = func(self, obj, name, type_, task_name, task_unique_config, **kwargs)
+        res = func(
+            self,
+            task_name=task_name,
+            task_unique_config=task_unique_config,
+            **kwargs,
+        )
+
+        name = kwargs["name"]
+        type_ = kwargs.get("type_")
+
+        msg = f"Task '{task_name}' saves '{name}'"
+        msg = msg + f"." if type_ is None else msg + f" of type {type_}."
+        logger.debug(msg)
 
         # log name of saved object
         saved_objects: Optional[Dict[str, None]] = self.load(
@@ -88,9 +104,16 @@ def _delete_object_names(func):
     """Decorator to delete names of previously saved but now deleted objects."""
 
     @functools.wraps(func)
-    def wrapper(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def wrapper(self, task_name: str, task_unique_config: Dict, **kwargs):
         # delete actual object
-        res = func(self, obj, name, type_, task_name, task_unique_config, **kwargs)
+        res = func(self, task_name=task_name, task_unique_config=task_unique_config, **kwargs)
+
+        name = kwargs["name"]
+        type_ = kwargs.get("type_")
+
+        msg = f"Task '{task_name}' deletes '{name}'"
+        msg = msg + f"." if type_ is None else msg + f" of type {type_}."
+        logger.debug(msg)
 
         # load saved object names
         saved_objects: Optional[Dict[str, None]] = self.load(
@@ -137,13 +160,13 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
         raise NotImplementedError
 
     @abstractmethod
-    # @_save_object_names
+    @_save_object_names
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """Method to save/update any artifact"""
         raise NotImplementedError
 
     @abstractmethod
-    # @_delete_object_names
+    @_delete_object_names
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
         """Method to delete any artifact"""
         raise NotImplementedError
@@ -162,7 +185,7 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
         promise: Optional[Promise] = None,
         type_: Optional[str] = None,
         sub_dir: Optional[str] = None,
-        **open_kwargs
+        **open_kwargs,
     ):
         """Method to open a file from Local File Store (only available for Local File Store)."""
 

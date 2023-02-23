@@ -3,13 +3,12 @@ import multiprocessing
 import sys
 from collections import defaultdict
 from itertools import product
-from typing import List, Any, Dict, Optional, Set, Union, Callable
+from typing import List, Any, Dict, Optional, Set, Union
 
 import networkx as nx
 from metadict import MetaDict
 from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
-from rich.traceback import install as rich_install
 
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
 from fluidml.common.task import Task, RunInfo
@@ -25,7 +24,6 @@ from fluidml.storage.controller import pack_pipeline_results
 from fluidml.swarm import Swarm
 from fluidml.swarm.dolphin import run_task
 
-rich_install(extra_lines=2)
 logger = logging.getLogger(__name__)
 
 
@@ -413,7 +411,6 @@ class Flow:
         start_method: str = "spawn",
         exit_on_error: bool = True,
         log_to_tmux: bool = False,
-        create_tmux_handler_fn: Optional[Callable] = None,
         max_panes_per_window: int = 4,
         force: Optional[Union[str, List[str]]] = None,
         project_name: str = "uncategorized",
@@ -441,8 +438,6 @@ class Flow:
             log_to_tmux: If ``True`` a new tmux session is created (given tmux is installed) and each worker (process)
                 logs to a dedicated pane to avoid garbled logging output. The session's name equals the combined
                 ``f"{project_name}--{run-name}"``. Defaults to ``False``. Only used when ``num_workers > 1``.
-            create_tmux_handler_fn: Callable to create a stream handler and formatter used for tmux logging.
-                Only used when ``num_workers > 1``.
             max_panes_per_window: Max number of panes per tmux window. Requires ``log_to_tmux`` being set to ``True``.
                 Defaults to ``4``. Only used when ``num_workers > 1``.
             force: Forcefully re-run tasks. Possible options are:
@@ -496,14 +491,13 @@ class Flow:
 
         # if multiple workers are used execute task graph in parallel with swarm
         if num_workers > 1:
-            logger.info(f"Execute task graph in parallel using multiprocessing with {num_workers} workers.")
+            logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers.')
             with Swarm(
                 n_dolphins=num_workers,
                 resources=resources,
                 start_method=start_method,
                 exit_on_error=exit_on_error,
                 log_to_tmux=log_to_tmux,
-                create_tmux_handler_fn=create_tmux_handler_fn,
                 max_panes_per_window=max_panes_per_window,
             ) as swarm:
                 results = swarm.work(
@@ -513,7 +507,7 @@ class Flow:
                 )
         # else run the topologically sorted graph sequentially
         else:
-            logger.info("Execute task graph sequentially (no multiprocessing).")
+            logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing).')
             resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
             results = self._run_linear(
                 results_store=results_store,

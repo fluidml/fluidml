@@ -32,7 +32,9 @@ class InMemoryStore(ResultsStore):
 
                     return obj
 
-    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def save(
+        self, obj: Any, name: str, task_name: str, task_unique_config: Dict, type_: Optional[str] = None, **kwargs
+    ):
         """In-memory save function.
         Adds individual object to in-memory store.
         """

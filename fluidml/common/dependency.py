@@ -78,6 +78,9 @@ def publishes(*publish_args, **publish_kwargs):
     # extract names and type annotations from registered args/kwargs
     published_objects = {name: None for name in publish_args}
     for name, type_annotation in publish_kwargs.items():
+        # note Python 3.6 cannot pickle generic typing objects like List[int].
+        # if type_annotation cannot be pickled we serialize the annotation as str
+
         published_objects[name] = type_annotation
 
     def decorator(function):
@@ -99,7 +102,7 @@ def get_expected_args_from_run_signature(
     if inspect.isclass(task):
         task_all_arguments = dict(inspect.signature(task.run).parameters)
         expected_inputs = {
-            arg: value if value.annotation is not inspect.Parameter.empty else None
+            arg: value  # if value.annotation is not inspect.Parameter.empty else None
             for arg, value in task_all_arguments.items()
             if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"] and value.name != "self"
         }
@@ -107,7 +110,7 @@ def get_expected_args_from_run_signature(
         task_all_arguments = dict(inspect.signature(task).parameters)
         task_extra_arguments = list(config) + list(additional_kwargs) + ["task"]
         expected_inputs = {
-            arg: value if value.annotation is not inspect.Parameter.empty else None
+            arg: value  # if value.annotation is not inspect.Parameter.empty else None
             for arg, value in task_all_arguments.items()
             if arg not in task_extra_arguments and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
         }

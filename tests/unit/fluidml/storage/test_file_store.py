@@ -23,8 +23,8 @@ def test_save_load(file_store: ResultsStore, type_: str):
     test_json_obj = {"dummy_result": "test"}
     test_config = {"config_param": 1}
 
-    file_store.save(test_json_obj, test_item_name,
-                    type_, test_task_name, test_config)
-    loaded_json_obj = file_store.load(
-        test_item_name, test_task_name, test_config)
+    file_store.save(
+        obj=test_json_obj, name=test_item_name, type_=type_, task_name=test_task_name, task_unique_config=test_config
+    )
+    loaded_json_obj = file_store.load(name=test_item_name, task_name=test_task_name, task_unique_config=test_config)
     assert loaded_json_obj == test_json_obj

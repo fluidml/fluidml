@@ -3,7 +3,7 @@ import multiprocessing
 import random
 from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 from types import TracebackType
-from typing import Optional, Type, List, Dict, Union, Any, Callable
+from typing import Optional, Type, List, Dict, Union, Any
 
 from fluidml.common.logging import LoggingListener, TmuxManager
 from fluidml.flow.task_spec import TaskSpec
@@ -22,7 +22,6 @@ class Swarm:
         start_method: str = "spawn",
         exit_on_error: bool = True,
         log_to_tmux: bool = False,
-        create_tmux_handler_fn: Optional[Callable] = None,
         max_panes_per_window: int = 4,
     ):
         """Configure workers, resources, results_store which are used to run the tasks.
@@ -35,7 +34,6 @@ class Swarm:
             exit_on_error: When an error happens all workers finish their current tasks and exit gracefully.
                 Defaults to True.
             log_to_tmux: Log to tmux session if True. Defaults to True.
-            create_tmux_handler_fn: Callable to create a stream handler and formatter used for tmux logging.
             max_panes_per_window: Max number of panes per tmux window.
         """
         set_start_method(start_method, force=True)
@@ -81,7 +79,6 @@ class Swarm:
         # logging args
         self.log_to_tmux = log_to_tmux
         self.max_panes_per_window = max_panes_per_window
-        self.create_tmux_handler_fn = create_tmux_handler_fn
 
     def _init_logging(self, project_name: Optional[str] = None, run_name: Optional[str] = None) -> LoggingListener:
         tmux_manager = None
@@ -91,7 +88,6 @@ class Swarm:
                 worker_names=[dolphin.name for dolphin in self.dolphins],
                 session_name=session_name,
                 max_panes_per_window=self.max_panes_per_window,
-                create_tmux_handler_fn=self.create_tmux_handler_fn,
             )
 
         # listener thread to handle stdout, stderr and logging from child processes
@@ -156,7 +152,6 @@ class Swarm:
         """
         # setup results store
         results_store = results_store if results_store is not None else InMemoryStore(self.manager)
-        # results_store.run_name = run_name
 
         # setup logging
         project_name = tasks[0].run_info.project_name
@@ -221,3 +216,4 @@ class Swarm:
                 dolphin.close()
             except AttributeError:
                 dolphin.terminate()
+        self.manager.shutdown()
