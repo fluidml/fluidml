@@ -3,7 +3,7 @@ from bokeh.io import show
 from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.plotting import figure
 
-from fluidml.visualization import build_sugiyama_layout
+from fluidml.visualization.graph_layout import build_sugiyama_layout
 
 
 def reformat_graph(graph):
