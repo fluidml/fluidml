@@ -1,44 +1,47 @@
-from dataclasses import dataclass
-from datetime import datetime
 import gzip
 import logging
 import math
 import multiprocessing
 import os
 import random
+from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
 
 import numpy as np
 import requests
+import torch
+import torch.nn as nn
 from tokenizers import Tokenizer
 from tokenizers.implementations import CharBPETokenizer
 from tokenizers.processors import TemplateProcessing
-import torch
-import torch.nn as nn
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
 from torchtext.data.metrics import bleu_score
 from tqdm import tqdm
 
-from transformer_model import Seq2SeqTransformer, Encoder, Decoder
-from fluidml import Flow, Swarm
-from fluidml.common import Task, Resource
+from fluidml import Flow
+from fluidml.common import Task
 from fluidml.common.logging import configure_logging
-from fluidml.flow import GridTaskSpec, TaskSpec
+from fluidml.flow import TaskSpec
 from fluidml.storage import LocalFileStore, TypeInfo
 from fluidml.visualization import visualize_graph_in_console
-
+from transformer_model import Seq2SeqTransformer, Encoder, Decoder
 
 logger = logging.getLogger(__name__)
 
 
-def get_balanced_devices(count: Optional[int] = None,
-                         use_cuda: bool = True) -> List[str]:
+def get_balanced_devices(
+    count: Optional[int] = None, use_cuda: bool = True, cuda_ids: Optional[List[int]] = None
+) -> List[str]:
     count = count if count is not None else multiprocessing.cpu_count()
     if use_cuda and torch.cuda.is_available():
-        devices = [f'cuda:{id_}' for id_ in range(torch.cuda.device_count())]
+        if cuda_ids is not None:
+            devices = [f"cuda:{id_}" for id_ in cuda_ids]
+        else:
+            devices = [f"cuda:{id_}" for id_ in range(torch.cuda.device_count())]
     else:
-        devices = ['cpu']
+        devices = ["cpu"]
     factor = int(count / len(devices))
     remainder = count % len(devices)
     devices = devices * factor + devices[:remainder]
@@ -56,35 +59,37 @@ class MyLocalFileStore(LocalFileStore):
     def __init__(self, base_dir: str):
         super().__init__(base_dir=base_dir)
 
-        self._type_registry['torch'] = TypeInfo(self._save_torch, self._load_torch, 'pt')
-        self._type_registry['tokenizer'] = TypeInfo(self._save_tokenizer, self._load_tokenizer, 'json')
+        self._type_registry["torch"] = TypeInfo(
+            save_fn=self._save_torch, load_fn=self._load_torch, extension="pt", needs_path=True
+        )
+        self._type_registry["tokenizer"] = TypeInfo(
+            save_fn=self._save_tokenizer, load_fn=self._load_tokenizer, extension="json", needs_path=True
+        )
 
     @staticmethod
-    def _save_torch(name: str, obj: Any, obj_dir: str, extension: str):
-        torch.save(obj, f=os.path.join(obj_dir, f'{name}.{extension}'))
+    def _save_torch(obj: Any, path: str):
+        torch.save(obj, f=path)
 
     @staticmethod
-    def _load_torch(name: str, obj_dir: str, extension: str) -> Any:
-        return torch.load(os.path.join(obj_dir, f'{name}.{extension}'))
+    def _load_torch(path: str) -> Any:
+        return torch.load(path)
 
     @staticmethod
-    def _save_tokenizer(name: str, obj: Tokenizer, obj_dir: str, extension: str):
-        obj.save(os.path.join(obj_dir, f'{name}.{extension}'))
+    def _save_tokenizer(obj: Tokenizer, path: str):
+        obj.save(path=path)
 
     @staticmethod
-    def _load_tokenizer(name: str, obj_dir: str, extension: str) -> Tokenizer:
-        return Tokenizer.from_file(os.path.join(obj_dir, f'{name}.{extension}'))
+    def _load_tokenizer(path: str) -> Tokenizer:
+        return Tokenizer.from_file(path)
 
 
 @dataclass
-class TaskResource(Resource):
+class TaskResource:
     device: str
 
 
 class DatasetLoading(Task):
-    def __init__(self,
-                 base_url: str,
-                 data_split_names: Dict[str, List]):
+    def __init__(self, base_url: str, data_split_names: Dict[str, List]):
         super().__init__()
         self.base_url = base_url
         self.data_split_names = data_split_names
@@ -96,7 +101,7 @@ class DatasetLoading(Task):
         # decompress downloaded gz data to bytes object
         data_bytes = gzip.decompress(data_gz.content)
         # decode bytes object to utf-8 encoded str and convert to list by splitting on new line chars
-        data = data_bytes.decode('utf-8').splitlines()
+        data = data_bytes.decode("utf-8").splitlines()
         return data
 
     def run(self):
@@ -109,12 +114,12 @@ class DatasetLoading(Task):
             for file_name in files:
                 # create download url
                 url = self.base_url + file_name
-                language = file_name.split('.')[1]
+                language = file_name.split(".")[1]
                 # download and parse data
                 data = DatasetLoading.download_and_extract_gz_from_url(url=url)
                 dataset[language] = data
             # save train-, valid- and test-data as json via local file store
-            self.save(obj=dataset, name=f'{split_name}_data', type_='json')
+            self.save(obj=dataset, name=f"{split_name}_data", type_="json")
 
 
 class TokenizerTraining(Task):
@@ -126,11 +131,13 @@ class TokenizerTraining(Task):
     def train_tokenizer(self, data: List[str]):
         # initialize and train a tokenizer
         tokenizer = CharBPETokenizer()
-        tokenizer.train_from_iterator(iterator=data,
-                                      vocab_size=self.vocab_size,
-                                      min_frequency=self.min_frequency,
-                                      special_tokens=['<unk>', '<bos>', '<eos>', '<pad>'],
-                                      show_progress=True)
+        tokenizer.train_from_iterator(
+            iterator=data,
+            vocab_size=self.vocab_size,
+            min_frequency=self.min_frequency,
+            special_tokens=["<unk>", "<bos>", "<eos>", "<pad>"],
+            show_progress=True,
+        )
 
         # add template rule to automatically add <bos> and <eos> to the encoding
         tokenizer.post_processor = TemplateProcessing(
@@ -148,15 +155,15 @@ class TokenizerTraining(Task):
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
         # train german tokenizer
-        de_tokenizer = self.train_tokenizer(data=train_data['de'])
+        de_tokenizer = self.train_tokenizer(data=train_data["de"])
 
         # train english tokenizer
-        en_tokenizer = self.train_tokenizer(data=train_data['en'])
+        en_tokenizer = self.train_tokenizer(data=train_data["en"])
 
         # save tokenizers
         logger.info(f'Save trained tokenizers to "{task_dir}".')
-        self.save(obj=de_tokenizer, name='de_tokenizer', type_='tokenizer')
-        self.save(obj=en_tokenizer, name='en_tokenizer', type_='tokenizer')
+        self.save(obj=de_tokenizer, name="de_tokenizer", type_="tokenizer")
+        self.save(obj=en_tokenizer, name="en_tokenizer", type_="tokenizer")
 
 
 class DatasetEncoding(Task):
@@ -164,20 +171,22 @@ class DatasetEncoding(Task):
         super().__init__()
 
     @staticmethod
-    def encode_data(data: Dict[str, List[str]],
-                    src_tokenizer: Tokenizer,
-                    trg_tokenizer: Tokenizer) -> List[Tuple[List[int], List[int]]]:
+    def encode_data(
+        data: Dict[str, List[str]], src_tokenizer: Tokenizer, trg_tokenizer: Tokenizer
+    ) -> List[Tuple[List[int], List[int]]]:
 
-        src_encoded = src_tokenizer.encode_batch(data['de'])
-        trg_encoded = trg_tokenizer.encode_batch(data['en'])
+        src_encoded = src_tokenizer.encode_batch(data["de"])
+        trg_encoded = trg_tokenizer.encode_batch(data["en"])
         return [(src.ids, trg.ids) for src, trg in zip(src_encoded, trg_encoded)]
 
-    def run(self,
-            train_data: Dict[str, List[str]],
-            valid_data: Dict[str, List[str]],
-            test_data: Dict[str, List[str]],
-            de_tokenizer: Tokenizer,
-            en_tokenizer: Tokenizer):
+    def run(
+        self,
+        train_data: Dict[str, List[str]],
+        valid_data: Dict[str, List[str]],
+        test_data: Dict[str, List[str]],
+        de_tokenizer: Tokenizer,
+        en_tokenizer: Tokenizer,
+    ):
         task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
 
@@ -186,9 +195,9 @@ class DatasetEncoding(Task):
         test_encoded = DatasetEncoding.encode_data(test_data, de_tokenizer, en_tokenizer)
 
         logger.info(f'Save encoded dataset to "{task_dir}".')
-        self.save(obj=train_encoded, name='train_encoded', type_='json')
-        self.save(obj=valid_encoded, name='valid_encoded', type_='json')
-        self.save(obj=test_encoded, name='test_encoded', type_='json')
+        self.save(obj=train_encoded, name="train_encoded", type_="json")
+        self.save(obj=valid_encoded, name="valid_encoded", type_="json")
+        self.save(obj=test_encoded, name="test_encoded", type_="json")
 
 
 class BatchCollator:
@@ -221,22 +230,24 @@ class TranslationDataset(Dataset):
 
 
 class Training(Task):
-    def __init__(self,
-                 hid_dim: int,
-                 enc_layers: int,
-                 dec_layers: int,
-                 enc_heads: int,
-                 dec_heads: int,
-                 enc_pf_dim: int,
-                 dec_pf_dim: int,
-                 enc_dropout: float,
-                 dec_dropout: float,
-                 learning_rate: float,
-                 clip_grad: float,
-                 train_batch_size: int,
-                 valid_batch_size: int,
-                 num_epochs: int,
-                 seed: int):
+    def __init__(
+        self,
+        hid_dim: int,
+        enc_layers: int,
+        dec_layers: int,
+        enc_heads: int,
+        dec_heads: int,
+        enc_pf_dim: int,
+        dec_pf_dim: int,
+        enc_dropout: float,
+        dec_dropout: float,
+        learning_rate: float,
+        clip_grad: float,
+        train_batch_size: int,
+        valid_batch_size: int,
+        num_epochs: int,
+        seed: int,
+    ):
         super().__init__()
 
         # transformer model parameters
@@ -261,25 +272,28 @@ class Training(Task):
         self.seed = seed
 
     def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int):
-        """ Initialize all training components.
-        """
+        """Initialize all training components."""
 
         # initialize the encoder and decoder block
-        enc = Encoder(input_dim,
-                      self.hid_dim,
-                      self.enc_layers,
-                      self.enc_heads,
-                      self.enc_pf_dim,
-                      self.enc_dropout,
-                      self.resource.device)
+        enc = Encoder(
+            input_dim,
+            self.hid_dim,
+            self.enc_layers,
+            self.enc_heads,
+            self.enc_pf_dim,
+            self.enc_dropout,
+            self.resource.device,
+        )
 
-        dec = Decoder(output_dim,
-                      self.hid_dim,
-                      self.dec_layers,
-                      self.dec_heads,
-                      self.dec_pf_dim,
-                      self.dec_dropout,
-                      self.resource.device)
+        dec = Decoder(
+            output_dim,
+            self.hid_dim,
+            self.dec_layers,
+            self.dec_heads,
+            self.dec_pf_dim,
+            self.dec_dropout,
+            self.resource.device,
+        )
 
         # initialize the full transformer sequence to sequence model
         model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
@@ -292,8 +306,7 @@ class Training(Task):
         return model, optimizer, criterion
 
     def _train_epoch(self, model, iterator, optimizer, criterion):
-        """ Train loop to iterate over batches
-        """
+        """Train loop to iterate over batches"""
         model.train()
 
         epoch_loss = 0
@@ -305,7 +318,7 @@ class Training(Task):
             output, _ = model(src, trg[:, :-1])
             output_dim = output.shape[-1]
             output = output.contiguous().view(-1, output_dim)  # [batch size * trg len - 1, output dim]
-            trg = trg[:, 1:].contiguous().view(-1)             # [batch size * trg len - 1]
+            trg = trg[:, 1:].contiguous().view(-1)  # [batch size * trg len - 1]
 
             loss = criterion(output, trg)
             loss.backward()
@@ -318,8 +331,7 @@ class Training(Task):
 
     @staticmethod
     def validate_epoch(model, iterator, criterion):
-        """ Validation loop to iterate over batches
-        """
+        """Validation loop to iterate over batches"""
         model.eval()
 
         epoch_loss = 0
@@ -330,21 +342,20 @@ class Training(Task):
                 output, _ = model(src, trg[:, :-1])
                 output_dim = output.shape[-1]
                 output = output.contiguous().view(-1, output_dim)  # [batch size * trg len - 1, output dim]
-                trg = trg[:, 1:].contiguous().view(-1)             # [batch size * trg len - 1]
+                trg = trg[:, 1:].contiguous().view(-1)  # [batch size * trg len - 1]
 
                 loss = criterion(output, trg)
                 epoch_loss += loss.item()
         return epoch_loss / len(iterator)
 
     def _train(self, model, train_iterator, valid_iterator, optimizer, criterion):
-        """ Train loop.
-        """
+        """Train loop."""
         task_dir = self.get_store_context()
         task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
-        model_dir = os.path.join(task_dir, 'models')
+        model_dir = os.path.join(task_dir, "models")
         logger.info(f'Save model checkpoints to "{model_dir}".')
 
-        best_valid_loss = float('inf')
+        best_valid_loss = float("inf")
         best_model = None
 
         for epoch in range(self.num_epochs):
@@ -359,56 +370,64 @@ class Training(Task):
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 best_model = model.state_dict()
-                self.save(obj=best_model, name='best_model', type_='torch')
-                self.save(obj={'epoch': epoch,
-                               'valid_loss': best_valid_loss}, name='best_model_metric', type_='json')
+                self.save(obj=best_model, name="best_model", type_="torch")
+                self.save(obj={"epoch": epoch, "valid_loss": best_valid_loss}, name="best_model_metric", type_="json")
 
-            logger.info(f'\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n'
-                        f'\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n'
-                        f'\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}')
+            logger.info(
+                f"\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n"
+                f"\tTrain Loss: {train_loss:.3f} | Train PPL: {math.exp(train_loss):7.3f}\n"
+                f"\t Val. Loss: {valid_loss:.3f} |  Val. PPL: {math.exp(valid_loss):7.3f}"
+            )
 
         assert best_model is not None
         return best_model, best_valid_loss
 
-    def run(self,
-            train_encoded: List[Tuple[List[int], List[int]]],
-            valid_encoded: List[Tuple[List[int], List[int]]],
-            de_tokenizer: Tokenizer,
-            en_tokenizer: Tokenizer):
+    def run(
+        self,
+        train_encoded: List[Tuple[List[int], List[int]]],
+        valid_encoded: List[Tuple[List[int], List[int]]],
+        de_tokenizer: Tokenizer,
+        en_tokenizer: Tokenizer,
+    ):
         set_seed(self.seed)
 
         # instantiate the collate fn for the dataloader
-        batch_collator = BatchCollator(de_pad_idx=de_tokenizer.token_to_id('<pad>'),
-                                       en_pad_idx=en_tokenizer.token_to_id('<pad>'),
-                                       device=self.resource.device)
+        batch_collator = BatchCollator(
+            de_pad_idx=de_tokenizer.token_to_id("<pad>"),
+            en_pad_idx=en_tokenizer.token_to_id("<pad>"),
+            device=self.resource.device,
+        )
 
         # instantiate train and validation datasets using a pytorch's Dataset class
         train_dataset = TranslationDataset(data=train_encoded)
         valid_dataset = TranslationDataset(data=valid_encoded)
 
         # instantiate train and validation dataloader
-        train_iterator = DataLoader(train_dataset, batch_size=self.train_batch_size, shuffle=True,
-                                    collate_fn=batch_collator)
-        valid_iterator = DataLoader(valid_dataset, batch_size=self.valid_batch_size, shuffle=False,
-                                    collate_fn=batch_collator)
+        train_iterator = DataLoader(
+            train_dataset, batch_size=self.train_batch_size, shuffle=True, collate_fn=batch_collator
+        )
+        valid_iterator = DataLoader(
+            valid_dataset, batch_size=self.valid_batch_size, shuffle=False, collate_fn=batch_collator
+        )
 
         input_dim = de_tokenizer.get_vocab_size()
         output_dim = en_tokenizer.get_vocab_size()
-        src_pad_idx = de_tokenizer.token_to_id('<pad>')
-        trg_pad_idx = en_tokenizer.token_to_id('<pad>')
+        src_pad_idx = de_tokenizer.token_to_id("<pad>")
+        trg_pad_idx = en_tokenizer.token_to_id("<pad>")
 
         # instantiate all training components
-        model, optimizer, criterion = self._init_training(input_dim=input_dim,
-                                                          output_dim=output_dim,
-                                                          src_pad_idx=src_pad_idx,
-                                                          trg_pad_idx=trg_pad_idx)
+        model, optimizer, criterion = self._init_training(
+            input_dim=input_dim, output_dim=output_dim, src_pad_idx=src_pad_idx, trg_pad_idx=trg_pad_idx
+        )
 
         # train the model on the training set and evaluate after every epoch on the validation set
-        self._train(model=model,
-                    train_iterator=train_iterator,
-                    valid_iterator=valid_iterator,
-                    optimizer=optimizer,
-                    criterion=criterion)
+        self._train(
+            model=model,
+            train_iterator=train_iterator,
+            valid_iterator=valid_iterator,
+            optimizer=optimizer,
+            criterion=criterion,
+        )
 
 
 class ModelSelection(Task):
@@ -418,11 +437,11 @@ class ModelSelection(Task):
     @staticmethod
     def _select_best_model_from_sweeps(training_results: List[Dict]) -> Dict:
         config = None
-        best_valid_loss = float('inf')
+        best_valid_loss = float("inf")
         for sweep in training_results:
-            if sweep['result']['best_model_metric']['valid_loss'] <= best_valid_loss:
-                best_valid_loss = sweep['result']['best_model_metric']['valid_loss']
-                config = sweep['config']
+            if sweep["result"]["best_model_metric"]["valid_loss"] <= best_valid_loss:
+                best_valid_loss = sweep["result"]["best_model_metric"]["valid_loss"]
+                config = sweep["config"]
         return config
 
     def run(self, reduced_results: List[Dict]):
@@ -434,7 +453,7 @@ class ModelSelection(Task):
         best_run_config = self._select_best_model_from_sweeps(training_results=reduced_results)
 
         logger.info(f'Save best run config to "{task_dir}".')
-        self.save(obj=best_run_config, name='best_run_config', type_='json')
+        self.save(obj=best_run_config, name="best_run_config", type_="json")
 
 
 class Evaluation(Task):
@@ -444,33 +463,36 @@ class Evaluation(Task):
         self.batch_size = test_batch_size
         self.seed = seed
 
-    def _init_model(self, train_config: Dict, input_dim: int, output_dim: int,
-                    src_pad_idx: int, trg_pad_idx: int) -> nn.Module:
-        """ Initialize the model and its components.
-        """
+    def _init_model(
+        self, train_config: Dict, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int
+    ) -> nn.Module:
+        """Initialize the model and its components."""
 
-        enc = Encoder(input_dim,
-                      train_config['hid_dim'],
-                      train_config['enc_layers'],
-                      train_config['enc_heads'],
-                      train_config['enc_pf_dim'],
-                      train_config['enc_dropout'],
-                      self.resource.device)
+        enc = Encoder(
+            input_dim,
+            train_config["hid_dim"],
+            train_config["enc_layers"],
+            train_config["enc_heads"],
+            train_config["enc_pf_dim"],
+            train_config["enc_dropout"],
+            self.resource.device,
+        )
 
-        dec = Decoder(output_dim,
-                      train_config['hid_dim'],
-                      train_config['dec_layers'],
-                      train_config['dec_heads'],
-                      train_config['dec_pf_dim'],
-                      train_config['dec_dropout'],
-                      self.resource.device)
+        dec = Decoder(
+            output_dim,
+            train_config["hid_dim"],
+            train_config["dec_layers"],
+            train_config["dec_heads"],
+            train_config["dec_pf_dim"],
+            train_config["dec_dropout"],
+            self.resource.device,
+        )
 
         model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
         return model
 
     def translate_sentence(self, src_encoded, bos_idx, eos_idx, model, max_len=50):
-        """ Translate an encoded sentence.
-        """
+        """Translate an encoded sentence."""
 
         model.eval()
 
@@ -494,20 +516,20 @@ class Evaluation(Task):
         return trg_indices[1:]
 
     def calculate_bleu(self, data_encoded, en_tokenizer, model, max_len=50):
-        """ Calculate the bleu score on the test set.
-        """
+        """Calculate the bleu score on the test set."""
 
         trgs = []
         pred_trgs = []
-        bos_idx = en_tokenizer.token_to_id('<bos>')
-        eos_idx = en_tokenizer.token_to_id('<eos>')
+        bos_idx = en_tokenizer.token_to_id("<bos>")
+        eos_idx = en_tokenizer.token_to_id("<eos>")
 
         worker_name = multiprocessing.current_process().name
-        with tqdm(desc=f'{worker_name} - Calculating BLEU',
-                  total=len(data_encoded),
-                  unit='sample',
-                  ascii=False,
-                  ) as progress_bar:
+        with tqdm(
+            desc=f"{worker_name} - Calculating BLEU",
+            total=len(data_encoded),
+            unit="sample",
+            ascii=False,
+        ) as progress_bar:
             for src, trg in data_encoded:
 
                 pred_trg = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
@@ -528,15 +550,17 @@ class Evaluation(Task):
         set_seed(self.seed)
 
         # load the best model, test-data and the tokenizers based on the previously selected best run config
-        model_state_dict = self.load(name='best_model', task_name='Training', task_unique_config=best_run_config)
-        test_encoded = self.load(name='test_encoded', task_name='DatasetEncoding', task_unique_config=best_run_config)
-        de_tokenizer = self.load(name='de_tokenizer', task_name='TokenizerTraining', task_unique_config=best_run_config)
-        en_tokenizer = self.load(name='en_tokenizer', task_name='TokenizerTraining', task_unique_config=best_run_config)
+        model_state_dict = self.load(name="best_model", task_name="Training", task_unique_config=best_run_config)
+        test_encoded = self.load(name="test_encoded", task_name="DatasetEncoding", task_unique_config=best_run_config)
+        de_tokenizer = self.load(name="de_tokenizer", task_name="TokenizerTraining", task_unique_config=best_run_config)
+        en_tokenizer = self.load(name="en_tokenizer", task_name="TokenizerTraining", task_unique_config=best_run_config)
 
         # instantiate the batch collator
-        batch_collator = BatchCollator(de_pad_idx=de_tokenizer.token_to_id('<pad>'),
-                                       en_pad_idx=en_tokenizer.token_to_id('<pad>'),
-                                       device=self.resource.device)
+        batch_collator = BatchCollator(
+            de_pad_idx=de_tokenizer.token_to_id("<pad>"),
+            en_pad_idx=en_tokenizer.token_to_id("<pad>"),
+            device=self.resource.device,
+        )
 
         # instantiate the test dataset
         test_dataset = TranslationDataset(data=test_encoded)
@@ -546,15 +570,17 @@ class Evaluation(Task):
 
         input_dim = de_tokenizer.get_vocab_size()
         output_dim = en_tokenizer.get_vocab_size()
-        src_pad_idx = de_tokenizer.token_to_id('<pad>')
-        trg_pad_idx = en_tokenizer.token_to_id('<pad>')
+        src_pad_idx = de_tokenizer.token_to_id("<pad>")
+        trg_pad_idx = en_tokenizer.token_to_id("<pad>")
 
         # instantiate the transformer model
-        model = self._init_model(train_config=best_run_config['Training'],
-                                 input_dim=input_dim,
-                                 output_dim=output_dim,
-                                 src_pad_idx=src_pad_idx,
-                                 trg_pad_idx=src_pad_idx)
+        model = self._init_model(
+            train_config=best_run_config["Training"],
+            input_dim=input_dim,
+            output_dim=output_dim,
+            src_pad_idx=src_pad_idx,
+            trg_pad_idx=src_pad_idx,
+        )
         model.load_state_dict(model_state_dict)
 
         # instantiate the loss criterion
@@ -562,97 +588,109 @@ class Evaluation(Task):
 
         # evaluate the model on the test set -> calculate the test set loss and perplexity
         test_loss = Training.validate_epoch(model=model, iterator=test_iterator, criterion=criterion)
-        logger.info(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+        logger.info(f"| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |")
 
         # calculate the model's bleu score on the test set
         bleu = self.calculate_bleu(test_encoded, en_tokenizer, model)
-        logger.info(f'BLEU score = {bleu * 100:.2f}')
+        logger.info(f"BLEU score = {bleu * 100:.2f}")
 
 
 def main():
-    current_dir = os.path.abspath('')
-    base_dir = os.path.join(current_dir, 'seq2seq_experiments')
+    current_dir = os.path.abspath("")
+    base_dir = os.path.join(current_dir, "seq2seq_experiments")
 
     num_workers = 1
     # choices [<task_name>, <task_name+>, [<task_name1+>, <task_name2>], all, None]
     #  "+" registers successor tasks for force execution as well
     force = None
     use_cuda = True
+    cuda_ids = [0]
     seed = 1234
 
-    configure_logging(level='INFO')
+    configure_logging(level="INFO")
 
-    dataset_loading_params = {'base_url': 'https://raw.githubusercontent.com/multi30k/dataset/'
-                                          'master/data/task1/raw/',
-                              'data_split_names': {'train': ['train.de.gz', 'train.en.gz'],
-                                                   'valid': ['val.de.gz', 'val.en.gz'],
-                                                   'test': ['test_2016_flickr.de.gz', 'test_2016_flickr.en.gz']}}
+    dataset_loading_params = {
+        "base_url": "https://raw.githubusercontent.com/multi30k/dataset/" "master/data/task1/raw/",
+        "data_split_names": {
+            "train": ["train.de.gz", "train.en.gz"],
+            "valid": ["val.de.gz", "val.en.gz"],
+            "test": ["test_2016_flickr.de.gz", "test_2016_flickr.en.gz"],
+        },
+    }
 
-    tokenizer_training_params = {'vocab_size': 30000,
-                                 'min_frequency': 2}
+    tokenizer_training_params = {"vocab_size": 30000, "min_frequency": 2}
 
-    training_params = {'hid_dim': 256,
-                       'enc_layers': 3,
-                       'dec_layers': 3,
-                       'enc_heads': 8,
-                       'dec_heads': 8,
-                       'enc_pf_dim': 512,
-                       'dec_pf_dim': 512,
-                       'enc_dropout': 0.1,
-                       'dec_dropout': 0.1,
-                       'learning_rate': [0.0005, 0.001],
-                       'clip_grad': 1.,
-                       'train_batch_size': [128, 256],
-                       'valid_batch_size': 128,
-                       'num_epochs': 10,
-                       'seed': seed}
+    training_params = {
+        "hid_dim": 256,
+        "enc_layers": 3,
+        "dec_layers": 3,
+        "enc_heads": 8,
+        "dec_heads": 8,
+        "enc_pf_dim": 512,
+        "dec_pf_dim": 512,
+        "enc_dropout": 0.1,
+        "dec_dropout": 0.1,
+        "learning_rate": [0.0005, 0.001],
+        "clip_grad": 1.0,
+        "train_batch_size": [128, 256],
+        "valid_batch_size": 128,
+        "num_epochs": 10,
+        "seed": seed,
+    }
 
-    evaluation_params = {'test_batch_size': 128,
-                         'seed': seed}
+    evaluation_params = {"test_batch_size": 128, "seed": seed}
 
     # create all task specs
-    dataset_loading_task = TaskSpec(task=DatasetLoading, config=dataset_loading_params,
-                                    publishes=['train_data', 'valid_data', 'test_data'])
-    tokenizer_training_task = TaskSpec(task=TokenizerTraining, config=tokenizer_training_params,
-                                       publishes=['de_tokenizer', 'en_tokenizer'])
-    dataset_encoding_task = TaskSpec(task=DatasetEncoding,
-                                     publishes=['train_encoded', 'valid_encoded', 'test_encoded'])
-    train_task = GridTaskSpec(task=Training, gs_config=training_params,
-                              publishes=['best_model', 'best_model_metric'])
-    model_selection_task = TaskSpec(task=ModelSelection, reduce=True, expects=['best_model_metric'],
-                                    publishes=['best_run_config'])
-    evaluate_task = TaskSpec(task=Evaluation, config=evaluation_params)
+    dataset_loading = TaskSpec(task=DatasetLoading, config=dataset_loading_params)
+    tokenizer_training = TaskSpec(task=TokenizerTraining, config=tokenizer_training_params)
+    dataset_encoding = TaskSpec(task=DatasetEncoding)
+    training = TaskSpec(task=Training, config=training_params, expand="product")
+    model_selection = TaskSpec(task=ModelSelection, reduce=True)
+    evaluate = TaskSpec(task=Evaluation, config=evaluation_params)
 
     # dependencies between tasks
-    tokenizer_training_task.requires(dataset_loading_task)
-    dataset_encoding_task.requires([tokenizer_training_task, dataset_loading_task])
-    train_task.requires([dataset_encoding_task, tokenizer_training_task])
-    model_selection_task.requires(train_task)
-    evaluate_task.requires(model_selection_task)
+    tokenizer_training.requires(dataset_loading)
+    dataset_encoding.requires([tokenizer_training, dataset_loading])
+    training.requires([dataset_encoding, tokenizer_training])
+    model_selection.requires(training)
+    evaluate.requires(model_selection)
 
     # all tasks
-    tasks = [dataset_loading_task, tokenizer_training_task, dataset_encoding_task,
-             train_task, model_selection_task, evaluate_task]
+    tasks = [
+        dataset_loading,
+        tokenizer_training,
+        dataset_encoding,
+        training,
+        model_selection,
+        evaluate,
+    ]
 
     # create list of resources
-    devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda)
+    devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda, cuda_ids=cuda_ids)
     resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
 
     # create local file storage used for versioning
     results_store = MyLocalFileStore(base_dir=base_dir)
 
-    with Swarm(n_dolphins=num_workers,
-               resources=resources,
-               results_store=results_store) as swarm:
-        flow = Flow(swarm=swarm)
-        flow.create(task_specs=tasks)
+    # create flow (expanded task graph)
+    flow = Flow(tasks=tasks)
 
-        # visualize graphs
-        visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
-        visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
+    # visualize graphs
+    visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
+    visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
 
-        flow.run(force=force)
+    # run linearly without swarm if num_workers is set to 1
+    # else run graph in parallel using multiprocessing
+    # create list of resources which is distributed among workers
+    # e.g. to manage that each worker has dedicated access to specific gpus
+    flow.run(
+        num_workers=num_workers,
+        resources=resources,
+        results_store=results_store,
+        project_name="transformer_seq2seq_translation_example",
+        force=force,
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
