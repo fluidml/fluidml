@@ -151,12 +151,24 @@ class File:
 
 @dataclass
 class TypeInfo:
-    save_fn: Callable  # save function used to save the object to store
-    load_fn: Callable  # load function used to load the object from store
-    extension: Optional[str] = None  # file extension the object is saved with
-    is_binary: Optional[bool] = None  # read, write and append in binary mode
-    open_fn: Optional[Callable] = None  # function used to open a file object (default is builtin open())
-    needs_path: bool = False  # save and load fn operate on path and not on file like object
+    """
+    Initializes saving and loading information for a specific type.
+
+    Args:
+        save_fn (Callable): save function used to save the object to store.
+        load_fn (Callable): load function used to load the object from store.
+        extension (Optional[str]): file extension the object is saved with.
+        is_binary (Optional[bool]): read, write and append in binary mode.
+        open_fn (Optional[Callable]): function used to open a file object (default is builtin open()).
+        needs_path (bool): Whether save and load fn should operate on path and not on file like object. Default: false.
+    """
+
+    save_fn: Callable
+    load_fn: Callable
+    extension: Optional[str] = None
+    is_binary: Optional[bool] = None
+    open_fn: Optional[Callable] = None
+    needs_path: bool = False
 
 
 class LocalFileStore(ResultsStore):
