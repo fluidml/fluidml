@@ -4,6 +4,7 @@ from typing import Dict, Any, List, Optional
 
 from fluidml.common import Task
 from fluidml.common.exception import TaskResultKeyAlreadyExists, TaskResultObjectMissing
+from fluidml.common.utils import change_logging_level
 from fluidml.flow.task_spec import TaskSpec
 from fluidml.storage import ResultsStore, Promise, Sweep, LazySweep
 
@@ -28,9 +29,13 @@ class TaskDataController:
         for item_name in self._task_expects:
             param: inspect.Parameter = self._task_expects[item_name]
             lazy: bool = self._is_lazy(param)
-            obj: Optional[Any] = self._results_store.load(
-                name=item_name, task_name=predecessor.name, task_unique_config=predecessor.unique_config, lazy=lazy
-            )
+            with change_logging_level(level=50):
+                obj: Optional[Any] = self._results_store.load(
+                    name=item_name,
+                    task_name=predecessor.name,
+                    task_unique_config=predecessor.unique_config,
+                    lazy=lazy,
+                )
             if obj is not None:
                 results[item_name] = obj
         return results
@@ -92,30 +97,36 @@ class TaskDataController:
         return predecessor_results
 
 
-def pack_pipeline_results(
-    all_tasks: List[TaskSpec], results_store: ResultsStore, return_results: Optional[str] = None
-) -> Dict[str, Any]:
+def pack_pipeline_results(all_tasks: List[TaskSpec], return_results: Optional[str] = None) -> Optional[Dict[str, Any]]:
     pipeline_results = defaultdict(list)
     if return_results is None:
-        pass
+        return None
+
     elif return_results == "all":
         for task in all_tasks:
-            results = results_store.get_results(
-                task_name=task.name, task_unique_config=task.unique_config, task_publishes=task.publishes
-            )
-            pipeline_results[task.name].append({"results": results, "config": task.unique_config})
+            results = _get_saved_task_results(task=task)
+            pipeline_results[task.name].append(results)
+
     elif return_results == "latest":
         for task in all_tasks:
             if not task.successors:
-                results = results_store.get_results(
-                    task_name=task.name, task_unique_config=task.unique_config, task_publishes=task.publishes
-                )
-                pipeline_results[task.name].append({"results": results, "config": task.unique_config})
+                results = _get_saved_task_results(task=task)
+                pipeline_results[task.name].append(results)
     else:
         choices = ", ".join(['"all"', '"latest"', "None"])
         raise ValueError(f"return_results must be set to one of: {choices}.")
 
     return _simplify_results(pipeline_results=pipeline_results)
+
+
+def _get_saved_task_results(task: TaskSpec) -> Dict:
+    saved_results = task.results_store.load(
+        ".saved_results", task_name=task.name, task_unique_config=task.unique_config
+    )
+    results = task.results_store.get_results(
+        task_name=task.name, task_unique_config=task.unique_config, saved_results=saved_results
+    )
+    return {"results": results, "config": task.unique_config}
 
 
 def _simplify_results(pipeline_results: Dict[str, Any]) -> Dict[str, Any]:

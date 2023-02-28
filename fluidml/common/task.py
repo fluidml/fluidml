@@ -1,65 +1,130 @@
 import inspect
+import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from enum import Enum
 from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union, Callable
 
 from metadict import MetaDict
 
 from fluidml.common.dependency import DependencyMixin
+from fluidml.common.utils import change_logging_level
 from fluidml.storage import ResultsStore, Promise, File
 
 if TYPE_CHECKING:
     from fluidml.flow import TaskSpec
 
+logger = logging.getLogger(__name__)
 
-# TODO (LH): Change to Pydantic in the future for easier json serialization
+
+class TaskState(str, Enum):
+    """The state of a task.
+
+    PENDING: Task has not been scheduled and processed, yet.
+    SCHEDULED: Task has been scheduled for processing.
+    RUNNING: Task is currently running.
+    KILLED: Task has been killed by the user via KeyBoardInterrupt.
+    FAILED: Task failed due to an unexpected error.
+    UPSTREAM_FAILED: Task failed/could not be executed due to one or more upstream task failures.
+    FINISHED: Task finished successfully.
+    """
+
+    PENDING = "pending"
+    SCHEDULED = "scheduled"
+    RUNNING = "running"
+    KILLED = "killed"
+    FAILED = "failed"
+    UPSTREAM_FAILED = "upstream_failed"
+    FINISHED = "finished"
+
+
 @dataclass
-class RunInfo:
+class TaskInfo:
     project_name: str
     run_name: str
-    unique_id: Optional[str] = None
-    run_path: Dict = field(default_factory=dict)
+    run_history: Optional[int] = None
+    sweep_counter: Optional[int] = None
+    unique_config_hash: Optional[str] = None
+
+    @property
+    def id(self) -> str:
+        return (
+            f"{self.run_name}-{self.sweep_counter}"
+            if self.sweep_counter
+            else f"{self.run_name}-{self.unique_config_hash}"
+        )
 
     def dict(self) -> Dict:
         return self.__dict__
 
 
-class Task(ABC, DependencyMixin):
-    """Base class for a task."""
+@dataclass
+class TaskData:
+    """Container to hold all attributes of a FluidML Task object.
+
+    Attributes:
+        name: Name of the task, e.g. "Processing".
+        unique_name: Unique name of the task if a run contains multiple instances of the same task,
+            e.g. "Processing-3".
+        project_name: Name of the project.
+        run_name: Name of the task's current run.
+        run_history: Holds the task ids of all predecessor task including the task itself.
+        sweep_counter: A dynamically created counter to distinguish different task instances with the same run name
+            in the results store. E.g. used in the LocalFileStore to name run directories.
+        unique_config_hash: An 8 character hash of the unique run config.
+        unique_config: Unique config of the task. Includes all predecessor task configs as well to uniquely define a
+            task.
+        results_store: An instance of results store for results management. If nothing is provided, a non-persistent
+            InMemoryStore store is used.
+        resource: A resource object that can hold arbitrary data, e.g. gpu or cpu device information.
+            Resource objects can be assigned in a multiprocessing context, so that each worker process
+            uses a dedicated resource, e.g. cuda device.
+        force: Indicator if the task is force executed or not.
+        expects: A dict of expected input arguments and their inspect.Parameter objects
+            of the task's run method signature.
+        reduce: A boolean indicating whether this is a reduce-task. Defaults to None.
+    """
+
+    project_name: Optional[str] = None
+    run_name: Optional[str] = None
+    run_history: Optional[Dict] = None
+    sweep_counter: Optional[str] = None
+    unique_config_hash: Optional[str] = None
+    state: Optional[TaskState] = None
+
+    name: Optional[str] = None
+    unique_name: Optional[str] = None
+    results_store: Optional[ResultsStore] = None
+    resource: Optional[Any] = None
+    reduce: Optional[bool] = None
+    expects: Optional[Dict[str, inspect.Parameter]] = None
+    config: Optional[Dict[str, Any]] = None
+    additional_kwargs: Optional[Dict[str, Any]] = None
+
+    unique_config: Optional[Union[Dict, MetaDict]] = None
+    force: Optional[bool] = None
+
+    @property
+    def id(self) -> str:
+        return self.info.id
+
+    @property
+    def info(self) -> TaskInfo:
+        return TaskInfo(
+            project_name=self.project_name,
+            run_name=self.run_name,
+            run_history=self.run_history,
+            sweep_counter=self.sweep_counter,
+            unique_config_hash=self.unique_config_hash,
+        )
+
+
+class Task(ABC, TaskData, DependencyMixin):
+    """Base class for a FluidML `Task`."""
 
     def __init__(self):
         DependencyMixin.__init__(self)
-
-        self.run_info: Optional[RunInfo] = None
-        self.name: Optional[str] = None
-        self.config_kwargs: Optional[Dict[str, Any]] = None
-        self.publishes: Optional[List[str]] = None
-        self.expects: Optional[Union[List[str], Dict[str, inspect.Parameter]]] = None
-        self.id_: Optional[int] = None
-        self.unique_config: Optional[MetaDict] = None
-        self.reduce: Optional[bool] = None
-        self.force: Optional[str] = None
-        self.unique_name: Optional[str] = None
-
-        # set in Dolphin or manually
-        self._results_store: Optional[ResultsStore] = None
-        self._resource: Optional[Any] = None
-
-    @property
-    def results_store(self):
-        return self._results_store
-
-    @results_store.setter
-    def results_store(self, results_store: ResultsStore):
-        self._results_store = results_store
-
-    @property
-    def resource(self):
-        return self._resource
-
-    @resource.setter
-    def resource(self, resource: Any):
-        self._resource = resource
+        TaskData.__init__(self)
 
     @abstractmethod
     def run(self, **results):
@@ -70,17 +135,49 @@ class Task(ABC, DependencyMixin):
         """
         raise NotImplementedError
 
-    def run_wrapped(self, **results):
-        """Calls run function to execute task and saves a 'completed' event file to signal successful execution."""
-        self.save(self.run_info.dict(), "fluidml_run_info", type_="json", indent=4)
-        self.run(**results)
-        # TODO (LH): if publishes is set, check that all non optional objects are present in saved_objects
-        # if self.publishes:
-        #     saved_objects: Optional[List] = self.load(name='.saved_objects')
-        #     required_objects = [name if not is_optional(annotation) for name, annotation in self.publishes.items()]
-        # else:
-        #     self.save('1', '.completed', type_='event', sub_dir='.load_info')
-        self.save("1", ".completed", type_="event", sub_dir=".load_info")
+    def _track_saved_object(self, name: str, mode: str, type_: Optional[str] = None):
+        # load saved objects
+        with change_logging_level(50):
+            saved_objects: Optional[List[str]] = self.load(
+                name=".saved_results",
+                task_name=self.name,
+                task_unique_config=self.unique_config,
+                raise_not_found_warning=False,
+            )
+
+        if mode == "save":
+            if saved_objects is None:
+                saved_objects = []
+
+            if name not in saved_objects:
+                saved_objects.append(name)
+                self.results_store.save(
+                    obj=saved_objects,
+                    name=".saved_results",
+                    type_="json",
+                    sub_dir=".load_info",
+                    task_name=self.name,
+                    task_unique_config=self.unique_config,
+                )
+
+        elif mode == "delete":
+            # delete name from registry and save registry
+            if saved_objects is not None and name in saved_objects:
+                del saved_objects[saved_objects.index(name)]
+                self.results_store.save(
+                    obj=saved_objects,
+                    name=".saved_results",
+                    type_="json",
+                    sub_dir=".load_info",
+                    task_name=self.name,
+                    task_unique_config=self.unique_config,
+                )
+        else:
+            raise ValueError(f'"mode" argument is "{mode}" but must be "save" or "delete".')
+
+        debug_msg = f'Task "{self.unique_name}" {mode}s "{name}"'
+        msg = debug_msg + f"." if type_ is None else debug_msg + f' of type "{type_}".'
+        logger.debug(msg)
 
     def save(self, obj: Any, name: str, type_: Optional[str] = None, **kwargs):
         """Saves the given object to the results store.
@@ -95,6 +192,7 @@ class Task(ABC, DependencyMixin):
         self.results_store.save(
             obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
         )
+        self._track_saved_object(name, mode="save", type_=type_)
 
     def load(
         self,
@@ -124,6 +222,7 @@ class Task(ABC, DependencyMixin):
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
         self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
+        self._track_saved_object(name, mode="delete")
 
     def delete_run(self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None):
         """Deletes run with specified name from results store"""
@@ -160,6 +259,9 @@ class Task(ABC, DependencyMixin):
         task_name = task_name if task_name is not None else self.name
         task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
+        if mode is not None and ("w" in mode or "a" in mode):
+            self._track_saved_object(name, mode="save", type_=type_)
+
         return self.results_store.open(
             name=name,
             task_name=task_name,
@@ -181,29 +283,32 @@ class Task(ABC, DependencyMixin):
         if inspect.isclass(task_spec.task):
             task = task_spec.task(**task_spec.config, **task_spec.additional_kwargs)
             task.config = task_spec.config
+            task.additional_kwargs = task_spec.additional_kwargs
         elif inspect.isfunction(task_spec.task):
             task = _TaskFromCallable(
                 task=task_spec.task,
-                config_kwargs=task_spec.config,
+                config=task_spec.config,
                 additional_kwargs=task_spec.additional_kwargs,
             )
         else:
             # cannot be reached, check has been made in TaskSpec.
             raise TypeError
 
-        task.run_info = task_spec.run_info
+        task.project_name = task_spec.project_name
+        task.run_name = task_spec.run_name
+        task.run_history = task_spec.run_history
+        task.sweep_counter = task_spec.sweep_counter
+        task.unique_config_hash = task_spec.unique_config_hash
         task.results_store = task_spec.results_store
         task.resource = task_spec.resource
         task.name = task_spec.name
         task.unique_name = task_spec.unique_name
-        task.id_ = task_spec.id_
         task.unique_config = task_spec.unique_config
         task.reduce = task_spec.reduce
         task.force = task_spec.force
         task.predecessors = task_spec.predecessors
         task.successors = task_spec.successors
         task.expects = task_spec.expects
-        task.publishes = task_spec.publishes
 
         return task
 
@@ -211,11 +316,11 @@ class Task(ABC, DependencyMixin):
 class _TaskFromCallable(Task):
     """A wrapper class that wraps a callable as a Task."""
 
-    def __init__(self, task: Callable, config_kwargs: MetaDict, additional_kwargs: MetaDict):
+    def __init__(self, task: Callable, config: MetaDict, additional_kwargs: MetaDict):
         super().__init__()
         self.task = task
-        self.config_kwargs = config_kwargs
+        self.config = config
         self.additional_kwargs = additional_kwargs
 
     def run(self, **results: Dict[str, Any]):
-        self.task(**results, **self.config_kwargs, **self.additional_kwargs, task=self)
+        self.task(**results, **self.config, **self.additional_kwargs, task=self)

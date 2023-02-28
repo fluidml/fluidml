@@ -47,12 +47,12 @@ class Whale(Process):
             self._configure_logging()
             self._work()
         except Exception as e:
+            logger.exception(e)
+            self._error_queue.put(e)
             if self._exit_on_error:
                 with self._lock:
-                    logger.exception(e)
-                    self._error_queue.put(e)
                     self.exit_event.set()
-            raise
+            # raise
         finally:
             sys.stdout = open(os.devnull, "w")
             sys.stderr = open(os.devnull, "w")

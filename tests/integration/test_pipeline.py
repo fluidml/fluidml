@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional
 
-from fluidml import Flow, Task, publishes
+from fluidml import Flow, Task
 from fluidml.flow import TaskSpec
 from fluidml.storage import Sweep, LocalFileStore
 import pathlib
@@ -13,33 +13,27 @@ class Parsing(Task):
         self.in_dir = in_dir
         self.z = z
 
-    @publishes(res1=Dict)
     def run(self):
         self.save(obj={}, name="res1", type_="json")
 
 
-@publishes(res2=Dict)
 def preprocess(res1: Dict, pipeline: List[str], abc: List[int], task: Task):
     task.save(obj={}, name="res2", type_="pickle")
 
 
-@publishes("res3")
 def featurize_tokens(res2: Dict, type_: str, batch_size: int, task: Task):
     pass
     # task.save(obj={}, name="res3", type_="pickle")
 
 
-@publishes("res4")
 def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
     task.save(obj={}, name="res4", type_="pickle")
 
 
-@publishes(res5=Dict)
 def train(res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task, res3: Optional[Dict] = None):
     task.save(obj={}, name="res5", type_="pickle")
 
 
-@publishes(res6=Dict)
 def evaluate(res5: List[Sweep], metric: str, task: Task):
     task.save(obj={}, name="res6", type_="pickle")
 

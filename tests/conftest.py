@@ -3,7 +3,7 @@ from typing import Dict
 
 import pytest
 
-from fluidml import Task, publishes
+from fluidml import Task
 
 
 @dataclass
@@ -15,7 +15,6 @@ class DummyTaskA(Task):
     def __init__(self, x: int):
         super().__init__()
 
-    @publishes(a=Dict)
     def run(self):
         self.save(obj={"a": 1}, name="a", type_="json")
 

@@ -1,3 +1,5 @@
+import contextlib
+import logging
 import hashlib
 import json
 import os
@@ -239,3 +241,13 @@ def create_unique_run_id_from_config(cfg: Dict, length: int = 8) -> str:
     hashed_cfg = hash_config(cfg)
     encoded_cfg = encode_base36(int(hashed_cfg, base=16))
     return encoded_cfg[:length]
+
+
+@contextlib.contextmanager
+def change_logging_level(level: int):
+    """Context manager to temporarily change the logging lvl."""
+    root_logger = logging.getLogger()
+    old_logging_level = root_logger.level
+    root_logger.setLevel(level)
+    yield
+    root_logger.setLevel(old_logging_level)

@@ -11,7 +11,7 @@ from networkx import DiGraph
 from networkx.algorithms.dag import topological_sort
 
 from fluidml.common.exception import NoTasksError, CyclicGraphError, TaskNameError
-from fluidml.common.task import Task, RunInfo
+from fluidml.common.task import Task
 from fluidml.common.utils import (
     update_merge,
     reformat_config,
@@ -333,7 +333,6 @@ class Flow:
     def _expand_and_link_task_specs(specs: List[TaskSpec]) -> List[TaskSpec]:
         # keep track of expanded task_specs by their names
         expanded_task_specs_by_name = defaultdict(list)
-        task_id = 0
 
         # for each spec to expand
         for spec in specs:
@@ -354,17 +353,18 @@ class Flow:
                     for task_spec_combination in task_spec_combinations:
                         task_spec.requires(task_spec_combination)
 
-                    task_spec.id_ = task_id
+                    # task_spec.counter = task_counter
                     expanded_task_specs_by_name[task_spec.name].append(task_spec)
 
                     # remove None value keys and prefixed keys to ignore
                     relevant_config = task_spec.prepare_config()
 
-                    task_spec.unique_config = {
-                        **predecessor_config,
-                        **{task_spec.name: relevant_config},
-                    }
-                    task_id += 1
+                    task_spec.unique_config = MetaDict(
+                        {
+                            **predecessor_config,
+                            **{task_spec.name: relevant_config},
+                        }
+                    )
             else:
                 # for each combination, create a new task
                 for task_spec_combination in task_spec_combinations:
@@ -375,18 +375,18 @@ class Flow:
 
                     # for each task that is created, add ids and dependencies
                     for task_spec in expanded_task_specs:
-                        task_spec.id_ = task_id
                         task_spec.requires(task_spec_combination)
 
                         # remove None value keys and prefixed keys to ignore
                         relevant_config = task_spec.prepare_config()
 
-                        task_spec.unique_config = {
-                            **predecessor_config,
-                            **{task_spec.name: relevant_config},
-                        }
+                        task_spec.unique_config = MetaDict(
+                            {
+                                **predecessor_config,
+                                **{task_spec.name: relevant_config},
+                            }
+                        )
                         expanded_task_specs_by_name[task_spec.name].append(task_spec)
-                        task_id += 1
 
         # create final list of linked task specs and set expansion id for expanded specs
         final_task_specs = []
@@ -399,9 +399,6 @@ class Flow:
                     task_spec.unique_name = f"{task_spec.name}-{expansion_id}"
                     final_task_specs.append(task_spec)
 
-        # convert task configs to MetaDIct objects
-        for spec in final_task_specs:
-            spec.unique_config = MetaDict(spec.unique_config)
         return final_task_specs
 
     def run(
@@ -467,13 +464,16 @@ class Flow:
         if return_results is None and (results_store is None or isinstance(results_store, InMemoryStore)):
             return_results = "latest"
 
-        # create run info objects
+        # Assign run and project name to spec object and generate unique config hash
         for spec in self._expanded_task_specs:
-            spec.run_info = RunInfo(
-                run_name=run_name,
-                project_name=project_name,
-                unique_id=create_unique_run_id_from_config(spec.unique_config),
-            )
+            spec.run_name = run_name
+            spec.project_name = project_name
+            spec.unique_config_hash = create_unique_run_id_from_config(spec.unique_config)
+            # spec.info = TaskInfo(
+            #     run_name=run_name,
+            #     project_name=project_name,
+            #     unique_config_hash=create_unique_run_id_from_config(spec.unique_config),
+            # )
 
         # get maximum number of available workers
         # and infer optimal number of workers given the expanded graph to process
@@ -491,7 +491,7 @@ class Flow:
 
         # if multiple workers are used execute task graph in parallel with swarm
         if num_workers > 1:
-            logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers.')
+            logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers')
             with Swarm(
                 n_dolphins=num_workers,
                 resources=resources,
@@ -507,7 +507,7 @@ class Flow:
                 )
         # else run the topologically sorted graph sequentially
         else:
-            logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing).')
+            logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')
             resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
             results = self._run_linear(
                 results_store=results_store,
@@ -540,14 +540,14 @@ class Flow:
 
             # Log task completion
             if completed:
-                msg = f"Task {task.unique_name} already executed"
+                msg = f'Task "{task.unique_name}" already executed'
             else:
-                msg = f"Finished task {task.unique_name}"
+                msg = f'Finished task "{task.unique_name}"'
             logger.info(f"{msg} [{i}/{self.num_tasks} " f"- {round((i / self.num_tasks) * 100)}%]")
 
         # collect published results from all tasks
         results: Dict[str, Any] = pack_pipeline_results(
-            all_tasks=self._expanded_task_specs, results_store=results_store, return_results=return_results
+            all_tasks=self._expanded_task_specs, return_results=return_results
         )
 
         return results

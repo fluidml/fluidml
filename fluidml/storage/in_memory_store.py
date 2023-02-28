@@ -3,6 +3,7 @@ from multiprocessing import Manager
 from typing import Dict, Optional, Any
 
 from fluidml.storage import ResultsStore
+from fluidml.storage.base import StoreContext
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class InMemoryStore(ResultsStore):
                     try:
                         obj = task_sweep["results"][name]
                     except KeyError:
-                        logger.warning(f'"{name}" could not be found in store.')
+                        logger.warning(f'Task "{task_name}" could not find "{name}" in result store.')
                         return None
 
                     return obj
@@ -85,12 +86,11 @@ class InMemoryStore(ResultsStore):
 
             existing_task_results = self._memory_store[task_name]
 
-            # ids_to_delete = []
-            # for i, task_sweep in enumerate(existing_task_results):
-            #     if task_sweep["config"].items() <= task_unique_config.items():
-            #         del existing_task_results[i]
             self._memory_store[task_name] = [
                 task_sweep
                 for task_sweep in existing_task_results
                 if not task_sweep["config"].items() <= task_unique_config.items()
             ]
+
+    def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
+        pass

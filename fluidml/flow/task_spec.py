@@ -2,19 +2,12 @@ import inspect
 import json
 from typing import Dict, Any, Optional, List, Union, Callable, Type
 
-from fluidml.common import (
-    DependencyMixin,
-    Task,
-    get_expected_args_from_run_signature,
-    get_published_args_from_run_decorator,
-)
-from fluidml.common.task import RunInfo
+from fluidml.common import DependencyMixin, Task, TaskData
 from fluidml.common.utils import remove_prefixed_keys_from_dict, remove_prefix_from_dict, remove_none_from_dict
 from fluidml.flow.config_expansion import expand_config
-from fluidml.storage import ResultsStore
 
 
-class TaskSpec(DependencyMixin):
+class TaskSpec(TaskData, DependencyMixin):
     def __init__(
         self,
         task: Union[Type["Task"], Callable],
@@ -32,7 +25,7 @@ class TaskSpec(DependencyMixin):
             task: Task class
             config: Task configuration parameters that are used while instantiating. Defaults to ``None``.
             additional_kwargs: Additional kwargs provided to the task.
-            name: A unique name of the class. Defaults to None.
+            name: Name of the task. Defaults to None.
             reduce: A boolean indicating whether this is a reduce task. Defaults to None.
             expand: Config expansion method, choose between "zip" and "product".
             config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
@@ -47,7 +40,8 @@ class TaskSpec(DependencyMixin):
                     With grouping "product" expansion yields : 2 * 3 = 6 configs, since the grouped parameters are
                     "zip" expanded.
         """
-        super().__init__()
+        DependencyMixin.__init__(self)
+        TaskData.__init__(self)
 
         # task has to be a class object which inherits Task or it has to be a function
         if not ((inspect.isclass(task) and issubclass(task, Task)) or inspect.isfunction(task)):
@@ -68,28 +62,20 @@ class TaskSpec(DependencyMixin):
 
         additional_kwargs = additional_kwargs if additional_kwargs is not None else {}
 
-        # set instance attributes
-        self.name = name
-        self.config: Dict = config
-        self.additional_kwargs: Dict = additional_kwargs
+        # TaskSpec attributes
         self.task = task
-        self.reduce = reduce
         self.expand_fn = expand
         self.config_group_prefix = config_group_prefix
         self.config_ignore_prefix = config_ignore_prefix
 
-        # dynamically retrieve expected and published arguments from task implementation
-        self.publishes = get_published_args_from_run_decorator(task)
+        # TaskData attributes
+        self.name = name
+        self.unique_name = name  # gets overwritten in case multiple instances of this task exists in the graph
+        self.config: Dict = config
+        self.additional_kwargs: Dict = additional_kwargs
+        self.reduce = reduce
+        # dynamically retrieve expected arguments from task implementation
         self.expects = get_expected_args_from_run_signature(task, config, additional_kwargs)
-
-        # set externally
-        self.unique_config: Optional[Dict] = None
-        self.unique_name = name
-        self.id_: Optional[int] = None
-        self.run_info: Optional[RunInfo] = None
-        self.force: Optional[str] = None
-        self.results_store: Optional[ResultsStore] = None
-        self.resource: Optional[Any] = None
 
     def expand(self) -> List["TaskSpec"]:
         return [
@@ -116,3 +102,28 @@ class TaskSpec(DependencyMixin):
         self.config = remove_prefix_from_dict(self.config, prefix=self.config_ignore_prefix)
 
         return relevant_config
+
+
+def get_expected_args_from_run_signature(
+    task: Union[Type["Task"], Callable], config: Dict, additional_kwargs: Dict
+) -> Dict[str, inspect.Parameter]:
+    if inspect.isclass(task):
+        task_all_arguments = dict(inspect.signature(task.run).parameters)
+        expected_inputs = {
+            arg: value
+            for arg, value in task_all_arguments.items()
+            if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"] and value.name != "self"
+        }
+    elif inspect.isfunction(task):
+        task_all_arguments = dict(inspect.signature(task).parameters)
+        task_extra_arguments = list(config) + list(additional_kwargs) + ["task"]
+        expected_inputs = {
+            arg: value
+            for arg, value in task_all_arguments.items()
+            if arg not in task_extra_arguments and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
+        }
+    else:
+        # cannot be reached, check has been made in TaskSpec.
+        raise TypeError
+
+    return expected_inputs

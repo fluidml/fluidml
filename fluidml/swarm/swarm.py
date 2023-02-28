@@ -5,6 +5,7 @@ from multiprocessing import Manager, set_start_method, Queue, Lock, Event
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
 
+# from fluidml.common.task import TaskState
 from fluidml.common.logging import LoggingListener, TmuxManager
 from fluidml.flow.task_spec import TaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
@@ -39,7 +40,8 @@ class Swarm:
         set_start_method(start_method, force=True)
 
         self.manager = Manager()
-        # self.results_store = results_store if results_store is not None else InMemoryStore(self.manager)
+
+        # self.task_states = self.manager.dict()
 
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
         self.resources = Swarm._allocate_resources(self.n_dolphins, resources)
@@ -47,13 +49,14 @@ class Swarm:
         self.scheduled_queue = Queue()
         self.running_queue = self.manager.list()
         self.done_queue = self.manager.list()
+        self.failed_queue = self.manager.list()
         self.logging_queue = Queue()
         self.error_queue = Queue()
         self.exit_event = Event()
         self.exit_on_error = exit_on_error
 
         # set in the beginning of self.work()
-        self.tasks: Dict[int, TaskSpec] = {}
+        self.tasks: Dict[str, TaskSpec] = {}  # self.manager.dict()
 
         # get effective logging lvl
         logging_lvl = logger.getEffectiveLevel()
@@ -63,8 +66,10 @@ class Swarm:
             Dolphin(
                 resource=self.resources[i],
                 scheduled_queue=self.scheduled_queue,
+                # task_states=self.task_states,
                 running_queue=self.running_queue,
                 done_queue=self.done_queue,
+                failed_queue=self.failed_queue,
                 logging_queue=self.logging_queue,
                 error_queue=self.error_queue,
                 lock=self.lock,
@@ -119,12 +124,12 @@ class Swarm:
         return resources
 
     @staticmethod
-    def _get_entry_point_tasks(tasks: List[TaskSpec]) -> Dict[int, str]:
+    def _get_entry_point_tasks(tasks: List[TaskSpec]) -> List[str]:
         """Gets tasks that are run first (tasks with no predecessors)."""
-        entry_task_ids = {}
+        entry_task_ids = []
         for task in tasks:
             if len(task.predecessors) == 0:
-                entry_task_ids[task.id_] = task.unique_name
+                entry_task_ids.append(task.unique_name)
         return entry_task_ids
 
     def work(
@@ -154,27 +159,31 @@ class Swarm:
         results_store = results_store if results_store is not None else InMemoryStore(self.manager)
 
         # setup logging
-        project_name = tasks[0].run_info.project_name
-        run_name = tasks[0].run_info.run_name
+        project_name = tasks[0].info.project_name
+        run_name = tasks[0].info.run_name
         logging_listener = self._init_logging(project_name, run_name)
 
         # get entry point task ids
-        entry_point_tasks: Dict[int, str] = self._get_entry_point_tasks(tasks)
+        entry_point_tasks: List[str] = self._get_entry_point_tasks(tasks)
 
         # also update the current tasks and assign results store
         for task in tasks:
             task.results_store = results_store
-            self.tasks[task.id_] = task
+            # task.status = TaskState.CUED
+            self.tasks[task.unique_name] = task
+            # self.task_states[task.unique_name] = TaskState.CUED
 
         # start the listener thread to receive log messages from child processes
         logging_listener.daemon = True
         logging_listener.start()
 
         # schedule entry point tasks
-        for task_id, task_name_unique in entry_point_tasks.items():
-            logger.debug(f"Swarm scheduling task {task_name_unique}.")
-            self.scheduled_queue.put(task_id)
-            self.running_queue.append(task_id)
+        for task_unique_name in entry_point_tasks:
+            logger.debug(f'Scheduling task "{task_unique_name}"')
+            self.scheduled_queue.put(task_unique_name)
+            self.running_queue.append(task_unique_name)
+            # self.task_states[task_unique_name] = Status.SCHEDULED
+            # self.tasks[task_unique_name].state = Status.SCHEDULED
 
         # start the workers
         for dolphin in self.dolphins:
@@ -195,7 +204,7 @@ class Swarm:
 
         # return all results
         results: Dict[str, Any] = pack_pipeline_results(
-            all_tasks=list(self.tasks.values()), results_store=results_store, return_results=return_results
+            all_tasks=list(self.tasks.values()), return_results=return_results
         )
         return results
 
