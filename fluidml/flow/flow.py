@@ -16,13 +16,13 @@ from fluidml.common.utils import (
     update_merge,
     reformat_config,
     generate_run_name,
-    create_unique_run_id_from_config,
 )
 from fluidml.flow import TaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.controller import pack_pipeline_results
 from fluidml.swarm import Swarm
-from fluidml.swarm.dolphin import run_task
+
+# from fluidml.swarm.dolphin import run_task
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class Flow:
                 task_spec.config_ignore_prefix = config_ignore_prefix
 
         # contains the expanded graph as list of Task objects -> used internally in swarm
-        self._expanded_task_specs: Optional[List[TaskSpec]] = None
+        self._expanded_tasks: Optional[List[Task]] = None
         # contains the expanded graph as networkx DiGraph -> accessible to the user for introspection and visualization
         self.task_graph: Optional[DiGraph] = None
         # contains the original, user defined task spec graph as networkx DiGraph
@@ -79,7 +79,7 @@ class Flow:
 
     @property
     def num_tasks(self):
-        return len(self._expanded_task_specs)
+        return len(self._expanded_tasks)
 
     def _create(self, task_specs: List[TaskSpec]):
         if not task_specs:
@@ -88,15 +88,15 @@ class Flow:
         Flow._check_no_task_name_clash(task_specs=task_specs)
 
         ordered_task_specs = self._order_task_specs(task_specs=task_specs)
-        self._expanded_task_specs: List[TaskSpec] = Flow._expand_and_link_task_specs(ordered_task_specs)
+        self._expanded_tasks: List[Task] = Flow._expand_and_link_tasks(ordered_task_specs)
         self.task_graph: DiGraph = Flow._create_graph_from_task_spec_list(
-            task_specs=self._expanded_task_specs, name="task graph"
+            task_specs=self._expanded_tasks, name="task graph"
         )
 
     def _infer_optimal_number_of_workers_from_graph(self) -> int:
         """Analyzes the graphs layout and finds the maximal number of tasks executed in parallel."""
         # get root tasks
-        root_tasks = [task.unique_name for task in self._expanded_task_specs if len(task.predecessors) == 0]
+        root_tasks = [task.unique_name for task in self._expanded_tasks if len(task.predecessors) == 0]
 
         # assign to each node the node's level in the directed graph
         node_to_lvl = {}
@@ -162,7 +162,9 @@ class Flow:
                 )
 
     @staticmethod
-    def _create_graph_from_task_spec_list(task_specs: List[TaskSpec], name: Optional[str] = None) -> DiGraph:
+    def _create_graph_from_task_spec_list(
+        task_specs: List[Union[TaskSpec, Task]], name: Optional[str] = None
+    ) -> DiGraph:
         """Creates nx.DiGraph object of the list of defined tasks with registered dependencies."""
         graph = DiGraph()
         for task_spec in task_specs:
@@ -192,7 +194,7 @@ class Flow:
 
         # if force == 'all' set force to True for all tasks
         if force == "all":
-            for task in self._expanded_task_specs:
+            for task in self._expanded_tasks:
                 task.force = True
             return
 
@@ -232,7 +234,7 @@ class Flow:
         tasks_to_force_execute = list(set(tasks_to_force_execute))
 
         # set force == True for all tasks in the created tasks_to_force_execute list
-        for task in self._expanded_task_specs:
+        for task in self._expanded_tasks:
             if task.name in tasks_to_force_execute:
                 task.force = True
 
@@ -248,7 +250,7 @@ class Flow:
         return sorted_specs
 
     @staticmethod
-    def _validate_spec_combination(spec_combination: List[TaskSpec]) -> bool:
+    def _validate_task_combination(task_combination: List[Task]) -> bool:
         def _match(task_cfgs: List[Dict[str, Any]]):
             # If the list of task_cfgs is empty we return True and continue with the next combination
             if not task_cfgs:
@@ -267,16 +269,16 @@ class Flow:
         # we validate the task combinations based on their path in the task graph
         # if two tasks have same parent task and their configs are different
         # then the combination is not valid
-        task_names_in_path = list(set(name for spec in spec_combination for name in spec.unique_config))
+        task_names_in_path = list(set(name for task in task_combination for name in task.unique_config))
 
         # for each defined task name in path config
         for name in task_names_in_path:
             # we collect configs for this task name from each predecessor task in the task combination list
             # if a predecessor task is of type reduce or its config doesn't contain the above task name we skip
             task_configs = [
-                spec.unique_config[name]
-                for spec in spec_combination
-                if not spec.reduce and name in spec.unique_config.keys()
+                task.unique_config[name]
+                for task in task_combination
+                if not task.reduce and name in task.unique_config.keys()
             ]
 
             # if they do not match, return False
@@ -285,38 +287,32 @@ class Flow:
         return True
 
     @staticmethod
-    def _get_predecessor_product(
-        expanded_specs_by_name: Dict[str, List[TaskSpec]], spec: TaskSpec
-    ) -> List[List[TaskSpec]]:
-        predecessor_specs = [expanded_specs_by_name[predecessor.name] for predecessor in spec.predecessors]
-        spec_combinations = [list(item) for item in product(*predecessor_specs)] if predecessor_specs else [[]]
+    def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]], spec: TaskSpec) -> List[List[Task]]:
+        predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in spec.predecessors]
+        task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
         task_combinations = [
-            combination for combination in spec_combinations if Flow._validate_spec_combination(combination)
+            combination for combination in task_combinations if Flow._validate_task_combination(combination)
         ]
         return task_combinations
 
     @staticmethod
-    def _combine_task_config(task_specs: List[TaskSpec]):
+    def _combine_task_config(task_combination: List[Task]) -> Dict:
         config = {}
-        for task_spec in task_specs:
-            config = {**config, **task_spec.unique_config}
+        for task in task_combination:
+            config = {**config, **task.unique_config}
         return config
 
     @staticmethod
-    def _merge_task_spec_combination_configs(
-        task_spec_combinations: List[List[TaskSpec]], task_specs: List[TaskSpec]
-    ) -> Dict:
+    def _merge_task_combination_configs(task_combinations: List[List[Task]], task_specs: List[TaskSpec]) -> Dict:
 
-        task_configs = [task.unique_config for combination in task_spec_combinations for task in combination]
+        task_configs = [task.unique_config for combination in task_combinations for task in combination]
         merged_config = task_configs.pop(0)
         for config in task_configs:
             merged_config: Dict = update_merge(merged_config, config)
 
         if task_configs:
             # get all task names that were specified as GridTaskSpec
-            grid_task_names = [
-                spec.name for spec in task_specs if spec.expand_fn is not None
-            ]  # isinstance(spec, GridTaskSpec)]
+            grid_task_names = [spec.name for spec in task_specs if spec.expand_fn is not None]
 
             # split merged_config in grid_task_config and normal_task_config
             grid_task_config = {key: value for key, value in merged_config.items() if key in grid_task_names}
@@ -330,76 +326,102 @@ class Flow:
         return merged_config
 
     @staticmethod
-    def _expand_and_link_task_specs(specs: List[TaskSpec]) -> List[TaskSpec]:
+    def _expand_and_link_tasks(specs: List[TaskSpec]) -> List[Task]:
         # keep track of expanded task_specs by their names
-        expanded_task_specs_by_name = defaultdict(list)
+        expanded_tasks_by_name = defaultdict(list)
 
         # for each spec to expand
         for spec in specs:
             # get predecessor task combinations
-            task_spec_combinations = Flow._get_predecessor_product(expanded_task_specs_by_name, spec)
+            task_combinations = Flow._get_predecessor_product(expanded_tasks_by_name, spec)
 
             if spec.reduce:
                 # if it is a reduce task, just add the predecessor task combinations as parents
-                expanded_task_specs = spec.expand()
+                expanded_tasks = spec.expand()
 
-                for task_spec in expanded_task_specs:
+                for task in expanded_tasks:
                     # merge configs from all predecessors to get a single reduced predecessor config
                     # note: this config might differ from the original grid config since original grid lists
                     #  containing dicts can not be recovered when merging expanded configs
-                    predecessor_config = Flow._merge_task_spec_combination_configs(task_spec_combinations, specs)
+                    predecessor_config = Flow._merge_task_combination_configs(task_combinations, specs)
 
                     # add dependencies
-                    for task_spec_combination in task_spec_combinations:
-                        task_spec.requires(task_spec_combination)
+                    for task_combination in task_combinations:
+                        task.requires(task_combination)
 
-                    # task_spec.counter = task_counter
-                    expanded_task_specs_by_name[task_spec.name].append(task_spec)
+                    # task.counter = task_counter
+                    expanded_tasks_by_name[task.name].append(task)
 
-                    # remove None value keys and prefixed keys to ignore
-                    relevant_config = task_spec.prepare_config()
-
-                    task_spec.unique_config = MetaDict(
+                    task.unique_config = MetaDict(
                         {
                             **predecessor_config,
-                            **{task_spec.name: relevant_config},
+                            **{task.name: task.unique_config},
                         }
                     )
             else:
                 # for each combination, create a new task
-                for task_spec_combination in task_spec_combinations:
-                    expanded_task_specs = spec.expand()
+                for task_combination in task_combinations:
+                    expanded_tasks = spec.expand()
 
                     # shared predecessor config
-                    predecessor_config = Flow._combine_task_config(task_spec_combination)
+                    predecessor_config = Flow._combine_task_config(task_combination)
 
                     # for each task that is created, add ids and dependencies
-                    for task_spec in expanded_task_specs:
-                        task_spec.requires(task_spec_combination)
+                    for task in expanded_tasks:
+                        task.requires(task_combination)
 
-                        # remove None value keys and prefixed keys to ignore
-                        relevant_config = task_spec.prepare_config()
-
-                        task_spec.unique_config = MetaDict(
+                        task.unique_config = MetaDict(
                             {
                                 **predecessor_config,
-                                **{task_spec.name: relevant_config},
+                                **{task.name: task.unique_config},
                             }
                         )
-                        expanded_task_specs_by_name[task_spec.name].append(task_spec)
+                        expanded_tasks_by_name[task.name].append(task)
 
         # create final list of linked task specs and set expansion id for expanded specs
-        final_task_specs = []
-        for expanded_task_specs in expanded_task_specs_by_name.values():
-            if len(expanded_task_specs) == 1:
-                for task_spec in expanded_task_specs:
-                    final_task_specs.append(task_spec)
+        all_tasks = []
+        for expanded_tasks in expanded_tasks_by_name.values():
+            if len(expanded_tasks) == 1:
+                for task in expanded_tasks:
+                    all_tasks.append(task)
             else:
-                for expansion_id, task_spec in enumerate(expanded_task_specs, 1):
-                    task_spec.unique_name = f"{task_spec.name}-{expansion_id}"
-                    final_task_specs.append(task_spec)
+                for expansion_id, task in enumerate(expanded_tasks, 1):
+                    task.unique_name = f"{task.name}-{expansion_id}"
+                    all_tasks.append(task)
 
-        return final_task_specs
+        return all_tasks
+
+    def _get_number_of_used_workers(self, num_workers: Optional[int] = None) -> int:
+        """Get the number of workers, given the optimal, maximum and user-defined number.
+
+        1. get maximum number of available workers.
+        2. infer optimal number of workers given the expanded graph to process
+        3. define num_workers based on optimal_num_workers
+
+        Args:
+            num_workers: Number of workers set by the user.
+
+        Returns:
+            Number of workers used.
+        """
+        max_num_workers = multiprocessing.cpu_count()
+        optimal_num_workers = self._infer_optimal_number_of_workers_from_graph()
+        optimal_num_workers = optimal_num_workers if optimal_num_workers <= max_num_workers else max_num_workers
+        if num_workers is None or num_workers > optimal_num_workers:
+            num_workers = optimal_num_workers
+
+        return num_workers
+
+    @staticmethod
+    def _process_resources(num_workers: int, resources: Optional[Any] = None) -> Optional[List[Any]]:
+        # convert resources to list if a single resource was provided
+        # and trim list of resources to actual number of used workers
+        if resources is None:
+            return None
+        elif isinstance(resources, List):
+            return resources[:num_workers]
+        else:
+            return [resources]
 
     def run(
         self,
@@ -464,90 +486,84 @@ class Flow:
         if return_results is None and (results_store is None or isinstance(results_store, InMemoryStore)):
             return_results = "latest"
 
-        # Assign run and project name to spec object and generate unique config hash
-        for spec in self._expanded_task_specs:
-            spec.run_name = run_name
-            spec.project_name = project_name
-            spec.unique_config_hash = create_unique_run_id_from_config(spec.unique_config)
-            # spec.info = TaskInfo(
-            #     run_name=run_name,
-            #     project_name=project_name,
-            #     unique_config_hash=create_unique_run_id_from_config(spec.unique_config),
-            # )
-
         # get maximum number of available workers
         # and infer optimal number of workers given the expanded graph to process
-        max_num_workers = multiprocessing.cpu_count()
-        optimal_num_workers = self._infer_optimal_number_of_workers_from_graph()
-        optimal_num_workers = optimal_num_workers if optimal_num_workers <= max_num_workers else max_num_workers
-        if num_workers is None or num_workers > optimal_num_workers:
-            num_workers = optimal_num_workers
+        num_workers = self._get_number_of_used_workers(num_workers)
 
         # convert resources to list if a single resource was provided
         # and trim list of resources to actual number of used workers
-        resources = resources if resources is None or isinstance(resources, List) else [resources]
-        if isinstance(resources, List):
-            resources = resources[:num_workers]
+        resources = self._process_resources(num_workers, resources)
 
-        # if multiple workers are used execute task graph in parallel with swarm
-        if num_workers > 1:
-            logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers')
-            with Swarm(
-                n_dolphins=num_workers,
-                resources=resources,
-                start_method=start_method,
-                exit_on_error=exit_on_error,
-                log_to_tmux=log_to_tmux,
-                max_panes_per_window=max_panes_per_window,
-            ) as swarm:
-                results = swarm.work(
-                    tasks=self._expanded_task_specs,
-                    results_store=results_store,
-                    return_results=return_results,
-                )
-        # else run the topologically sorted graph sequentially
-        else:
-            logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')
-            resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
-            results = self._run_linear(
+        with Swarm(
+            n_dolphins=num_workers,
+            resources=resources,
+            start_method=start_method,
+            exit_on_error=exit_on_error,
+            log_to_tmux=log_to_tmux,
+            max_panes_per_window=max_panes_per_window,
+        ) as swarm:
+            results = swarm.work(
+                tasks=self._expanded_tasks,
+                run_name=run_name,
+                project_name=project_name,
                 results_store=results_store,
                 return_results=return_results,
-                resource=resource,  # assign first resource object to all tasks (see doc-string)
             )
 
-        return results
-
-    def _run_linear(
-        self,
-        results_store: Optional[ResultsStore] = None,
-        return_results: Optional[str] = None,
-        resource: Optional[Any] = None,
-    ) -> Dict[str, Union[List[Dict], Dict]]:
-
-        # setup results store
-        results_store = results_store if results_store is not None else InMemoryStore()
-
-        for i, task_spec in enumerate(self._expanded_task_specs, 1):
-
-            task_spec.results_store = results_store
-            task_spec.resource = resource
-
-            # instantiate task obj
-            task = Task.from_spec(task_spec)
-
-            # run the task
-            completed: bool = run_task(task)
-
-            # Log task completion
-            if completed:
-                msg = f'Task "{task.unique_name}" already executed'
-            else:
-                msg = f'Finished task "{task.unique_name}"'
-            logger.info(f"{msg} [{i}/{self.num_tasks} " f"- {round((i / self.num_tasks) * 100)}%]")
-
-        # collect published results from all tasks
-        results: Dict[str, Any] = pack_pipeline_results(
-            all_tasks=self._expanded_task_specs, return_results=return_results
-        )
+        # # if multiple workers are used execute task graph in parallel with swarm
+        # if num_workers > 1:
+        #     logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers')
+        #     with Swarm(
+        #         n_dolphins=num_workers,
+        #         resources=resources,
+        #         start_method=start_method,
+        #         exit_on_error=exit_on_error,
+        #         log_to_tmux=log_to_tmux,
+        #         max_panes_per_window=max_panes_per_window,
+        #     ) as swarm:
+        #         results = swarm.work(
+        #             tasks=self._expanded_tasks,
+        #             results_store=results_store,
+        #             return_results=return_results,
+        #         )
+        # # else run the topologically sorted graph sequentially
+        # else:
+        #     logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')
+        #     resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
+        #     results = self._run_linear(
+        #         results_store=results_store,
+        #         return_results=return_results,
+        #         resource=resource,  # assign first resource object to all tasks (see doc-string)
+        #     )
 
         return results
+
+    # def _run_linear(
+    #     self,
+    #     results_store: Optional[ResultsStore] = None,
+    #     return_results: Optional[str] = None,
+    #     resource: Optional[Any] = None,
+    # ) -> Dict[str, Union[List[Dict], Dict]]:
+    #
+    #     # setup results store
+    #     results_store = results_store if results_store is not None else InMemoryStore()
+    #
+    #     for i, task in enumerate(self._expanded_tasks, 1):
+    #
+    #         task.results_store = results_store
+    #         task.resource = resource
+    #
+    #         # run the task
+    #         completed: bool = run_task(task)
+    #
+    #         # Log task completion
+    #         if completed:
+    #             msg = f'Task "{task.unique_name}" already executed'
+    #         else:
+    #             msg = f'Finished task "{task.unique_name}"'
+    #         logger.info(f"{msg} [{i}/{self.num_tasks} " f"- {round((i / self.num_tasks) * 100)}%]")
+    #
+    #     # collect published results from all tasks
+    #     results: Dict[str, Any] = pack_pipeline_results(all_tasks=self._expanded_tasks, return_results=return_results)
+    #
+    #     return results

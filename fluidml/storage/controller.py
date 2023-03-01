@@ -5,7 +5,6 @@ from typing import Dict, Any, List, Optional
 from fluidml.common import Task
 from fluidml.common.exception import TaskResultKeyAlreadyExists, TaskResultObjectMissing
 from fluidml.common.utils import change_logging_level
-from fluidml.flow.task_spec import TaskSpec
 from fluidml.storage import ResultsStore, Promise, Sweep, LazySweep
 
 
@@ -13,7 +12,7 @@ class TaskDataController:
     def __init__(self, task: Task):
         self._task_name: str = task.name
         self._results_store: ResultsStore = task.results_store
-        self._predecessor_tasks: List[TaskSpec] = task.predecessors
+        self._predecessor_tasks: List[Task] = task.predecessors
         self._task_expects: Dict[str, inspect.Parameter] = task.expects
         self._reduce = task.reduce
 
@@ -24,7 +23,7 @@ class TaskDataController:
         else:
             return False
 
-    def _get_results_from_predecessor(self, predecessor: TaskSpec) -> Dict:
+    def _get_results_from_predecessor(self, predecessor: Task) -> Dict:
         results = {}
         for item_name in self._task_expects:
             param: inspect.Parameter = self._task_expects[item_name]
@@ -97,7 +96,7 @@ class TaskDataController:
         return predecessor_results
 
 
-def pack_pipeline_results(all_tasks: List[TaskSpec], return_results: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def pack_pipeline_results(all_tasks: List[Task], return_results: Optional[str] = None) -> Optional[Dict[str, Any]]:
     pipeline_results = defaultdict(list)
     if return_results is None:
         return None
@@ -119,7 +118,7 @@ def pack_pipeline_results(all_tasks: List[TaskSpec], return_results: Optional[st
     return _simplify_results(pipeline_results=pipeline_results)
 
 
-def _get_saved_task_results(task: TaskSpec) -> Dict:
+def _get_saved_task_results(task: Task) -> Dict:
     saved_results = task.results_store.load(
         ".saved_results", task_name=task.name, task_unique_config=task.unique_config
     )

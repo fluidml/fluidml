@@ -117,10 +117,24 @@ class ResultsStore(ABC):
         return results
 
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
+        from fluidml.common.task import TaskState
+
         # try to load task completed object; if it is None we return None and re-run the task
-        completed: Optional[str] = self.load(
-            name=".completed", task_name=task_name, task_unique_config=task_unique_config
+        run_info: Optional[Dict] = self.load(
+            name="fluidml_run_info", task_name=task_name, task_unique_config=task_unique_config
         )
-        if not completed:
+        if not run_info:
             return False
-        return True
+        elif run_info["state"] == TaskState.FINISHED:
+            return True
+        else:
+            return True
+
+    # def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
+    #     # try to load task completed object; if it is None we return None and re-run the task
+    #     completed: Optional[str] = self.load(
+    #         name=".completed", task_name=task_name, task_unique_config=task_unique_config
+    #     )
+    #     if not completed:
+    #         return False
+    #     return True

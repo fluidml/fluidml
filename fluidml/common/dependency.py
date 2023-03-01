@@ -1,6 +1,7 @@
 from typing import Union, List, Tuple, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from fluidml.common.task import Task
     from fluidml.flow.task_spec import TaskSpec
 
 
@@ -16,7 +17,7 @@ class DependencyMixin:
         self._predecessors = []
         self._successors = []
 
-    def requires(self, *predecessors: Union["TaskSpec", List["TaskSpec"]]):
+    def requires(self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]):
         """Adds predecessor task specs"""
         if len(predecessors) == 1:
             predecessors = predecessors[0] if isinstance(predecessors[0], List) else [predecessors[0]]
@@ -41,17 +42,17 @@ class DependencyMixin:
         self._successors.append(successor)
 
     @property
-    def predecessors(self) -> List["TaskSpec"]:
+    def predecessors(self) -> List[Union["TaskSpec", "Task"]]:
         return self._predecessors
 
     @predecessors.setter
-    def predecessors(self, predecessors: List["TaskSpec"]):
+    def predecessors(self, predecessors: List[Union["TaskSpec", "Task"]]):
         self._predecessors = predecessors
 
     @property
-    def successors(self) -> List["TaskSpec"]:
+    def successors(self) -> List[Union["TaskSpec", "Task"]]:
         return self._successors
 
     @successors.setter
-    def successors(self, successors: List["TaskSpec"]):
+    def successors(self, successors: List[Union["TaskSpec", "Task"]]):
         self._successors = successors

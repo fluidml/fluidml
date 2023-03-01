@@ -42,6 +42,7 @@ class TaskState(str, Enum):
 class TaskInfo:
     project_name: str
     run_name: str
+    state: TaskState
     run_history: Optional[int] = None
     sweep_counter: Optional[int] = None
     unique_config_hash: Optional[str] = None
@@ -58,9 +59,8 @@ class TaskInfo:
         return self.__dict__
 
 
-@dataclass
-class TaskData:
-    """Container to hold all attributes of a FluidML Task object.
+class Task(ABC, DependencyMixin):
+    """Base class for a FluidML `Task`.
 
     Attributes:
         name: Name of the task, e.g. "Processing".
@@ -85,24 +85,51 @@ class TaskData:
         reduce: A boolean indicating whether this is a reduce-task. Defaults to None.
     """
 
-    project_name: Optional[str] = None
-    run_name: Optional[str] = None
-    run_history: Optional[Dict] = None
-    sweep_counter: Optional[str] = None
-    unique_config_hash: Optional[str] = None
-    state: Optional[TaskState] = None
+    # needed to avoid overwriting already initialized Task attributes, when the user task's __init__ method
+    #  with a super() call is called at a later time.
+    _is_initialized: bool = False
 
-    name: Optional[str] = None
-    unique_name: Optional[str] = None
-    results_store: Optional[ResultsStore] = None
-    resource: Optional[Any] = None
-    reduce: Optional[bool] = None
-    expects: Optional[Dict[str, inspect.Parameter]] = None
-    config: Optional[Dict[str, Any]] = None
-    additional_kwargs: Optional[Dict[str, Any]] = None
+    def __init__(
+        self,
+        project_name: Optional[str] = None,
+        run_name: Optional[str] = None,
+        run_history: Optional[Dict] = None,
+        sweep_counter: Optional[str] = None,
+        unique_config_hash: Optional[str] = None,
+        state: Optional[TaskState] = None,
+        name: Optional[str] = None,
+        unique_name: Optional[str] = None,
+        results_store: Optional[ResultsStore] = None,
+        resource: Optional[Any] = None,
+        reduce: Optional[bool] = None,
+        expects: Optional[Dict[str, inspect.Parameter]] = None,
+        config: Optional[Dict[str, Any]] = None,
+        additional_kwargs: Optional[Dict[str, Any]] = None,
+        unique_config: Optional[Union[Dict, MetaDict]] = None,
+        force: Optional[bool] = None,
+    ):
 
-    unique_config: Optional[Union[Dict, MetaDict]] = None
-    force: Optional[bool] = None
+        if not self._is_initialized:
+            DependencyMixin.__init__(self)
+
+            self.project_name = project_name
+            self.run_name = run_name
+            self.run_history = run_history
+            self.sweep_counter = sweep_counter
+            self.unique_config_hash = unique_config_hash
+            self.state = state
+            self.name = name
+            self.unique_name = unique_name
+            self.results_store = results_store
+            self.resource = resource
+            self.reduce = reduce
+            self.expects = expects
+            self.config = config
+            self.additional_kwargs = additional_kwargs
+            self.unique_config = unique_config
+            self.force = force
+
+            self._is_initialized = True
 
     @property
     def id(self) -> str:
@@ -113,18 +140,11 @@ class TaskData:
         return TaskInfo(
             project_name=self.project_name,
             run_name=self.run_name,
+            state=self.state,
             run_history=self.run_history,
             sweep_counter=self.sweep_counter,
             unique_config_hash=self.unique_config_hash,
         )
-
-
-class Task(ABC, TaskData, DependencyMixin):
-    """Base class for a FluidML `Task`."""
-
-    def __init__(self):
-        DependencyMixin.__init__(self)
-        TaskData.__init__(self)
 
     @abstractmethod
     def run(self, **results):
@@ -134,6 +154,19 @@ class Task(ABC, TaskData, DependencyMixin):
             **results: results from predecessors (automatically passed by flow or swarm (multiprocessing))
         """
         raise NotImplementedError
+
+    def _init(self):
+        """A wrapper to call the actual user task's __init__ method with the provided config"""
+        self.__init__(**self.config)
+
+    @staticmethod
+    def _check_no_internally_used_config_keys(task: "Task", config: MetaDict):
+        internal_keys = [k for k in config if k in {**Task.__dict__, **task.__dict__}]
+        if internal_keys:
+            raise ValueError(
+                f"The config keys: {', '.join(internal_keys)} are protected since they are used "
+                f"internally by the Task class. Please consider renaming them."
+            )
 
     def _track_saved_object(self, name: str, mode: str, type_: Optional[str] = None):
         # load saved objects
@@ -273,42 +306,54 @@ class Task(ABC, TaskData, DependencyMixin):
         )
 
     @classmethod
-    def from_spec(cls, task_spec: "TaskSpec"):
+    def from_spec(cls, task_spec: "TaskSpec", half_initialize: bool = False) -> "Task":
+        """Initializes a Task object from a TaskSpec object.
 
-        # convert task config values to MetaDicts
+        Args:
+            task_spec: A task specification object.
+            half_initialize: A boolean to indicate whether only the parent Task object is initialized and the
+                child class initialization is delayed until task._init() is called.
+                The half initialization is only needed internally to create a task object without directly executing the
+                __init__ method of the actual task implemented by the user.
+
+        Returns:
+            A task object (fully or half initialized).
+        """
+
+        # convert task config values to MetaDict
         task_spec.config = MetaDict(task_spec.config)
-        task_spec.additional_kwargs = MetaDict(task_spec.additional_kwargs)
 
-        # TODO (LH): Deep merge config kwargs and additional kwargs (to preserve original config structure of arguments)
         if inspect.isclass(task_spec.task):
-            task = task_spec.task(**task_spec.config, **task_spec.additional_kwargs)
+            if half_initialize:
+                # create a new user task object without initialization
+                task = task_spec.task.__new__(task_spec.task)
+                # only init the inherited base task
+                Task.__init__(task)
+            else:
+                # normal initialization
+                task = task_spec.task(**task_spec.config)
             task.config = task_spec.config
-            task.additional_kwargs = task_spec.additional_kwargs
+
+            # make sure the user provided config does not contain first level keys that are used in the Task class
+            Task._check_no_internally_used_config_keys(task=task, config=task.config)
+
         elif inspect.isfunction(task_spec.task):
+            # create an artificial wrapper task object to support functional tasks
             task = _TaskFromCallable(
                 task=task_spec.task,
                 config=task_spec.config,
-                additional_kwargs=task_spec.additional_kwargs,
             )
         else:
             # cannot be reached, check has been made in TaskSpec.
             raise TypeError
 
-        task.project_name = task_spec.project_name
-        task.run_name = task_spec.run_name
-        task.run_history = task_spec.run_history
-        task.sweep_counter = task_spec.sweep_counter
-        task.unique_config_hash = task_spec.unique_config_hash
-        task.results_store = task_spec.results_store
-        task.resource = task_spec.resource
         task.name = task_spec.name
         task.unique_name = task_spec.unique_name
         task.unique_config = task_spec.unique_config
         task.reduce = task_spec.reduce
-        task.force = task_spec.force
+        task.expects = task_spec.expects
         task.predecessors = task_spec.predecessors
         task.successors = task_spec.successors
-        task.expects = task_spec.expects
 
         return task
 
@@ -316,11 +361,13 @@ class Task(ABC, TaskData, DependencyMixin):
 class _TaskFromCallable(Task):
     """A wrapper class that wraps a callable as a Task."""
 
-    def __init__(self, task: Callable, config: MetaDict, additional_kwargs: MetaDict):
+    def __init__(self, task: Callable, config: MetaDict):
         super().__init__()
         self.task = task
         self.config = config
-        self.additional_kwargs = additional_kwargs
 
     def run(self, **results: Dict[str, Any]):
-        self.task(**results, **self.config, **self.additional_kwargs, task=self)
+        self.task(**results, **self.config, task=self)
+
+    def _init(self):
+        pass

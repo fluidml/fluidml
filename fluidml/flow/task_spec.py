@@ -2,12 +2,12 @@ import inspect
 import json
 from typing import Dict, Any, Optional, List, Union, Callable, Type
 
-from fluidml.common import DependencyMixin, Task, TaskData
+from fluidml.common import DependencyMixin, Task
 from fluidml.common.utils import remove_prefixed_keys_from_dict, remove_prefix_from_dict, remove_none_from_dict
 from fluidml.flow.config_expansion import expand_config
 
 
-class TaskSpec(TaskData, DependencyMixin):
+class TaskSpec(DependencyMixin):
     def __init__(
         self,
         task: Union[Type["Task"], Callable],
@@ -41,7 +41,6 @@ class TaskSpec(TaskData, DependencyMixin):
                     "zip" expanded.
         """
         DependencyMixin.__init__(self)
-        TaskData.__init__(self)
 
         # task has to be a class object which inherits Task or it has to be a function
         if not ((inspect.isclass(task) and issubclass(task, Task)) or inspect.isfunction(task)):
@@ -77,31 +76,79 @@ class TaskSpec(TaskData, DependencyMixin):
         # dynamically retrieve expected arguments from task implementation
         self.expects = get_expected_args_from_run_signature(task, config, additional_kwargs)
 
-    def expand(self) -> List["TaskSpec"]:
-        return [
-            TaskSpec(
-                task=self.task,
-                config=config,
-                additional_kwargs=self.additional_kwargs,
-                name=self.name,
-                reduce=self.reduce,
-                config_group_prefix=self.config_group_prefix,
-                config_ignore_prefix=self.config_ignore_prefix,
-            )
-            for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix)
-        ]
+        # dynamically set by Flow
+        self.unique_config: Optional[Dict] = None
 
-    def prepare_config(self):
-        # remove keys with None values as well as prefixed keys to ignore from config
-        # creates a new relevant_config object
+    def expand(self) -> List["Task"]:
+        tasks = []
+        for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix):
+            relevant_config = self.create_relevant_config(config)
+            config = self.prepare_config(config)
+
+            task_spec = TaskSpec(task=self.task, config=config, name=self.name, reduce=self.reduce)
+            task_spec.unique_config = relevant_config
+
+            tasks.append(Task.from_spec(task_spec, half_initialize=True))
+
+        return tasks
+
+    def create_relevant_config(self, config: Dict) -> Dict:
+        """Remove keys with None values as well as prefixed keys to ignore from config.
+
+        Args:
+            config: An expanded config dictionary.
+
+        Returns:
+            A new relevant_config object that is used to initialize the unique_config
+        """
         relevant_config = remove_prefixed_keys_from_dict(
-            remove_none_from_dict(self.config), prefix=self.config_ignore_prefix
+            remove_none_from_dict(config), prefix=self.config_ignore_prefix
         )
-
-        # mutate self.config object by removing the ignore prefix from all keys
-        self.config = remove_prefix_from_dict(self.config, prefix=self.config_ignore_prefix)
-
         return relevant_config
+
+    def prepare_config(self, config: Dict) -> Dict:
+        """Prepare the config for feedint it into the task.
+
+        Removes the ignore_prefix from all keys in config.
+        Merges the additional keyword arguments.
+
+        Args:
+            config: An expanded config dictionary.
+
+        Returns:
+            A new relevant_config object that is used to initialize the unique_config
+        """
+        # remove ignore_prefix from all keys in config
+        config = remove_prefix_from_dict(config, prefix=self.config_ignore_prefix)
+        # merge config with additional kwargs
+        config = {**config, **self.additional_kwargs}
+        return config
+
+    # def expand(self) -> List["TaskSpec"]:
+    #     return [
+    #         TaskSpec(
+    #             task=self.task,
+    #             config=config,
+    #             additional_kwargs=self.additional_kwargs,
+    #             name=self.name,
+    #             reduce=self.reduce,
+    #             config_group_prefix=self.config_group_prefix,
+    #             config_ignore_prefix=self.config_ignore_prefix,
+    #         )
+    #         for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix)
+    #     ]
+    #
+    # def prepare_config(self):
+    #     # remove keys with None values as well as prefixed keys to ignore from config
+    #     # creates a new relevant_config object
+    #     relevant_config = remove_prefixed_keys_from_dict(
+    #         remove_none_from_dict(self.config), prefix=self.config_ignore_prefix
+    #     )
+    #
+    #     # mutate self.config object by removing the ignore prefix from all keys
+    #     self.config = remove_prefix_from_dict(self.config, prefix=self.config_ignore_prefix)
+    #
+    #     return relevant_config
 
 
 def get_expected_args_from_run_signature(
