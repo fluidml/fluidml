@@ -3,13 +3,21 @@ import contextlib
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from multiprocessing import Lock
+from enum import Enum
+from multiprocessing import RLock
 from typing import Optional, Dict, Any, List
 
 from metadict import MetaDict
 
 
 logger = logging.getLogger(__name__)
+
+
+class Names(str, Enum):
+    FLUIDML_INFO_FILE = "fluidml_info"
+    SAVED_RESULTS_FILE = ".saved_results"
+    FLUIDML_DIR = ".fluidml"
+    CONFIG = "config.json"
 
 
 class Promise(ABC):
@@ -38,7 +46,7 @@ class StoreContext:
 
 class ResultsStore(ABC):
     def __init__(self):
-        self._lock: Optional[Lock] = None
+        self._lock: Optional[RLock] = None
 
     @property
     def lock(self):
@@ -49,7 +57,7 @@ class ResultsStore(ABC):
         return self._lock
 
     @lock.setter
-    def lock(self, lock: Lock):
+    def lock(self, lock: RLock):
         self._lock = lock
 
     @abstractmethod
@@ -121,20 +129,9 @@ class ResultsStore(ABC):
 
         # try to load task completed object; if it is None we return None and re-run the task
         run_info: Optional[Dict] = self.load(
-            name="fluidml_run_info", task_name=task_name, task_unique_config=task_unique_config
+            name=Names.FLUIDML_INFO_FILE, task_name=task_name, task_unique_config=task_unique_config
         )
-        if not run_info:
-            return False
-        elif run_info["state"] == TaskState.FINISHED:
+        if run_info and run_info["state"] == TaskState.FINISHED:
             return True
         else:
-            return True
-
-    # def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
-    #     # try to load task completed object; if it is None we return None and re-run the task
-    #     completed: Optional[str] = self.load(
-    #         name=".completed", task_name=task_name, task_unique_config=task_unique_config
-    #     )
-    #     if not completed:
-    #         return False
-    #     return True
+            return False

@@ -1,15 +1,15 @@
+import datetime
 import inspect
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union, Callable
 
 from metadict import MetaDict
 
 from fluidml.common.dependency import DependencyMixin
-from fluidml.common.utils import change_logging_level
-from fluidml.storage import ResultsStore, Promise, File
+from fluidml.common.utils import change_logging_level, BaseModel
+from fluidml.storage import ResultsStore, Promise, File, Names
 
 if TYPE_CHECKING:
     from fluidml.flow import TaskSpec
@@ -38,25 +38,17 @@ class TaskState(str, Enum):
     FINISHED = "finished"
 
 
-@dataclass
-class TaskInfo:
+class TaskInfo(BaseModel):
     project_name: str
     run_name: str
-    state: TaskState
-    run_history: Optional[int] = None
-    sweep_counter: Optional[int] = None
+    state: Optional[TaskState] = None
+    started: Optional[datetime.datetime] = None
+    ended: Optional[datetime.datetime] = None
+    duration: Optional[datetime.timedelta] = None
+    run_history: Optional[Dict] = None
+    sweep_counter: Optional[str] = None
     unique_config_hash: Optional[str] = None
-
-    @property
-    def id(self) -> str:
-        return (
-            f"{self.run_name}-{self.sweep_counter}"
-            if self.sweep_counter
-            else f"{self.run_name}-{self.unique_config_hash}"
-        )
-
-    def dict(self) -> Dict:
-        return self.__dict__
+    id: Optional[str] = None
 
 
 class Task(ABC, DependencyMixin):
@@ -93,10 +85,12 @@ class Task(ABC, DependencyMixin):
         self,
         project_name: Optional[str] = None,
         run_name: Optional[str] = None,
+        state: Optional[TaskState] = None,
+        started: Optional[datetime.datetime] = None,
+        ended: Optional[datetime.datetime] = None,
         run_history: Optional[Dict] = None,
         sweep_counter: Optional[str] = None,
         unique_config_hash: Optional[str] = None,
-        state: Optional[TaskState] = None,
         name: Optional[str] = None,
         unique_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
@@ -114,10 +108,12 @@ class Task(ABC, DependencyMixin):
 
             self.project_name = project_name
             self.run_name = run_name
+            self.state = state
+            self.started = started
+            self.ended = ended
             self.run_history = run_history
             self.sweep_counter = sweep_counter
             self.unique_config_hash = unique_config_hash
-            self.state = state
             self.name = name
             self.unique_name = unique_name
             self.results_store = results_store
@@ -133,7 +129,20 @@ class Task(ABC, DependencyMixin):
 
     @property
     def id(self) -> str:
-        return self.info.id
+        return (
+            f"{self.run_name}-{self.sweep_counter}"
+            if self.sweep_counter
+            else f"{self.run_name}-{self.unique_config_hash}"
+        )
+
+    @property
+    def duration(self) -> Optional[datetime.timedelta]:
+        if self.started and self.ended:
+            return self.ended - self.started
+        elif self.started:
+            return datetime.datetime.now() - self.started
+        else:
+            return None
 
     @property
     def info(self) -> TaskInfo:
@@ -141,9 +150,13 @@ class Task(ABC, DependencyMixin):
             project_name=self.project_name,
             run_name=self.run_name,
             state=self.state,
+            started=self.started,
+            ended=self.ended,
+            duration=self.duration,
             run_history=self.run_history,
             sweep_counter=self.sweep_counter,
             unique_config_hash=self.unique_config_hash,
+            id=self.id,
         )
 
     @abstractmethod
@@ -170,12 +183,11 @@ class Task(ABC, DependencyMixin):
 
     def _track_saved_object(self, name: str, mode: str, type_: Optional[str] = None):
         # load saved objects
-        with change_logging_level(50):
+        with change_logging_level(40):
             saved_objects: Optional[List[str]] = self.load(
-                name=".saved_results",
+                name=Names.SAVED_RESULTS_FILE,
                 task_name=self.name,
                 task_unique_config=self.unique_config,
-                raise_not_found_warning=False,
             )
 
         if mode == "save":
@@ -186,9 +198,9 @@ class Task(ABC, DependencyMixin):
                 saved_objects.append(name)
                 self.results_store.save(
                     obj=saved_objects,
-                    name=".saved_results",
+                    name=Names.SAVED_RESULTS_FILE,
                     type_="json",
-                    sub_dir=".load_info",
+                    sub_dir=Names.FLUIDML_DIR,
                     task_name=self.name,
                     task_unique_config=self.unique_config,
                 )
@@ -199,9 +211,9 @@ class Task(ABC, DependencyMixin):
                 del saved_objects[saved_objects.index(name)]
                 self.results_store.save(
                     obj=saved_objects,
-                    name=".saved_results",
+                    name=Names.SAVED_RESULTS_FILE,
                     type_="json",
-                    sub_dir=".load_info",
+                    sub_dir=Names.FLUIDML_DIR,
                     task_name=self.name,
                     task_unique_config=self.unique_config,
                 )

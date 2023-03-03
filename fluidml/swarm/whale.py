@@ -1,8 +1,7 @@
 import logging
-import os
 import sys
 from abc import abstractmethod
-from multiprocessing import Process, Queue, Lock, Event
+from multiprocessing import Process, Queue, RLock, Event
 
 from fluidml.common.logging import QueueHandler, StdoutHandler, StderrHandler
 
@@ -17,10 +16,11 @@ class Whale(Process):
         logging_queue: Queue,
         error_queue: Queue,
         logging_lvl: int,
-        lock: Lock,
+        lock: RLock,
         use_multiprocessing: bool = True,
     ):
         self.use_multiprocessing = use_multiprocessing
+        # only init the Process parent class if multiprocessing is configured.
         if self.use_multiprocessing:
             super().__init__(target=self.work, args=())
             self._logging_queue = logging_queue
@@ -30,7 +30,6 @@ class Whale(Process):
         self._exit_on_error = exit_on_error
         self._error_queue = error_queue
         self._lock = lock
-        self.internal_error = True
 
     def _configure_logging(self):
         h = QueueHandler(self._logging_queue, self.name)

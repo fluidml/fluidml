@@ -124,32 +124,6 @@ class TaskSpec(DependencyMixin):
         config = {**config, **self.additional_kwargs}
         return config
 
-    # def expand(self) -> List["TaskSpec"]:
-    #     return [
-    #         TaskSpec(
-    #             task=self.task,
-    #             config=config,
-    #             additional_kwargs=self.additional_kwargs,
-    #             name=self.name,
-    #             reduce=self.reduce,
-    #             config_group_prefix=self.config_group_prefix,
-    #             config_ignore_prefix=self.config_ignore_prefix,
-    #         )
-    #         for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix)
-    #     ]
-    #
-    # def prepare_config(self):
-    #     # remove keys with None values as well as prefixed keys to ignore from config
-    #     # creates a new relevant_config object
-    #     relevant_config = remove_prefixed_keys_from_dict(
-    #         remove_none_from_dict(self.config), prefix=self.config_ignore_prefix
-    #     )
-    #
-    #     # mutate self.config object by removing the ignore prefix from all keys
-    #     self.config = remove_prefix_from_dict(self.config, prefix=self.config_ignore_prefix)
-    #
-    #     return relevant_config
-
 
 def get_expected_args_from_run_signature(
     task: Union[Type["Task"], Callable], config: Dict, additional_kwargs: Dict

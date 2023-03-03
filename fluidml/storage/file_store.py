@@ -6,7 +6,7 @@ import shutil
 from dataclasses import dataclass
 from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO, TYPE_CHECKING
 
-from fluidml.storage.base import ResultsStore, Promise, StoreContext
+from fluidml.storage.base import ResultsStore, Promise, StoreContext, Names
 
 if TYPE_CHECKING:
     from fluidml.common.task import TaskInfo
@@ -211,7 +211,7 @@ class LocalFileStore(ResultsStore):
         }
 
         # create a hidden load info dir to save object information used by self.load()
-        load_info_dir = os.path.join(run_dir, ".load_info")
+        load_info_dir = os.path.join(run_dir, Names.FLUIDML_DIR)
         os.makedirs(load_info_dir, exist_ok=True)
 
         pickle.dump(load_info, open(os.path.join(load_info_dir, f'.{name.lstrip(".")}_load_info.p'), "wb"))
@@ -219,7 +219,7 @@ class LocalFileStore(ResultsStore):
     @staticmethod
     def _get_load_info(run_dir: str, name: str) -> Optional[Tuple]:
         # get load information from run dir
-        load_info_file_path = os.path.join(run_dir, ".load_info", f'.{name.lstrip(".")}_load_info.p')
+        load_info_file_path = os.path.join(run_dir, Names.FLUIDML_DIR, f'.{name.lstrip(".")}_load_info.p')
         try:
             load_info = pickle.load(open(load_info_file_path, "rb"))
         except FileNotFoundError:
@@ -532,14 +532,15 @@ class LocalFileStore(ResultsStore):
             # create new run dir if run dir does not exist
             if run_dir is None:
                 run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_info=self.run_info)
-                json.dump(task_unique_config, open(os.path.join(run_dir, f"config.json"), "w"), indent=4)
+                json.dump(task_unique_config, open(os.path.join(run_dir, Names.CONFIG), "w"), indent=4)
 
             sweep_counter = os.path.split(run_dir)[-1].rsplit("-")[-1]
         return StoreContext(run_dir=run_dir, sweep_counter=sweep_counter)
 
     @staticmethod
     def _scan_task_dir(task_dir: str) -> List[str]:
-        os.makedirs(task_dir, exist_ok=True)
+        if not os.path.isdir(task_dir):
+            return []
         exist_run_dirs = [os.path.join(task_dir, d.name) for d in os.scandir(task_dir) if d.is_dir()]
         return exist_run_dirs
 
@@ -548,7 +549,7 @@ class LocalFileStore(ResultsStore):
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         for exist_run_dir in exist_run_dirs:
             try:
-                exist_config = json.load(open(os.path.join(exist_run_dir, "config.json"), "r"))
+                exist_config = json.load(open(os.path.join(exist_run_dir, Names.CONFIG), "r"))
             except FileNotFoundError:
                 continue
 
@@ -582,9 +583,6 @@ class LocalFileStore(ResultsStore):
 
             # create the new run dir name
             new_dir_name = new_id if run_info is None else f"{run_info.run_name}-{new_id}"
-            # register the new id as sweep counter for the task's run info object
-            # if run_info:
-            #     run_info.sweep_counter = new_id
 
         # create and return new run dir
         new_run_dir = os.path.join(task_dir, new_dir_name)

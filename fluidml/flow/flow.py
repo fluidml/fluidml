@@ -19,10 +19,8 @@ from fluidml.common.utils import (
 )
 from fluidml.flow import TaskSpec
 from fluidml.storage import ResultsStore, InMemoryStore
-from fluidml.storage.controller import pack_pipeline_results
 from fluidml.swarm import Swarm
 
-# from fluidml.swarm.dolphin import run_task
 
 logger = logging.getLogger(__name__)
 
@@ -510,60 +508,4 @@ class Flow:
                 return_results=return_results,
             )
 
-        # # if multiple workers are used execute task graph in parallel with swarm
-        # if num_workers > 1:
-        #     logger.info(f'Execute run "{run_name}" using multiprocessing with {num_workers} workers')
-        #     with Swarm(
-        #         n_dolphins=num_workers,
-        #         resources=resources,
-        #         start_method=start_method,
-        #         exit_on_error=exit_on_error,
-        #         log_to_tmux=log_to_tmux,
-        #         max_panes_per_window=max_panes_per_window,
-        #     ) as swarm:
-        #         results = swarm.work(
-        #             tasks=self._expanded_tasks,
-        #             results_store=results_store,
-        #             return_results=return_results,
-        #         )
-        # # else run the topologically sorted graph sequentially
-        # else:
-        #     logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')
-        #     resource = resources[0] if resources else None  # assign first resource object to all tasks (see doc-string)
-        #     results = self._run_linear(
-        #         results_store=results_store,
-        #         return_results=return_results,
-        #         resource=resource,  # assign first resource object to all tasks (see doc-string)
-        #     )
-
         return results
-
-    # def _run_linear(
-    #     self,
-    #     results_store: Optional[ResultsStore] = None,
-    #     return_results: Optional[str] = None,
-    #     resource: Optional[Any] = None,
-    # ) -> Dict[str, Union[List[Dict], Dict]]:
-    #
-    #     # setup results store
-    #     results_store = results_store if results_store is not None else InMemoryStore()
-    #
-    #     for i, task in enumerate(self._expanded_tasks, 1):
-    #
-    #         task.results_store = results_store
-    #         task.resource = resource
-    #
-    #         # run the task
-    #         completed: bool = run_task(task)
-    #
-    #         # Log task completion
-    #         if completed:
-    #             msg = f'Task "{task.unique_name}" already executed'
-    #         else:
-    #             msg = f'Finished task "{task.unique_name}"'
-    #         logger.info(f"{msg} [{i}/{self.num_tasks} " f"- {round((i / self.num_tasks) * 100)}%]")
-    #
-    #     # collect published results from all tasks
-    #     results: Dict[str, Any] = pack_pipeline_results(all_tasks=self._expanded_tasks, return_results=return_results)
-    #
-    #     return results

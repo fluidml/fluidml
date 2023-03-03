@@ -1,12 +1,13 @@
+import datetime
+import json
 import logging
-import time
-import signal
-from multiprocessing import Queue, Lock, Event
+from multiprocessing import Queue, RLock, Event
 from queue import Empty
 from typing import Dict, Any, Union, Optional
 
-from fluidml.common import Task
+from fluidml.common import Task, TaskInfo
 from fluidml.common.utils import change_logging_level
+from fluidml.storage import Names
 from fluidml.storage.controller import TaskDataController
 from fluidml.swarm import Whale
 
@@ -21,7 +22,7 @@ class Dolphin(Whale):
         scheduled_queue: Queue,
         task_states: Dict[str, TaskState],
         error_queue: Queue,
-        lock: Lock,
+        lock: RLock,
         tasks: Dict[str, Task],
         exit_event: Event,
         exit_on_error: bool,
@@ -67,25 +68,79 @@ class Dolphin(Whale):
             task_counter = None
         return task_counter
 
-    # def _execute_task(self, task: Task):
-    #
-    #     # run the task
-    #     completed: bool = self._run_task(task)
-    #
-    #     with self._lock:
-    #         self.task_states[task.unique_name] = TaskState.FINISHED
-    #
-    #         # Log task completion
-    #         if completed:
-    #             msg = f'Task "{task.unique_name}" already executed'
-    #         else:
-    #             msg = f'Finished task "{task.unique_name}"'
-    #
-    #         num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
-    #         logger.info(
-    #             f"{msg} [{num_finished_task}/{self.num_tasks} "
-    #             f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
-    #         )
+    def _schedule_successors(self, task: Task):
+        # get successor tasks and put them in task queue for processing
+        for successor in task.successors:
+            if self.task_states[successor.unique_name] == TaskState.PENDING:
+                logger.debug(f"Is now scheduling {successor.unique_name}.")
+                self.task_states[successor.unique_name] = TaskState.SCHEDULED
+                self.scheduled_queue.put(successor.unique_name)
+
+    def _log_task_finished(self, task: Task, completed: bool):
+        if completed:
+            msg = f'Task "{task.unique_name}" already executed'
+        else:
+            msg = f'Finished task "{task.unique_name}"'
+
+        num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
+        logger.info(
+            f"{msg} [{num_finished_task}/{self.num_tasks} " f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
+        )
+
+    def _on_task_start(self, task: Task, stored_task_info: Optional[Dict] = None):
+        """Prepare task starting.
+
+        Logging, update the task state, set the start time, call the user's task's __init__ function.
+        """
+
+        if stored_task_info:
+            logger.info(f'Started task "{task.unique_name}" with existing id "{task.id}"')
+        else:
+            logger.info(f'Started task "{task.unique_name}"')
+
+        # update state and register started timestamp
+        self.task_states[task.unique_name] = TaskState.RUNNING
+        task.state = TaskState.RUNNING
+        task.started = datetime.datetime.now()
+
+        # call user defined __init__ of task object
+        task._init()
+
+    def _on_task_end(self, task: Task, completed: Optional[bool] = None, exception: Optional[BaseException] = None):
+        logger.debug(f'Enter "_on_task_end()" with status "{self.task_states[task.unique_name]}"')
+
+        # register ended timestamp
+        task.ended = datetime.datetime.now()
+
+        if self.task_states[task.unique_name] == TaskState.FINISHED:
+            # Log task completion
+            self._log_task_finished(task, completed)
+
+        elif self.task_states[task.unique_name] == TaskState.KILLED:
+            # Log exception and put it in error queue
+            logger.exception(f'Killed task "{task.unique_name}"\n{exception}')
+            self._error_queue.put(exception)
+            # set exit event to stop process
+            self.exit_event.set()
+
+        elif self.task_states[task.unique_name] == TaskState.FAILED:
+            # Log exception and put it in error queue
+            logger.exception(f'Task "{task.unique_name}" failed with error:\n{exception}')
+            self._error_queue.put(exception)
+            # set exit event to stop process only if exit on error is set to True
+            if self._exit_on_error:
+                self.exit_event.set()
+
+        # save the fluidml info object as json
+        task.state = self.task_states[task.unique_name]
+        task.results_store.save(
+            json.loads(task.info.json()),  # we use pydantics json() fn, load the json str as dict and save it
+            Names.FLUIDML_INFO_FILE,
+            type_="json",
+            task_name=task.name,
+            task_unique_config=task.unique_config,
+            indent=4,
+        )
 
     def _execute_task(self, task: Task):
 
@@ -93,21 +148,27 @@ class Dolphin(Whale):
         task.resource = self.resource
         task.results_store.lock = self._lock
 
-        # try to load existing run info object
-        # if run info object was found, overwrite run info attributes with cached run info
-        stored_run_info = task.load("fluidml_run_info")
-        if stored_run_info:
+        # try to load existing task info object
+        # if task info object was found, overwrite run info attributes with cached run info
+        stored_task_info = task.load(Names.FLUIDML_INFO_FILE)
+        if stored_task_info:
             # assign loaded objects to current task
-            for k, v in stored_run_info.items():
-                setattr(task, k, v)
-            self.task_states[task.unique_name] = stored_run_info["state"]
+            for k, v in TaskInfo(**stored_task_info).dict().items():
+                # try/except block for property attributes (id, duration) which cannot be set
+                try:
+                    setattr(task, k, v)
+                except AttributeError:
+                    pass
+
+            # update tasks state to stored state
+            self.task_states[task.unique_name] = task.state  # stored_task_info.state
 
         # provide task's result store with run info -> needed to properly name new run dirs
         task.results_store.run_info = task.info
 
         # if force is true, delete all task results and re-run task
         if task.force:
-            with change_logging_level(level=50):
+            with change_logging_level(level=40):
                 task.delete_run()
 
         # check if task was successfully completed before
@@ -125,87 +186,39 @@ class Dolphin(Whale):
                 task.sweep_counter = run_context.sweep_counter
 
             # set and update the task's run history
-            if not stored_run_info:
+            if not stored_task_info:
                 task.run_history = {task.name: task.id}
                 for pred in task.predecessors:
                     pred_run_info = task.load(
-                        "fluidml_run_info", task_name=pred.name, task_unique_config=pred.unique_config
+                        Names.FLUIDML_INFO_FILE, task_name=pred.name, task_unique_config=pred.unique_config
                     )
                     task.run_history = {**pred_run_info["run_history"], **task.run_history}
 
-            # # save the run info object as json
-            # task.results_store.save(
-            #     task.info.dict(),
-            #     "fluidml_run_info",
-            #     type_="json",
-            #     task_name=task.name,
-            #     task_unique_config=task.unique_config,
-            #     indent=4,
-            # )
-
-            if stored_run_info:
-                logger.info(f'Started task "{task.unique_name}" with existing id "{task.id}"')
-            else:
-                logger.info(f'Started task "{task.unique_name}"')
-
-            # instantiate user defined __init__ of task object
-            self.task_states[task.unique_name] = TaskState.RUNNING
-            task.state = TaskState.RUNNING
             try:
-                task._init()
+                # start the task
+                self._on_task_start(task=task, stored_task_info=stored_task_info)
+
+                # run the task
                 task.run(**pred_results)
 
-                # update task status
+                # finish the task
                 with self._lock:
                     self.task_states[task.unique_name] = TaskState.FINISHED
-                    msg = f'Finished task "{task.unique_name}"'
-
-                    num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
-                    logger.info(
-                        f"{msg} [{num_finished_task}/{self.num_tasks} "
-                        f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
-                    )
+                    self._on_task_end(task)
 
             except KeyboardInterrupt as e:
-                # log exception
-                # logger.warning(f'Killed task "{task.unique_name}"')
-                # e.args = (f'Killed task "{task.unique_name}"',)
-                logger.exception(f'Killed task "{task.unique_name}"\n{e}')
-                self._error_queue.put(e)
-                # update task status
+                # handle KeyboardInterrupt
                 self.task_states[task.unique_name] = TaskState.KILLED
-                # set exit event to stop process
-                self.exit_event.set()
-            except Exception as e:
-                # logger.warning(f"Task {task.unique_name} failed with error:")
-                logger.exception(f'Task "{task.unique_name}" failed with error:\n{e}')
-                self._error_queue.put(e)
-                self.task_states[task.unique_name] = TaskState.FAILED
-                if self._exit_on_error:
-                    self.exit_event.set()
+                self._on_task_end(task, exception=e)
 
-            # save the run info object as json
-            task.state = self.task_states[task.unique_name]
-            task.results_store.save(
-                task.info.dict(),
-                "fluidml_run_info",
-                type_="json",
-                task_name=task.name,
-                task_unique_config=task.unique_config,
-                indent=4,
-            )
+            except Exception as e:
+                # handle other exceptions
+                self.task_states[task.unique_name] = TaskState.FAILED
+                self._on_task_end(task, exception=e)
 
         with self._lock:
             if completed:
-                # Log task completion
-                msg = f'Task "{task.unique_name}" already executed'
-
-                num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
-                logger.info(
-                    f"{msg} [{num_finished_task}/{self.num_tasks} "
-                    f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
-                )
-
+                self._log_task_finished(task, completed)
             self._schedule_successors(task)
 
     def _stop(self) -> bool:
@@ -216,7 +229,6 @@ class Dolphin(Whale):
         )
 
     def _work(self):
-        # signal.signal(signal.SIGINT, signal.SIG_IGN)
         while not self._stop():
             # fetch next task to run
             task_unique_name = self._fetch_next_task()
@@ -241,160 +253,3 @@ class Dolphin(Whale):
 
                 # execute the task
                 self._execute_task(task)
-
-    def _schedule_successors(self, task: Task):
-        # get successor tasks and put them in task queue for processing
-        for successor in task.successors:
-            if self.task_states[successor.unique_name] == TaskState.PENDING:
-                logger.debug(f"Is now scheduling {successor.unique_name}.")
-                self.task_states[successor.unique_name] = TaskState.SCHEDULED
-                self.scheduled_queue.put(successor.unique_name)
-
-    # def _work(self):
-    #
-    #     while not self._is_done():
-    #
-    #         # fetch next task to run
-    #         task_unique_name = self._fetch_next_task()
-    #
-    #         # continue when there is a valid task to run
-    #         if task_unique_name is not None:
-    #             # get current task from task_unique_name
-    #             task = self.tasks[task_unique_name]
-    #
-    #             try:
-    #                 with self._lock:
-    #                     if not self._is_task_ready(task):
-    #                         continue
-    #                     # # check if any predecessor task is in failed_tasks list
-    #                     # failed_predecessor = None
-    #                     # for predecessor in task.predecessors:
-    #                     #     if self.task_states[predecessor.unique_name] in [
-    #                     #         TaskState.FAILED,
-    #                     #         TaskState.UPSTREAM_FAILED,
-    #                     #     ]:
-    #                     #         # if predecessor.state in [
-    #                     #         #     TaskState.FAILED,
-    #                     #         #     TaskState.UPSTREAM_FAILED,
-    #                     #         # ]:
-    #                     #         failed_predecessor = predecessor.unique_name
-    #                     #         break
-    #                     #
-    #                     # if failed_predecessor:
-    #                     #     logger.info(
-    #                     #         f'Task "{task_unique_name}" cannot be executed since predecessor task "{failed_predecessor}" failed.'
-    #                     #     )
-    #                     #     self.task_states[task.unique_name] = TaskState.UPSTREAM_FAILED
-    #                     #     # task.state = TaskState.UPSTREAM_FAILED
-    #                     #
-    #                     #     self._schedule_successors(task)
-    #                     #     continue
-    #                     #
-    #                     # # run task only if all dependencies are satisfied
-    #                     # if not self._is_task_ready(task=task):
-    #                     #     logger.debug(f"Dependencies are not satisfied yet for " f"task {task.unique_name}")
-    #                     #     self.scheduled_queue.put(task.unique_name)
-    #                     #     continue
-    #
-    #                 # instantiate user defined __init__ of task object
-    #                 task._init()
-    #
-    #                 self.task_states[task.unique_name] = TaskState.RUNNING
-    #                 # task.state = self.task_states[task.unique_name]
-    #                 # task.state = TaskState.RUNNING
-    #
-    #                 # execute the task
-    #                 self._execute_task(task)
-    #
-    #                 with self._lock:
-    #                     # schedule the task's successors
-    #                     self._schedule_successors(task)
-    #             except Exception as e:
-    #                 with self._lock:
-    #                     logger.info(f'Task "{task_unique_name}" cannot be executed.')
-    #                     self.task_states[task_unique_name] = TaskState.FAILED
-    #                     # task.state = TaskState.FAILED
-    #                     self._schedule_successors(task)
-    #                     raise
-    #
-    # def _schedule_successors(self, task: Task):
-    #     # get successor tasks and put them in task queue for processing
-    #     for successor in task.successors:
-    #         if self.task_states[successor.unique_name] == TaskState.PENDING:
-    #             # if successor.state == TaskState.PENDING:
-    #             logger.debug(f"Is now scheduling {successor.unique_name}.")
-    #             self.scheduled_queue.put(successor.unique_name)
-    #             self.task_states[successor.unique_name] = TaskState.SCHEDULED
-    #             # successor.state = TaskState.SCHEDULED
-
-
-# def run_task(task: Task) -> bool:
-#
-#     # try to load existing run info object
-#     # if run info object was found, overwrite run info attributes with cached run info
-#     stored_run_info = task.load("fluidml_run_info")
-#     if stored_run_info:
-#         for k, v in stored_run_info.items():
-#             setattr(task, k, v)
-#
-#     # provide task's result store with run info -> needed to properly name new run dirs
-#     task.results_store.run_info = task.info
-#
-#     # if force is true, delete all task results and re-run task
-#     if task.force:
-#         with change_logging_level(level=50):
-#             task.delete_run()
-#
-#     # check if task was successfully completed before
-#     completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
-#
-#     # if task is not completed, run the task now
-#     if not completed:
-#         # extract predecessor results
-#         controller = TaskDataController(task)
-#         pred_results: Dict = controller.pack_predecessor_results()
-#
-#         # get run context from ResultStore
-#         run_context = task.get_store_context()
-#         if run_context:
-#             task.sweep_counter = run_context.sweep_counter
-#
-#         # set and update the task's run history
-#         if not stored_run_info:
-#             task.run_history = {task.name: task.id}
-#             for pred in task.predecessors:
-#                 pred_run_info = task.load(
-#                     "fluidml_run_info", task_name=pred.name, task_unique_config=pred.unique_config
-#                 )
-#                 task.run_history = {**pred_run_info["run_history"], **task.run_history}
-#
-#         # save the run info object as json
-#         task.results_store.save(
-#             task.info.dict(),
-#             "fluidml_run_info",
-#             type_="json",
-#             task_name=task.name,
-#             task_unique_config=task.unique_config,
-#             indent=4,
-#         )
-#
-#         if stored_run_info:
-#             logger.info(f'Started task "{task.unique_name}" with existing id "{task.id}"')
-#         else:
-#             logger.info(f'Started task "{task.unique_name}"')
-#
-#         # instantiate user defined __init__ of task object
-#         task._init()
-#         task.run(**pred_results)
-#
-#         # save the "completed = 1" file
-#         task.results_store.save(
-#             "1",
-#             ".completed",
-#             type_="event",
-#             sub_dir=".load_info",
-#             task_name=task.name,
-#             task_unique_config=task.unique_config,
-#         )
-#
-#     return completed

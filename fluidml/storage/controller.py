@@ -28,7 +28,7 @@ class TaskDataController:
         for item_name in self._task_expects:
             param: inspect.Parameter = self._task_expects[item_name]
             lazy: bool = self._is_lazy(param)
-            with change_logging_level(level=50):
+            with change_logging_level(level=40):
                 obj: Optional[Any] = self._results_store.load(
                     name=item_name,
                     task_name=predecessor.name,
