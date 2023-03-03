@@ -20,10 +20,8 @@ from torch.utils.data import Dataset, DataLoader
 from torchtext.data.metrics import bleu_score
 from tqdm import tqdm
 
-from fluidml import Flow
-from fluidml.common import Task
+from fluidml import Flow, Task, TaskSpec
 from fluidml.common.logging import configure_logging
-from fluidml.flow import TaskSpec
 from fluidml.storage import LocalFileStore, TypeInfo
 from fluidml.visualization import visualize_graph_in_console
 from transformer_model import Seq2SeqTransformer, Encoder, Decoder

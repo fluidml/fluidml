@@ -11,9 +11,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
-from fluidml.common import Task
+from fluidml import Task, Flow, TaskSpec
 from fluidml.common.logging import configure_logging
-from fluidml.flow import Flow, TaskSpec
 from fluidml.storage import Sweep
 from fluidml.visualization import visualize_graph_interactive
 
@@ -192,7 +191,7 @@ def main():
         model_selection_task,
     ]
 
-    # create flow (expanded task graph)
+    # create flow
     flow = Flow(tasks=tasks)
 
     # visualize graphs
