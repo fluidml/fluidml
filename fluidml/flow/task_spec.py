@@ -76,7 +76,7 @@ class TaskSpec(DependencyMixin):
         # dynamically retrieve expected arguments from task implementation
         self.expects = get_expected_args_from_run_signature(task, config, additional_kwargs)
 
-        # dynamically set by Flow
+        # dynamically set in expand fn
         self.unique_config: Optional[Dict] = None
 
     def expand(self) -> List["Task"]:

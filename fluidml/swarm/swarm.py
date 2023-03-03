@@ -3,15 +3,14 @@ import logging.handlers
 import multiprocessing
 import random
 import signal
-
 from multiprocessing import set_start_method, Queue as MPQueue, RLock, Event as MPEvent
 from multiprocessing.managers import SyncManager
 from queue import Queue
 from types import TracebackType
 from typing import Optional, Type, List, Dict, Union, Any
 
-from fluidml.common.task import Task, TaskState
 from fluidml.common.logging import LoggingListener, TmuxManager
+from fluidml.common.task import Task, TaskState
 from fluidml.common.utils import create_unique_hash_from_config
 from fluidml.storage import ResultsStore, InMemoryStore
 from fluidml.storage.controller import pack_pipeline_results
@@ -21,10 +20,21 @@ logger = logging.getLogger(__name__)
 
 
 def manager_init():
+    """An initialization function passed to the multiprocessing manager.
+
+    It causes the manager object to ignore KeyboardInterrupt signals in the child process.
+    This is necessary to let the child processes exit gracefully. Otherwise, an error would be thrown, since
+    the child processes tries to access the manager object during graceful exit, but it has been terminated already.
+    """
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 class Event:
+    """A non-multiprocessing Event Class.
+
+    Imitates the API and functionality of multiprocessing.Event().
+    """
+
     def __init__(self):
         self._flag = False
 
@@ -41,27 +51,28 @@ class Event:
 
 
 class Swarm:
+    """Configure workers, resources, results_store which are used to run the tasks.
+
+    Args:
+        n_dolphins: Number of parallel workers. Defaults to None.
+        resources: A list of resources that are assigned to workers.
+            If len(resources) < n_dolphins, resources are assigned randomly to workers.
+        start_method: Start method for multiprocessing. Defaults to 'spawn'.
+        exit_on_error: When an error happens all workers finish their current tasks and exit gracefully.
+            Defaults to False.
+        log_to_tmux: Log to tmux session if True. Defaults to True.
+        max_panes_per_window: Max number of panes per tmux window.
+    """
+
     def __init__(
         self,
         n_dolphins: Optional[int] = None,
         resources: Optional[List[Any]] = None,
         start_method: str = "spawn",
-        exit_on_error: bool = True,
+        exit_on_error: bool = False,
         log_to_tmux: bool = False,
         max_panes_per_window: int = 4,
     ):
-        """Configure workers, resources, results_store which are used to run the tasks.
-
-        Args:
-            n_dolphins: Number of parallel workers. Defaults to None.
-            resources: A list of resources that are assigned to workers.
-                If len(resources) < n_dolphins, resources are assigned randomly to workers.
-            start_method: Start method for multiprocessing. Defaults to 'spawn'.
-            exit_on_error: When an error happens all workers finish their current tasks and exit gracefully.
-                Defaults to True.
-            log_to_tmux: Log to tmux session if True. Defaults to True.
-            max_panes_per_window: Max number of panes per tmux window.
-        """
         self.n_dolphins = n_dolphins if n_dolphins else multiprocessing.cpu_count()
 
         # set in the beginning of self.work()
@@ -165,9 +176,14 @@ class Swarm:
         return entry_task_ids
 
     def _join(self, logging_listener: LoggingListener):
-        # wait for them to finish
+        # wait for all workers to finish
         for dolphin in self.dolphins:
-            dolphin.join()
+            try:
+                # Only call join() if child processes have been started.
+                # If they haven't been started, an AssertionError is thrown and we pass.
+                dolphin.join()
+            except AssertionError:
+                pass
 
         self.logging_queue.put(None)
         logging_listener.join()
@@ -260,8 +276,6 @@ class Swarm:
         if self.exit_event.is_set():
             err = self.error_queue.get()
             raise err
-
-        logger.warning("Exit event not set")
 
         # return all results
         results: Dict[str, Any] = pack_pipeline_results(
