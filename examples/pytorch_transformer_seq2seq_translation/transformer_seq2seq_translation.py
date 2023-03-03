@@ -105,9 +105,8 @@ class DatasetLoading(Task):
         return data
 
     def run(self):
-        task_dir = self.get_store_context()
-        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
-        logger.info(f'Download and save raw dataset to "{task_dir}".')
+        task_run_dir = self.get_store_context().run_dir
+        logger.info(f'Download and save raw dataset to "{task_run_dir}".')
 
         for split_name, files in self.data_split_names.items():
             dataset = {}
@@ -151,8 +150,7 @@ class TokenizerTraining(Task):
         return tokenizer
 
     def run(self, train_data: Dict[str, List[str]]):
-        task_dir = self.get_store_context()
-        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+        task_run_dir = self.get_store_context().run_dir
 
         # train german tokenizer
         de_tokenizer = self.train_tokenizer(data=train_data["de"])
@@ -161,7 +159,7 @@ class TokenizerTraining(Task):
         en_tokenizer = self.train_tokenizer(data=train_data["en"])
 
         # save tokenizers
-        logger.info(f'Save trained tokenizers to "{task_dir}".')
+        logger.info(f'Save trained tokenizers to "{task_run_dir}".')
         self.save(obj=de_tokenizer, name="de_tokenizer", type_="tokenizer")
         self.save(obj=en_tokenizer, name="en_tokenizer", type_="tokenizer")
 
@@ -187,14 +185,13 @@ class DatasetEncoding(Task):
         de_tokenizer: Tokenizer,
         en_tokenizer: Tokenizer,
     ):
-        task_dir = self.get_store_context()
-        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+        task_run_dir = self.get_store_context().run_dir
 
         train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
         valid_encoded = DatasetEncoding.encode_data(valid_data, de_tokenizer, en_tokenizer)
         test_encoded = DatasetEncoding.encode_data(test_data, de_tokenizer, en_tokenizer)
 
-        logger.info(f'Save encoded dataset to "{task_dir}".')
+        logger.info(f'Save encoded dataset to "{task_run_dir}".')
         self.save(obj=train_encoded, name="train_encoded", type_="json")
         self.save(obj=valid_encoded, name="valid_encoded", type_="json")
         self.save(obj=test_encoded, name="test_encoded", type_="json")
@@ -350,9 +347,8 @@ class Training(Task):
 
     def _train(self, model, train_iterator, valid_iterator, optimizer, criterion):
         """Train loop."""
-        task_dir = self.get_store_context()
-        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
-        model_dir = os.path.join(task_dir, "models")
+        task_run_dir = self.get_store_context().run_dir
+        model_dir = os.path.join(task_run_dir, "models")
         logger.info(f'Save model checkpoints to "{model_dir}".')
 
         best_valid_loss = float("inf")
@@ -445,14 +441,13 @@ class ModelSelection(Task):
         return config
 
     def run(self, reduced_results: List[Dict]):
-        task_dir = self.get_store_context()
-        task_dir = os.path.relpath(task_dir, self.results_store.base_dir)
+        task_run_dir = self.get_store_context().run_dir
 
         # select the best run config by comparing model performances from different parameter sweeps
         # on the validation set
         best_run_config = self._select_best_model_from_sweeps(training_results=reduced_results)
 
-        logger.info(f'Save best run config to "{task_dir}".')
+        logger.info(f'Save best run config to "{task_run_dir}".')
         self.save(obj=best_run_config, name="best_run_config", type_="json")
 
 
@@ -676,8 +671,8 @@ def main():
     flow = Flow(tasks=tasks)
 
     # visualize graphs
-    visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
-    visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
+    # visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
+    # visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
 
     # run linearly without swarm if num_workers is set to 1
     # else run graph in parallel using multiprocessing
