@@ -671,8 +671,8 @@ def main():
     flow = Flow(tasks=tasks)
 
     # visualize graphs
-    # visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
-    # visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
+    visualize_graph_in_console(flow.task_spec_graph, use_pager=True, use_unicode=True)
+    visualize_graph_in_console(flow.task_graph, use_pager=True, use_unicode=True)
 
     # run linearly without swarm if num_workers is set to 1
     # else run graph in parallel using multiprocessing
