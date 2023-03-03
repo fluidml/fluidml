@@ -1,9 +1,27 @@
+import contextlib
+import datetime
+import logging
 import hashlib
 import json
 import os
 import random
 import string
 from typing import Any, Union, Tuple, Dict, Optional
+
+from pydantic import BaseModel as BaseModel_
+
+
+JSON_ENCODERS = {
+    datetime.datetime: lambda x: str(x),
+    datetime.timedelta: lambda x: str(x),
+}
+
+
+class BaseModel(BaseModel_):
+    class Config:
+        arbitrary_types_allowed = True
+        use_enum_values = True
+        json_encoders = JSON_ENCODERS
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
@@ -225,7 +243,7 @@ def encode_base36(number: int) -> str:
     return base36 or alphabet[0]
 
 
-def create_unique_run_id_from_config(cfg: Dict, length: int = 8) -> str:
+def create_unique_hash_from_config(cfg: Dict, length: int = 8) -> str:
     """Creates an 8 char long unique id for input config dict.
     Uses md5 hashing and base36 encoding to be filename compatible.
 
@@ -239,3 +257,17 @@ def create_unique_run_id_from_config(cfg: Dict, length: int = 8) -> str:
     hashed_cfg = hash_config(cfg)
     encoded_cfg = encode_base36(int(hashed_cfg, base=16))
     return encoded_cfg[:length]
+
+
+@contextlib.contextmanager
+def change_logging_level(level: int):
+    """Context manager to temporarily change the logging lvl."""
+    root_logger = logging.getLogger()
+    old_logging_level = root_logger.level
+    try:
+        root_logger.setLevel(level)
+        yield
+        root_logger.setLevel(old_logging_level)
+    except Exception:
+        root_logger.setLevel(old_logging_level)
+        raise

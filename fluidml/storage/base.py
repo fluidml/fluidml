@@ -1,17 +1,23 @@
 import contextlib
-import functools
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from multiprocessing import Lock
-from typing import Optional, Dict, Any
+from enum import Enum
+from multiprocessing import RLock
+from typing import Optional, Dict, Any, List
 
 from metadict import MetaDict
 
-from fluidml.common.utils import is_optional
-
 
 logger = logging.getLogger(__name__)
+
+
+class Names(str, Enum):
+    FLUIDML_INFO_FILE = "fluidml_info"
+    SAVED_RESULTS_FILE = ".saved_results"
+    FLUIDML_DIR = ".fluidml"
+    CONFIG = "config.json"
 
 
 class Promise(ABC):
@@ -32,115 +38,15 @@ class LazySweep:
     config: MetaDict
 
 
-class InheritDecoratorsMixin:
-    def __init_subclass__(cls, *args, **kwargs):
-        super().__init_subclass__(*args, **kwargs)
-        decorator_registry = getattr(cls, "_decorator_registry", {}).copy()
-        cls._decorator_registry = decorator_registry
-        # Check for decorated objects in the mixin itself (optional):
-        for name, obj in __class__.__dict__.items():
-            if getattr(obj, "inherit_decorator", False) and name not in decorator_registry:
-                decorator_registry[name] = obj.inherit_decorator
-        # annotate newly decorated methods in the current class/subclass:
-        for name, obj in cls.__dict__.items():
-            if getattr(obj, "inherit_decorator", False) and name not in decorator_registry:
-                decorator_registry[name] = obj.inherit_decorator
-        # finally, decorate all methods annotated in the registry:
-        for name, decorator in decorator_registry.items():
-            if name in cls.__dict__ and getattr(getattr(cls, name), "inherit_decorator", None) != decorator:
-                setattr(cls, name, decorator(cls.__dict__[name]))
+@dataclass
+class StoreContext:
+    run_dir: Optional[str] = None
+    sweep_counter: Optional[str] = None
 
 
-# TODO (LH): Add decorators to save and delete fn
-def _save_object_names(func):
-    """Decorator to save names of saved objects.
-
-    The resulting ".saved_objects" name list is used to check if any or all to-be-published objects of a task
-    have been saved before.
-    """
-
-    @functools.wraps(func)
-    def wrapper(self, task_name: str, task_unique_config: Dict, **kwargs):
-        # save actual object
-        res = func(
-            self,
-            task_name=task_name,
-            task_unique_config=task_unique_config,
-            **kwargs,
-        )
-
-        name = kwargs["name"]
-        type_ = kwargs.get("type_")
-
-        msg = f"Task '{task_name}' saves '{name}'"
-        msg = msg + f"." if type_ is None else msg + f" of type {type_}."
-        logger.debug(msg)
-
-        # log name of saved object
-        saved_objects: Optional[Dict[str, None]] = self.load(
-            name=".saved_objects", task_name=task_name, task_unique_config=task_unique_config
-        )
-        if saved_objects is None:
-            saved_objects = {}
-        if name not in saved_objects:
-            saved_objects[name] = None
-        func(
-            self,
-            obj=saved_objects,
-            name=".saved_objects",
-            type_="json",
-            sub_dir=".load_info",
-            task_name=task_name,
-            task_unique_config=task_unique_config,
-        )
-        return res
-
-    # necessary for the decorator inheritance to work
-    wrapper.inherit_decorator = _save_object_names
-    return wrapper
-
-
-def _delete_object_names(func):
-    """Decorator to delete names of previously saved but now deleted objects."""
-
-    @functools.wraps(func)
-    def wrapper(self, task_name: str, task_unique_config: Dict, **kwargs):
-        # delete actual object
-        res = func(self, task_name=task_name, task_unique_config=task_unique_config, **kwargs)
-
-        name = kwargs["name"]
-        type_ = kwargs.get("type_")
-
-        msg = f"Task '{task_name}' deletes '{name}'"
-        msg = msg + f"." if type_ is None else msg + f" of type {type_}."
-        logger.debug(msg)
-
-        # load saved object names
-        saved_objects: Optional[Dict[str, None]] = self.load(
-            name=".saved_objects", task_name=task_name, task_unique_config=task_unique_config
-        )
-        # delete name from registry and save registry
-        if saved_objects is not None and name in saved_objects:
-            del saved_objects[name]
-            func(
-                self,
-                obj=saved_objects,
-                name=".saved_objects",
-                type_="json",
-                sub_dir=".load_info",
-                task_name=task_name,
-                task_unique_config=task_unique_config,
-            )
-        return res
-
-    # necessary for the decorator inheritance to work
-    wrapper.inherit_decorator = _delete_object_names
-    return wrapper
-
-
-class ResultsStore(ABC, InheritDecoratorsMixin):
+class ResultsStore(ABC):
     def __init__(self):
-        self._lock: Optional[Lock] = None
+        self._lock: Optional[RLock] = None
 
     @property
     def lock(self):
@@ -151,7 +57,7 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
         return self._lock
 
     @lock.setter
-    def lock(self, lock: Lock):
+    def lock(self, lock: RLock):
         self._lock = lock
 
     @abstractmethod
@@ -160,13 +66,13 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
         raise NotImplementedError
 
     @abstractmethod
-    @_save_object_names
+    # @_save_object_names
     def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
         """Method to save/update any artifact"""
         raise NotImplementedError
 
     @abstractmethod
-    @_delete_object_names
+    # @_delete_object_names
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
         """Method to delete any artifact"""
         raise NotImplementedError
@@ -189,12 +95,13 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
     ):
         """Method to open a file from Local File Store (only available for Local File Store)."""
 
-    def get_context(self, task_name: str, task_unique_config: Dict):
+    @abstractmethod
+    def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
         """Method to get store specific storage context, e.g. the current run directory for Local File Store"""
 
-    def get_results(self, task_name: str, task_unique_config: Dict, task_publishes: Dict[str, Any]) -> Optional[Dict]:
+    def get_results(self, task_name: str, task_unique_config: Dict, saved_results: List[str]) -> Optional[Dict]:
         # if a task publishes no results, we always execute the task
-        if not task_publishes:
+        if not saved_results:
             return None
 
         # if a task is not yet finished, we again execute the task
@@ -203,28 +110,28 @@ class ResultsStore(ABC, InheritDecoratorsMixin):
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
         results = {}
-        for item_name, type_annotation in task_publishes.items():
+        for item_name in saved_results:
             # load object
             obj: Optional[Any] = self.load(name=item_name, task_name=task_name, task_unique_config=task_unique_config)
 
             # if at least one expected and non-optional result object of the task cannot be loaded,
             # return None and re-run the task.
-            if not is_optional(type_annotation) and obj is None:
+            if obj is None:
                 return None
-            # if obj is None:
-            #     return None
 
             # store object in results
             results[item_name] = obj
 
         return results
 
-    # TODO(LH): determine best functionality to decide whether a task can be skipped
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
+        from fluidml.common.task import TaskState
+
         # try to load task completed object; if it is None we return None and re-run the task
-        completed: Optional[str] = self.load(
-            name=".completed", task_name=task_name, task_unique_config=task_unique_config
+        run_info: Optional[Dict] = self.load(
+            name=Names.FLUIDML_INFO_FILE, task_name=task_name, task_unique_config=task_unique_config
         )
-        if not completed:
+        if run_info and run_info["state"] == TaskState.FINISHED:
+            return True
+        else:
             return False
-        return True

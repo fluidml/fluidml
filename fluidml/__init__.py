@@ -4,7 +4,7 @@ import os
 from .__about__ import *
 from .flow import Flow, TaskSpec
 from .swarm import Swarm
-from .common import Task, publishes
+from .common import Task  # , publishes
 
 
 logging.getLogger(__name__)

@@ -6,6 +6,7 @@ from typing import Optional, Dict, Any
 import mongoengine as me
 
 from fluidml.storage import ResultsStore
+from fluidml.storage.base import StoreContext
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,13 @@ class MongoDBStore(ResultsStore):
         self._collection_name = collection_name
 
     @connection
-    def load(self, name: str, task_name: str, task_unique_config: Dict, lazy: bool = False) -> Optional[Any]:
+    def load(
+        self,
+        name: str,
+        task_name: str,
+        task_unique_config: Dict,
+        lazy: bool = False,
+    ) -> Optional[Any]:
         """Query method to load an object based on its name, task_name and task_config if it exists"""
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
@@ -104,6 +111,9 @@ class MongoDBStore(ResultsStore):
 
         # delete document
         task_result.delete()
+
+    def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
+        pass
 
     def _get_task_result_class(self):
         # Hack to set the collection name dynamically from user input

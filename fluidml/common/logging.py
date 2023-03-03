@@ -380,8 +380,8 @@ class LoggingListener(Thread):
         try:
             self._work()
         except Exception as e:
+            logger_.exception(e)
+            self._error_queue.put(e)
             if self._exit_on_error:
                 with self._lock:
-                    logger_.exception(e)
-                    self._error_queue.put(e)
                     self.exit_event.set()

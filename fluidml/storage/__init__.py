@@ -1,4 +1,4 @@
-from .base import ResultsStore, Promise, Sweep, LazySweep
+from .base import ResultsStore, Promise, Sweep, LazySweep, Names
 from .file_store import LocalFileStore, TypeInfo, FilePromise, File
 from .in_memory_store import InMemoryStore
 

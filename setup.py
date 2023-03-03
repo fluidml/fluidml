@@ -42,6 +42,7 @@ setup(
         "grandalf",  # for console graph visualization
         "metadict",  # enables attribute access for dicts (converted to MetaDict objects)
         "networkx",  # creation of task graph
+        "pydantic",  # for easy data model serialization and loading
         "rich",  # beautiful error traceback printing and logging
         "tblib",  # enables sending tracebacks through multiprocessing queue
     ],
