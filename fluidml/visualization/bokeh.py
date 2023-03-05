@@ -1,9 +1,11 @@
+from typing import Optional
+
 import networkx as nx
 from bokeh.io import show
 from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.plotting import figure
 
-from fluidml.visualization import build_sugiyama_layout
+from fluidml.visualization.graph_layout import build_sugiyama_layout
 
 
 def reformat_graph(graph):
@@ -57,17 +59,19 @@ def get_edges(sug_layout, height):
 def visualize_graph_interactive(
     graph: nx.Graph,
     plot_width: int = 500,
-    plot_height: int = 500,
+    plot_height: int = 200,
     node_width: int = 50,
     node_height: int = 50,
     scale_width: bool = True,
+    browser: Optional[str] = None,
 ):
     # reformat the graph with attributes
     reformatted_graph = reformat_graph(graph)
 
     # bokeh plot settings
-    plot = figure(plot_width=plot_width, plot_height=plot_height)
+    plot = figure(width=plot_width, height=plot_height)
     plot.title.text = "Task Graph"
+    plot.title.text_font_size = "20pt"
     plot.grid.visible = False
     plot.sizing_mode = "scale_width" if scale_width else "auto"
     plot.xaxis.visible = False
@@ -78,8 +82,14 @@ def visualize_graph_interactive(
     positions = {vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1]) for vertex in layout.g.sV}
     positions = flip_positions(positions, plot_height)
 
-    # plot nodes
+    # get positions
     x, y = zip(*positions.values())
+
+    # plot edges
+    xs, ys = get_edges(layout, plot_height)
+    plot.multi_line(xs, ys)
+
+    # plot nodes
     source = ColumnDataSource({"x": x, "y": y, "task_name": list(positions.keys())})
     labels = LabelSet(
         x="x",
@@ -88,14 +98,10 @@ def visualize_graph_interactive(
         source=source,
         text_align="center",
         background_fill_color="white",
-        text_font_size="12px",
+        text_font_size="16px",
         border_line_color="black",
         name="task_name",
     )
     plot.renderers.append(labels)
 
-    # plot edges
-    xs, ys = get_edges(layout, plot_height)
-    plot.multi_line(xs, ys)
-
-    show(plot)
+    show(plot, browser=browser)

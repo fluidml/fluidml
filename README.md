@@ -77,16 +77,18 @@ For real machine learning examples, check the "Examples" section below.
 First, we import necessary classes from FluidML.
 
 ```Python
-from fluidml import Task, publishes, TaskSpec, Flow
-from fluidml.storage import MongoDBStore, LocalFileStore, ResultsStore
-from fluidml.visualization import visualize_graph_in_console
+from fluidml import Task, TaskSpec, Flow
 ```
 
 #### 2. Define Tasks
 
 Next, we define some toy machine learning tasks. A Task can be implemented as a function or as a class inheriting from our `Task` class.
 
-In case of the class approach, each task should implement the `run()` method, which takes some inputs and performs the desired functionality. These inputs are actually the results from predecessor tasks and are automatically forwarded by FluidML based on registered task dependencies. If the task has any hyper-parameters, they can be defined as arguments in the constructor. Additionally, within each task, users have access to methods and attributes like `self.save()` and `self.resource` to save its result and access task resources (more on that later).
+In case of the class approach, each task should implement the `run()` method, which takes some inputs and performs the desired functionality. 
+These inputs are actually the results from predecessor tasks and are automatically forwarded by FluidML based on registered task dependencies. 
+If the task has any hyper-parameters, they can be defined as arguments in the constructor. 
+Additionally, within each task, users have access to special `Task` methods and attributes like 
+`self.save()` and `self.resource` to save its result and access task resources (more on that later).
 
 ```Python
 class MyTask(Task):
@@ -110,15 +112,14 @@ Below, we define standard machine learning tasks such as dataset preparation, pr
 Notice that:
 
 - Each task is implemented individually and it's clear what the inputs are (check arguments of `run()` method)
-- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. This unique name corresponds to input names in successor task definitions.
+- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. 
+  This unique name corresponds to input names in successor task definitions.
 
 ```Python
 class DatasetFetchTask(Task):
     def run(self):
-        ...
-        # For InMemoryStore (default) and MongoDBStore type_ is NOT required
-        # For LocalFileStore type_ IS required               
-        self.save(obj=data_fetch_result, name='data_fetch_result', type_='json')
+        ...           
+        self.save(obj=data_fetch_result, name='data_fetch_result')
 
 
 class PreProcessTask(Task):
@@ -169,61 +170,48 @@ class EvaluateTask(Task):
 
 Next, we can create the defined tasks with their specifications. 
 We now only write their specifications, later these are used to create real instances of tasks by FluidML.
-For each Task specification, we also add a list of result names that the corresponding task _publishes_. 
-Each published result object will be considered when results are automatically collected for a successor task.
 
-Note: The `config` argument holds the configuration of the task (ie. hyper-parameters). 
+Note: The `config` argument holds the configuration of the task (i.e. hyper-parameters). 
 It has to be a dictionary (possibly nested), which is `json` serializable. 
 That means a `TypeError` is thrown if the dictionary contains objects, e.g. an `np.array`, that cannot be serialized by Python's json encoder.
 
-Additionally, if there are other parameters to the task, including objects of non-standard types (eg. models, tensors, files, etc), they can be passed using `additional_kwargs` argument.
+Additionally, if there are other parameters to the task, including objects of non-standard types (eg. models, tensors, files, etc), 
+they can be passed using `additional_kwargs` argument.
 
 
 ```Python
-dataset_fetch_task = TaskSpec(task=DatasetFetchTask, publishes=['data_fetch_result'])
-pre_process_task = TaskSpec(task=PreProcessTask,
-                            config={
-                                "pre_processing_steps": ["lower_case", "remove_punct"]},
-                            publishes=['pre_process_result'])
-featurize_task_1 = TaskSpec(task=GloveFeaturizeTask,
-                            publishes=['glove_featurize_result'])
-featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, config={"min_df": 5, "max_features": 1000},
-                            publishes=['tfidf_featurize_result'])
-train_task = TaskSpec(task=TrainTask, config={"max_iter": 50, "balanced": True},
-                      publishes=['train_result'])
-evaluate_task = TaskSpec(task=EvaluateTask, publishes=['evaluate_result'])
+dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
+pre_process_task = TaskSpec(task=PreProcessTask, config={"pre_processing_steps": ["lower_case", "remove_punct"]})
+featurize_task_1 = TaskSpec(task=GloveFeaturizeTask)
+featurize_task_2 = TaskSpec(task=TFIDFFeaturizeTask, config={"min_df": 5, "max_features": 1000})
+train_task = TaskSpec(task=TrainTask, config={"max_iter": 50, "balanced": True})
+evaluate_task = TaskSpec(task=EvaluateTask)
 ```
 
 #### 4. Registering task dependencies
 
-Here we create the task graph by registering dependencies between the tasks. In particular, for each task specifier, you can register a list of predecessor tasks using the `requires()` method.
+Here we create the task graph by registering dependencies between the tasks. 
+In particular, for each task specifier, you can register a list of predecessor tasks using the `requires()` method.
 
 ```Python
 pre_process_task.requires(dataset_fetch_task)
 featurize_task_1.requires(pre_process_task)
 featurize_task_2.requires(pre_process_task)
-train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
-evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
+train_task.requires(dataset_fetch_task, featurize_task_1, featurize_task_2)
+evaluate_task.requires(dataset_fetch_task, featurize_task_1, featurize_task_2, train_task)
 ```
 
-#### 5. [optional] Define and instantiate Resources to share across all Tasks
+#### 5. [optional] Define resources to share across all Tasks
 
-Additionally, you can pass a list of resources (eg. GPU devices) that are made available to the workers, which forward them to the corresponding tasks.
-You just have to create your own Resource dataclass, which inherits from our `Resource` interface. In this dataclass you can define all resources, e.g. the cuda device, which automatically is made available to all tasks through the `self.resource` or `task.resource` attribute.
+This is particularly useful when executing the task graph in a multiprocessing setting.
+A provided list of resources is allocated to the multiprocessing workers so that each worker holds a specific resource.
+The workers make these available to all tasks they execute via the `self.resource` or `task.resource` attribute.
 
-```python
-@dataclass
-class TaskResource(Resource):
-    device: str
-```
+Let's assume our resources consist of a list of cuda device ids, e.g. `resources = ['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
+We pass the resources to the `Flow.run()` method (see below) and thus equally split the available cuda devices among 
+all workers.
 
-Let's assume our resources consist of a list of cuda device ids, e.g. `['cuda:0', 'cuda:1', 'cuda:0', 'cuda:1']`, and we set `num_workers=4`.
-Then we can create our list of resources object with a simple list comprehension:
 
-```python
-# create list of resources
-resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
-```
 
 #### 6. [optional] Results Store/Caching
 

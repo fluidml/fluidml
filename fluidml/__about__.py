@@ -2,8 +2,8 @@ import time
 
 _this_year = time.strftime("%Y")
 __version__ = "0.2.0"
-__author__ = "Rajkumar Ramamurthy, Lars Hillebrand"
-__author_email__ = "raj1514@gmail.com"
+__author__ = "Lars Hillebrand, Rajkumar Ramamurthy"
+__author_email__ = "hokage555@web.de"
 __license__ = "Apache-2.0"
 __copyright__ = f"Copyright (c) 2020-{_this_year}, {__author__}."
 __homepage__ = "https://github.com/fluidml/fluidml/"
