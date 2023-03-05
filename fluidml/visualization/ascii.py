@@ -9,7 +9,7 @@ import math
 import os
 from typing import Dict, TYPE_CHECKING
 
-from fluidml.visualization import build_sugiyama_layout
+from fluidml.visualization.graph_layout import build_sugiyama_layout
 
 if TYPE_CHECKING:
     from grandalf.layouts import SugiyamaLayout
