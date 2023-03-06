@@ -44,27 +44,27 @@ shared: &shared
 jobs:
   "py37":
     docker:
-      - image: circleci/python:3.7
+      - image: cimg/python:3.7
     <<: *shared
 
   "py38":
     docker:
-      - image: circleci/python:3.8
+      - image: cimg/python:3.8
     <<: *shared
 
   "py39":
     docker:
-      - image: circleci/python:3.9
+      - image: cimg/python:3.9
     <<: *shared
 
   "py310":
     docker:
-      - image: circleci/python:3.10
+      - image: cimg/python:3.10
     <<: *shared
 
   "py311":
     docker:
-      - image: circleci/python:3.11
+      - image: cimg/python:3.11
     <<: *shared
 
 workflows:
