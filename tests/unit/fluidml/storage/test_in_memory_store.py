@@ -1,5 +1,7 @@
-import pytest
 from multiprocessing import Manager
+
+import pytest
+
 from fluidml.storage import InMemoryStore, ResultsStore
 
 
@@ -23,10 +25,20 @@ def test_save_load(in_memory_store: ResultsStore):
     test_config = {"config_param": 1}
 
     # save
-    in_memory_store.save(obj=test_obj_1, name=test_item_name, task_name=test_task_name, task_unique_config=test_config)
+    in_memory_store.save(
+        obj=test_obj_1,
+        name=test_item_name,
+        task_name=test_task_name,
+        task_unique_config=test_config,
+    )
 
     # replace
-    in_memory_store.save(obj=test_obj_2, name=test_item_name, task_name=test_task_name, task_unique_config=test_config)
+    in_memory_store.save(
+        obj=test_obj_2,
+        name=test_item_name,
+        task_name=test_task_name,
+        task_unique_config=test_config,
+    )
     # load
     loaded_json_obj = in_memory_store.load(
         name=test_item_name, task_name=test_task_name, task_unique_config=test_config

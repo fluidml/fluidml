@@ -1,9 +1,9 @@
 import pytest
 
+from fluidml.exception import NoTasksError
 from fluidml.flow import Flow
 from fluidml.swarm import Swarm
-from fluidml.common.exception import NoTasksError
-from fluidml.flow.task_spec import TaskSpec
+from fluidml.task_spec import TaskSpec
 
 
 @pytest.fixture

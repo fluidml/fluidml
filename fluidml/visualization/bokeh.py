@@ -5,7 +5,7 @@ from bokeh.io import show
 from bokeh.models import ColumnDataSource, LabelSet
 from bokeh.plotting import figure
 
-from fluidml.visualization.graph_layout import build_sugiyama_layout
+from fluidml.visualization.graph_layout import _build_sugiyama_layout
 
 
 def reformat_graph(graph):
@@ -78,8 +78,11 @@ def visualize_graph_interactive(
     plot.yaxis.visible = False
 
     # get sugiyama layout
-    layout = build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
-    positions = {vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1]) for vertex in layout.g.sV}
+    layout = _build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
+    positions = {
+        vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1])
+        for vertex in layout.g.sV
+    }
     positions = flip_positions(positions, plot_height)
 
     # get positions

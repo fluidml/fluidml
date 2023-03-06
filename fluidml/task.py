@@ -3,39 +3,38 @@ import inspect
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Dict, List, Optional, Any, TYPE_CHECKING, Union, Callable
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 from metadict import MetaDict
 
-from fluidml.common.dependency import DependencyMixin
-from fluidml.common.utils import change_logging_level, BaseModel
-from fluidml.storage import ResultsStore, Promise, File, Names
+from fluidml.dependency import DependencyMixin
+from fluidml.storage.base import Names, Promise, ResultsStore
+from fluidml.storage.file_store import File
+from fluidml.utils import BaseModel, change_logging_level
 
 if TYPE_CHECKING:
-    from fluidml.flow import TaskSpec
+    from fluidml.task_spec import TaskSpec
 
 logger = logging.getLogger(__name__)
 
 
 class TaskState(str, Enum):
-    """The state of a task.
-
-    PENDING: Task has not been scheduled and processed, yet.
-    SCHEDULED: Task has been scheduled for processing.
-    RUNNING: Task is currently running.
-    KILLED: Task has been killed by the user via KeyBoardInterrupt.
-    FAILED: Task failed due to an unexpected error.
-    UPSTREAM_FAILED: Task failed/could not be executed due to one or more upstream task failures.
-    FINISHED: Task finished successfully.
-    """
+    """The state of a task."""
 
     PENDING = "pending"
+    """Task has not been scheduled and processed, yet."""
     SCHEDULED = "scheduled"
+    """Task has been scheduled for processing."""
     RUNNING = "running"
+    """Task is currently running."""
     KILLED = "killed"
+    """Task has been killed by the user via KeyBoardInterrupt."""
     FAILED = "failed"
+    """Task failed due to an unexpected error."""
     UPSTREAM_FAILED = "upstream_failed"
+    """Task failed/could not be executed due to one or more upstream task failures."""
     FINISHED = "finished"
+    """Task finished successfully."""
 
 
 class TaskInfo(BaseModel):
@@ -54,7 +53,7 @@ class TaskInfo(BaseModel):
 class Task(ABC, DependencyMixin):
     """Base class for a FluidML `Task`.
 
-    Attributes:
+    Args:
         name: Name of the task, e.g. "Processing".
         unique_name: Unique name of the task if a run contains multiple instances of the same task,
             e.g. "Processing-3".
@@ -218,7 +217,9 @@ class Task(ABC, DependencyMixin):
                     task_unique_config=self.unique_config,
                 )
         else:
-            raise ValueError(f'"mode" argument is "{mode}" but must be "save" or "delete".')
+            raise ValueError(
+                f'"mode" argument is "{mode}" but must be "save" or "delete".'
+            )
 
         debug_msg = f'Task "{self.unique_name}" {mode}s "{name}"'
         msg = debug_msg + f"." if type_ is None else debug_msg + f' of type "{type_}".'
@@ -235,7 +236,12 @@ class Task(ABC, DependencyMixin):
             **kwargs: Additional keyword args.
         """
         self.results_store.save(
-            obj=obj, name=name, type_=type_, task_name=self.name, task_unique_config=self.unique_config, **kwargs
+            obj=obj,
+            name=name,
+            type_=type_,
+            task_name=self.name,
+            task_unique_config=self.unique_config,
+            **kwargs,
         )
         self._track_saved_object(name, mode="save", type_=type_)
 
@@ -255,35 +261,63 @@ class Task(ABC, DependencyMixin):
             **kwargs: Additional keyword args.
         """
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        task_unique_config = (
+            task_unique_config if task_unique_config is not None else self.unique_config
+        )
 
-        return self.results_store.load(name=name, task_name=task_name, task_unique_config=task_unique_config, **kwargs)
+        return self.results_store.load(
+            name=name,
+            task_name=task_name,
+            task_unique_config=task_unique_config,
+            **kwargs,
+        )
 
     def delete(
-        self, name: str, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None
+        self,
+        name: str,
+        task_name: Optional[str] = None,
+        task_unique_config: Optional[Union[Dict, MetaDict]] = None,
     ):
         """Deletes object with specified name from results store"""
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        task_unique_config = (
+            task_unique_config if task_unique_config is not None else self.unique_config
+        )
 
-        self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
+        self.results_store.delete(
+            name=name, task_name=task_name, task_unique_config=task_unique_config
+        )
         self._track_saved_object(name, mode="delete")
 
-    def delete_run(self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None):
+    def delete_run(
+        self,
+        task_name: Optional[str] = None,
+        task_unique_config: Optional[Union[Dict, MetaDict]] = None,
+    ):
         """Deletes run with specified name from results store"""
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        task_unique_config = (
+            task_unique_config if task_unique_config is not None else self.unique_config
+        )
 
-        self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
+        self.results_store.delete_run(
+            task_name=task_name, task_unique_config=task_unique_config
+        )
 
     def get_store_context(
-        self, task_name: Optional[str] = None, task_unique_config: Optional[Union[Dict, MetaDict]] = None
+        self,
+        task_name: Optional[str] = None,
+        task_unique_config: Optional[Union[Dict, MetaDict]] = None,
     ) -> Any:
         """Wrapper to get store specific storage context, e.g. the current run directory for Local File Store"""
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        task_unique_config = (
+            task_unique_config if task_unique_config is not None else self.unique_config
+        )
 
-        return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
+        return self.results_store.get_context(
+            task_name=task_name, task_unique_config=task_unique_config
+        )
 
     def open(
         self,
@@ -302,7 +336,9 @@ class Task(ABC, DependencyMixin):
             return self.results_store.open(promise=promise, mode=mode)
 
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
+        task_unique_config = (
+            task_unique_config if task_unique_config is not None else self.unique_config
+        )
 
         if mode is not None and ("w" in mode or "a" in mode):
             self._track_saved_object(name, mode="save", type_=type_)

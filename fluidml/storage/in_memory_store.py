@@ -1,9 +1,8 @@
 import logging
 from multiprocessing import Manager
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
 
-from fluidml.storage import ResultsStore
-from fluidml.storage.base import StoreContext
+from fluidml.storage.base import ResultsStore, StoreContext
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +17,9 @@ class InMemoryStore(ResultsStore):
         super().__init__()
         self._memory_store = manager.dict() if manager is not None else {}
 
-    def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
+    def load(
+        self, name: str, task_name: str, task_unique_config: Dict, **kwargs
+    ) -> Optional[Any]:
         with self.lock:
             if task_name not in self._memory_store:
                 return None
@@ -28,13 +29,21 @@ class InMemoryStore(ResultsStore):
                     try:
                         obj = task_sweep["results"][name]
                     except KeyError:
-                        logger.warning(f'Task "{task_name}" could not find "{name}" in result store.')
+                        logger.warning(
+                            f'Task "{task_name}" could not find "{name}" in result store.'
+                        )
                         return None
 
                     return obj
 
     def save(
-        self, obj: Any, name: str, task_name: str, task_unique_config: Dict, type_: Optional[str] = None, **kwargs
+        self,
+        obj: Any,
+        name: str,
+        task_name: str,
+        task_unique_config: Dict,
+        type_: Optional[str] = None,
+        **kwargs,
     ):
         """In-memory save function.
         Adds individual object to in-memory store.
@@ -60,7 +69,10 @@ class InMemoryStore(ResultsStore):
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
         with self.lock:
             if task_name not in self._memory_store:
-                logger.warning(f'"{name}" could not be deleted. ' f"Task {task_name} does not exist in InMemoryStore.")
+                logger.warning(
+                    f'"{name}" could not be deleted. '
+                    f"Task {task_name} does not exist in InMemoryStore."
+                )
                 return None
 
             existing_task_results = self._memory_store[task_name]
@@ -71,11 +83,14 @@ class InMemoryStore(ResultsStore):
                         del task_sweep["results"][name]
                         self._memory_store[task_name] = existing_task_results
                     except KeyError:
-                        logger.warning(f'"{name}" could not be deleted from store since it was not found.')
+                        logger.warning(
+                            f'"{name}" could not be deleted from store since it was not found.'
+                        )
                     return None
 
             logger.warning(
-                f'"{name}" could not be deleted. ' f'No matching unique_config for task "{task_name}" exists.'
+                f'"{name}" could not be deleted. '
+                f'No matching unique_config for task "{task_name}" exists.'
             )
 
     def delete_run(self, task_name: str, task_unique_config: Dict):

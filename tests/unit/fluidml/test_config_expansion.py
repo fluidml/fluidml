@@ -2,8 +2,8 @@ from typing import Dict
 
 import pytest
 
-from fluidml.common.exception import GridSearchExpansionError
-from fluidml.flow.config_expansion import expand_config, ConfigExpansionRegistry
+from fluidml.config_expansion import ConfigExpansionRegistry, expand_config
+from fluidml.exception import GridSearchExpansionError
 
 # correct: 1
 cfg_1 = {}
@@ -88,12 +88,19 @@ cfg_7 = {
 cfg_8 = {
     "a": [{"a": [1, 2, "@x"]}, {"a": 4}, "@z"],
     "b": {"c": [1, 2, 3, "@x"], "e": {}},
-    "c": {"test": [True, False, "@z"], "funny": {"x": [[[1, 2, 3, 4]]], "y": [True, False, "@x"]}},
+    "c": {
+        "test": [True, False, "@z"],
+        "funny": {"x": [[[1, 2, 3, 4]]], "y": [True, False, "@x"]},
+    },
 }
 
 # correct: 2 (product/zip)
 cfg_9 = {
-    "a": [{"b": [{"c": [{"d": [1, 2, "@x"]}, {"f": 3}, "@x"]}, {"g": 3}, "@x"]}, {"e": 4}, "@x"],
+    "a": [
+        {"b": [{"c": [{"d": [1, 2, "@x"]}, {"f": 3}, "@x"]}, {"g": 3}, "@x"]},
+        {"e": 4},
+        "@x",
+    ],
 }
 
 # correct: 2 (product/zip)
@@ -125,6 +132,16 @@ cfg_10 = {
 def test_expand_config(config: Dict, expansion_method: str, num_expanded_cfgs: int):
     if expansion_method not in ConfigExpansionRegistry.registered_ids():
         with pytest.raises(GridSearchExpansionError) as _:
-            assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs
+            assert (
+                len(
+                    expand_config(
+                        config=config, expand=expansion_method, group_prefix="@"
+                    )
+                )
+                == num_expanded_cfgs
+            )
     else:
-        assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs
+        assert (
+            len(expand_config(config=config, expand=expansion_method, group_prefix="@"))
+            == num_expanded_cfgs
+        )

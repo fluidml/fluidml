@@ -3,23 +3,25 @@ import logging.handlers
 import multiprocessing
 import random
 import signal
-from multiprocessing import set_start_method, Queue as MPQueue, RLock, Event as MPEvent
+from multiprocessing import Event as MPEvent
+from multiprocessing import Queue as MPQueue
+from multiprocessing import RLock, set_start_method
 from multiprocessing.managers import SyncManager
 from queue import Queue
 from types import TracebackType
-from typing import Optional, Type, List, Dict, Union, Any
+from typing import Any, Dict, List, Optional, Type, Union
 
-from fluidml.common.logging import LoggingListener, TmuxManager
-from fluidml.common.task import Task, TaskState
-from fluidml.common.utils import create_unique_hash_from_config
-from fluidml.storage import ResultsStore, InMemoryStore
+from fluidml.dolphin import Dolphin
+from fluidml.logging import LoggingListener, TmuxManager
+from fluidml.storage import InMemoryStore, ResultsStore
 from fluidml.storage.controller import pack_pipeline_results
-from fluidml.swarm import Dolphin
+from fluidml.task import Task, TaskState
+from fluidml.utils import create_unique_hash_from_config
 
 logger = logging.getLogger(__name__)
 
 
-def manager_init():
+def _manager_init():
     """An initialization function passed to the multiprocessing manager.
 
     It causes the manager object to ignore KeyboardInterrupt signals in the child process.
@@ -96,7 +98,7 @@ class Swarm:
         if self.n_dolphins > 1:
             set_start_method(start_method, force=True)
             self.manager = SyncManager()
-            self.manager.start(manager_init)
+            self.manager.start(_manager_init)
             self.task_states = self.manager.dict()
             self.lock = RLock()
             self.scheduled_queue = MPQueue()
@@ -126,11 +128,15 @@ class Swarm:
             for i in range(self.n_dolphins)
         ]
 
-    def _init_mp_logging(self, project_name: Optional[str] = None, run_name: Optional[str] = None) -> LoggingListener:
+    def _init_mp_logging(
+        self, project_name: Optional[str] = None, run_name: Optional[str] = None
+    ) -> LoggingListener:
         """Initialize logging in the case of multiprocessing."""
         tmux_manager = None
         if self.log_to_tmux and TmuxManager.is_tmux_installed():
-            session_name = project_name if run_name is None else f"{project_name}--{run_name}"
+            session_name = (
+                project_name if run_name is None else f"{project_name}--{run_name}"
+            )
             tmux_manager = TmuxManager(
                 worker_names=[dolphin.name for dolphin in self.dolphins],
                 session_name=session_name,
@@ -152,7 +158,10 @@ class Swarm:
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
     ):
         if self.n_dolphins > 1:
             self.close()
@@ -243,7 +252,9 @@ class Swarm:
             A Dict with the tasks results and configs.
         """
         # setup results store
-        results_store = results_store if results_store is not None else InMemoryStore(self.manager)
+        results_store = (
+            results_store if results_store is not None else InMemoryStore(self.manager)
+        )
 
         # get entry point task ids
         entry_point_tasks: List[str] = self._get_entry_point_tasks(tasks)
@@ -266,7 +277,9 @@ class Swarm:
             self.task_states[task_unique_name] = TaskState.SCHEDULED
 
         if self.n_dolphins > 1:
-            logger.info(f'Execute run "{run_name}" using multiprocessing with {self.n_dolphins} workers')
+            logger.info(
+                f'Execute run "{run_name}" using multiprocessing with {self.n_dolphins} workers'
+            )
             self._run_parallel(project_name, run_name)
         else:
             logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')

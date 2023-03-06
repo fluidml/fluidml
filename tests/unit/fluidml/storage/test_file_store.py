@@ -1,5 +1,6 @@
-import pytest
 import tempfile
+
+import pytest
 
 from fluidml.storage import LocalFileStore, ResultsStore
 
@@ -24,7 +25,13 @@ def test_save_load(file_store: ResultsStore, type_: str):
     test_config = {"config_param": 1}
 
     file_store.save(
-        obj=test_json_obj, name=test_item_name, type_=type_, task_name=test_task_name, task_unique_config=test_config
+        obj=test_json_obj,
+        name=test_item_name,
+        type_=type_,
+        task_name=test_task_name,
+        task_unique_config=test_config,
     )
-    loaded_json_obj = file_store.load(name=test_item_name, task_name=test_task_name, task_unique_config=test_config)
+    loaded_json_obj = file_store.load(
+        name=test_item_name, task_name=test_task_name, task_unique_config=test_config
+    )
     assert loaded_json_obj == test_json_obj

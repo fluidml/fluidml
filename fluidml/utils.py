@@ -1,15 +1,14 @@
 import contextlib
 import datetime
-import logging
 import hashlib
 import json
+import logging
 import os
 import random
 import string
-from typing import Any, Union, Tuple, Dict, Optional
+from typing import Any, Dict, Optional, Tuple, Union
 
 from pydantic import BaseModel as BaseModel_
-
 
 JSON_ENCODERS = {
     datetime.datetime: lambda x: str(x),
@@ -45,7 +44,10 @@ def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
         return {
             **d1,
             **d2,
-            **{k: d1[k] if d1[k] == d2[k] else update_merge(d1[k], d2[k]) for k in sorted({*d1} & {*d2})},
+            **{
+                k: d1[k] if d1[k] == d2[k] else update_merge(d1[k], d2[k])
+                for k in sorted({*d1} & {*d2})
+            },
         }
     else:
         # This case happens when values are merged
@@ -59,7 +61,9 @@ def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
             combined = d1 + d2
         else:
             combined = (d1, d2)
-        return tuple(element for i, element in enumerate(combined) if element not in combined[:i])
+        return tuple(
+            element for i, element in enumerate(combined) if element not in combined[:i]
+        )
 
 
 def reformat_config(d: Dict) -> Dict:
@@ -100,7 +104,11 @@ def remove_none_from_dict(obj: Dict) -> Dict:
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
     elif isinstance(obj, dict):
-        return {k: remove_none_from_dict(v) for k, v in obj.items() if k is not None and v is not None}
+        return {
+            k: remove_none_from_dict(v)
+            for k, v in obj.items()
+            if k is not None and v is not None
+        }
     else:
         return obj
 
@@ -119,7 +127,9 @@ def remove_value_from_dict(obj: Dict, value: Any) -> Dict:
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_value_from_dict(x, value) for x in obj if x != value)
     elif isinstance(obj, dict):
-        return {k: remove_value_from_dict(v, value) for k, v in obj.items() if v != value}
+        return {
+            k: remove_value_from_dict(v, value) for k, v in obj.items() if v != value
+        }
     else:
         return obj
 
@@ -143,7 +153,8 @@ def remove_prefixed_keys_from_dict(obj: Dict, prefix: Optional[str] = None) -> D
         return {
             k: remove_prefixed_keys_from_dict(v, prefix)
             for k, v in obj.items()
-            if not isinstance(k, str) or (isinstance(k, str) and not k.startswith(prefix))
+            if not isinstance(k, str)
+            or (isinstance(k, str) and not k.startswith(prefix))
         }
     else:
         return obj
@@ -166,9 +177,11 @@ def remove_prefix_from_dict(obj: Dict, prefix: Optional[str] = None) -> Dict:
         return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)
     elif isinstance(obj, dict):
         return {
-            (k.split(prefix, 1)[-1] if isinstance(k, str) and k.startswith(prefix) else k): remove_prefix_from_dict(
-                v, prefix
-            )
+            (
+                k.split(prefix, 1)[-1]
+                if isinstance(k, str) and k.startswith(prefix)
+                else k
+            ): remove_prefix_from_dict(v, prefix)
             for k, v in obj.items()
         }
     else:
@@ -183,8 +196,8 @@ def generate_run_name() -> str:
     """
     from fluidml import package_path
 
-    adj_path = os.path.join(package_path, "common", "word_lists", "adjectives.txt")
-    noun_path = os.path.join(package_path, "common", "word_lists", "nouns.txt")
+    adj_path = os.path.join(package_path, "word_lists", "adjectives.txt")
+    noun_path = os.path.join(package_path, "word_lists", "nouns.txt")
 
     # load nouns and adjectives (source Wordnet 3.1)
     with open(noun_path, "r") as noun_f:

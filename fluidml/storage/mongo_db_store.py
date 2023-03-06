@@ -1,12 +1,11 @@
 import functools
 import logging
 import pickle
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 import mongoengine as me
 
-from fluidml.storage import ResultsStore
-from fluidml.storage.base import StoreContext
+from fluidml.storage.base import ResultsStore, StoreContext
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,9 @@ class ResultObject(me.EmbeddedDocument):
 
 
 class MongoDBStore(ResultsStore):
-    def __init__(self, db: str, collection_name: Optional[str] = None, host: Optional[str] = None):
+    def __init__(
+        self, db: str, collection_name: Optional[str] = None, host: Optional[str] = None
+    ):
         super().__init__()
 
         self._host = host
@@ -50,7 +51,9 @@ class MongoDBStore(ResultsStore):
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(
+                unique_config__lte=task_unique_config
+            )
         except me.DoesNotExist:
             return None
         # try to query obj from results DictField
@@ -63,15 +66,27 @@ class MongoDBStore(ResultsStore):
         return obj
 
     @connection
-    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def save(
+        self,
+        obj: Any,
+        name: str,
+        type_: str,
+        task_name: str,
+        task_unique_config: Dict,
+        **kwargs,
+    ):
         """Method to save/update any artifact"""
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(
+                unique_config=task_unique_config
+            )
         except me.DoesNotExist:
             # create new document if query was not successful
-            task_result = task_result_cls(name=task_name, unique_config=task_unique_config)
+            task_result = task_result_cls(
+                name=task_name, unique_config=task_unique_config
+            )
 
         # store object in document and save the document
         result_obj = ResultObject(obj=pickle.dumps(obj))
@@ -84,7 +99,9 @@ class MongoDBStore(ResultsStore):
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(
+                unique_config__lte=task_unique_config
+            )
         except me.DoesNotExist:
             logger.warning(
                 f'"{name}" could not be deleted. '
@@ -96,7 +113,9 @@ class MongoDBStore(ResultsStore):
             del task_result.results[name]
             task_result.save()
         except KeyError:
-            logger.warning(f'"{name}" could not be deleted from store since it was not found.')
+            logger.warning(
+                f'"{name}" could not be deleted from store since it was not found.'
+            )
 
     @connection
     def delete_run(self, task_name: str, task_unique_config: Dict):
@@ -104,9 +123,13 @@ class MongoDBStore(ResultsStore):
         task_result_cls = self._get_task_result_class()
         # try to get query run document based on task name and task unique config
         try:
-            task_result = task_result_cls.objects(name=task_name).get(unique_config__lte=task_unique_config)
+            task_result = task_result_cls.objects(name=task_name).get(
+                unique_config__lte=task_unique_config
+            )
         except me.DoesNotExist:
-            logger.warning(f'No document for task "{task_name}" and the provided unique_config exists.')
+            logger.warning(
+                f'No document for task "{task_name}" and the provided unique_config exists.'
+            )
             return None
 
         # delete document
@@ -138,12 +161,30 @@ def main():
     task_1 = "task_1"
     task_2 = "task_2"
 
-    store.save(obj=obj1, name="obj1", type_="a", task_name=task_1, task_unique_config=task_1_config)
-    store.save(obj=obj2, name="obj2", type_="b", task_name=task_2, task_unique_config=task_2_config)
+    store.save(
+        obj=obj1,
+        name="obj1",
+        type_="a",
+        task_name=task_1,
+        task_unique_config=task_1_config,
+    )
+    store.save(
+        obj=obj2,
+        name="obj2",
+        type_="b",
+        task_name=task_2,
+        task_unique_config=task_2_config,
+    )
     # store.delete(name='obj2', task_name=task_name, task_unique_config=task_config)
-    result1 = store.load(name="obj1", task_name=task_1, task_unique_config=task_1_config)
-    result2 = store.load(name="obj2", task_name=task_2, task_unique_config=task_2_config)
-    result3 = store.load(name="obj1", task_name=task_1, task_unique_config=task_2_config)
+    result1 = store.load(
+        name="obj1", task_name=task_1, task_unique_config=task_1_config
+    )
+    result2 = store.load(
+        name="obj2", task_name=task_2, task_unique_config=task_2_config
+    )
+    result3 = store.load(
+        name="obj1", task_name=task_1, task_unique_config=task_2_config
+    )
     print(result1)
     print(result2)
     print(result3)

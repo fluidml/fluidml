@@ -1,18 +1,18 @@
 import re
 import string
-from typing import Dict, Tuple, List
+from typing import Dict, List, Tuple
 
 import numpy as np
 from datasets import load_dataset
 from flair.data import Sentence
-from flair.embeddings import WordEmbeddings, DocumentPoolEmbeddings
+from flair.embeddings import DocumentPoolEmbeddings, WordEmbeddings
 from rich import print
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import classification_report
 
-from fluidml import Task, Flow, TaskSpec
-from fluidml.common.logging import configure_logging
+from fluidml import Flow, Task, TaskSpec
+from fluidml.logging import configure_logging
 from fluidml.storage import Sweep
 from fluidml.visualization import visualize_graph_interactive
 
@@ -28,7 +28,9 @@ class DatasetFetchTask(Task):
         elif split in ["train", "val"]:
             splitted = list(dataset["train"])
             split_index = int(0.7 * len(splitted))
-            return splitted[:split_index] if split == "train" else splitted[split_index:]
+            return (
+                splitted[:split_index] if split == "train" else splitted[split_index:]
+            )
 
     @staticmethod
     def _get_sentences_and_labels(dataset) -> Tuple[List[str], List[str]]:
@@ -36,7 +38,10 @@ class DatasetFetchTask(Task):
         labels = []
         for item in dataset:
             sentences.append(item["text"])
-            labels.append(item["coarse_label"])
+            label = (
+                item["coarse_label"] if "coarse_label" in item else item["label-coarse"]
+            )
+            labels.append(label)
         return sentences, labels
 
     def run(self):
@@ -45,7 +50,9 @@ class DatasetFetchTask(Task):
         dataset_splits = {}
         for split in splits:
             dataset_split = DatasetFetchTask._get_split(dataset, split)
-            sentences, labels = DatasetFetchTask._get_sentences_and_labels(dataset_split)
+            sentences, labels = DatasetFetchTask._get_sentences_and_labels(
+                dataset_split
+            )
             split_results = {"sentences": sentences, "labels": labels}
             dataset_splits[split] = split_results
         self.save(dataset_splits, "raw_dataset")
@@ -62,7 +69,9 @@ class PreProcessTask(Task):
             if step == "lower_case":
                 pre_processed_text = pre_processed_text.lower()
             if step == "remove_punct":
-                pre_processed_text = pre_processed_text.translate(str.maketrans("", "", string.punctuation))
+                pre_processed_text = pre_processed_text.translate(
+                    str.maketrans("", "", string.punctuation)
+                )
             if step == "remove_digits":
                 pre_processed_text = re.sub(r"\d+", "<num>", pre_processed_text)
         return pre_processed_text
@@ -70,7 +79,10 @@ class PreProcessTask(Task):
     def run(self, raw_dataset: Dict):
         pre_processed_splits = {}
         for split in ["train", "val", "test"]:
-            pre_processed_sentences = [self._pre_process(sentence) for sentence in raw_dataset[split]["sentences"]]
+            pre_processed_sentences = [
+                self._pre_process(sentence)
+                for sentence in raw_dataset[split]["sentences"]
+            ]
             pre_processed_splits[split] = {"sentences": pre_processed_sentences}
         self.save(pre_processed_splits, "pre_processed_dataset")
 
@@ -82,11 +94,15 @@ class TFIDFFeaturizeTask(Task):
         self._max_features = max_features
 
     def run(self, pre_processed_dataset: Dict):
-        tfidf_model = TfidfVectorizer(min_df=self._min_df, max_features=self._max_features)
+        tfidf_model = TfidfVectorizer(
+            min_df=self._min_df, max_features=self._max_features
+        )
         tfidf_model.fit(pre_processed_dataset["train"]["sentences"])
         featurized_splits = {}
         for split in ["train", "val", "test"]:
-            tfidf_vectors = tfidf_model.transform(pre_processed_dataset[split]["sentences"]).toarray()
+            tfidf_vectors = tfidf_model.transform(
+                pre_processed_dataset[split]["sentences"]
+            ).toarray()
             featurized_splits[split] = {"vectors": tfidf_vectors}
         self.save(featurized_splits, "tfidf_featurized_dataset")
 
@@ -98,7 +114,9 @@ class GloveFeaturizeTask(Task):
     def run(self, pre_processed_dataset: Dict):
         featurized_splits = {}
         for split in ["train", "val", "test"]:
-            sentences = [Sentence(sent) for sent in pre_processed_dataset[split]["sentences"]]
+            sentences = [
+                Sentence(sent) for sent in pre_processed_dataset[split]["sentences"]
+            ]
             embedder = DocumentPoolEmbeddings([WordEmbeddings("glove")])
             embedder.embed(sentences)
             glove_vectors = [sent.embedding.cpu().numpy() for sent in sentences]
@@ -113,10 +131,20 @@ class TrainTask(Task):
         self._max_iter = max_iter
         self._class_weight = "balanced" if balanced else None
 
-    def run(self, raw_dataset: Dict, tfidf_featurized_dataset: Dict, glove_featurized_dataset: Dict):
-        model = LogisticRegression(max_iter=self._max_iter, class_weight=self._class_weight)
+    def run(
+        self,
+        raw_dataset: Dict,
+        tfidf_featurized_dataset: Dict,
+        glove_featurized_dataset: Dict,
+    ):
+        model = LogisticRegression(
+            max_iter=self._max_iter, class_weight=self._class_weight
+        )
         stacked_vectors = np.hstack(
-            (tfidf_featurized_dataset["train"]["vectors"], glove_featurized_dataset["train"]["vectors"])
+            (
+                tfidf_featurized_dataset["train"]["vectors"],
+                glove_featurized_dataset["train"]["vectors"],
+            )
         )
         model.fit(stacked_vectors, raw_dataset["train"]["labels"])
         self.save(model, "trained_model")
@@ -136,10 +164,15 @@ class EvaluateTask(Task):
         evaluation_results = {}
         for split in ["train", "val", "test"]:
             stacked_vectors = np.hstack(
-                (tfidf_featurized_dataset[split]["vectors"], glove_featurized_dataset[split]["vectors"])
+                (
+                    tfidf_featurized_dataset[split]["vectors"],
+                    glove_featurized_dataset[split]["vectors"],
+                )
             )
             predictions = trained_model.predict(stacked_vectors)
-            report = classification_report(raw_dataset[split]["labels"], predictions, output_dict=True)
+            report = classification_report(
+                raw_dataset[split]["labels"], predictions, output_dict=True
+            )
             evaluation_results[split] = {"classification_report": report}
         self.save(evaluation_results, "evaluation_results")
 
@@ -151,7 +184,9 @@ class ModelSelectionTask(Task):
     def run(self, evaluation_results: List[Sweep]):
         sorted_results = sorted(
             evaluation_results,
-            key=lambda model_result: model_result.value["val"]["classification_report"]["macro avg"]["f1-score"],
+            key=lambda model_result: model_result.value["val"]["classification_report"][
+                "macro avg"
+            ]["f1-score"],
             reverse=True,
         )
         self.save(sorted_results[0].config, "best_config")
@@ -163,12 +198,21 @@ def main():
 
     # create all task specs
     dataset_fetch_task = TaskSpec(task=DatasetFetchTask)
-    pre_process_task = TaskSpec(task=PreProcessTask, config={"pre_processing_steps": ["lower_case", "remove_punct"]})
+    pre_process_task = TaskSpec(
+        task=PreProcessTask,
+        config={"pre_processing_steps": ["lower_case", "remove_punct"]},
+    )
     featurize_task_1 = TaskSpec(task=GloveFeaturizeTask)
     featurize_task_2 = TaskSpec(
-        task=TFIDFFeaturizeTask, config={"min_df": 5, "max_features": [1000, 2000]}, expand="product"
+        task=TFIDFFeaturizeTask,
+        config={"min_df": 5, "max_features": [1000, 2000]},
+        expand="product",
     )
-    train_task = TaskSpec(task=TrainTask, config={"max_iter": [50, 100], "balanced": [True, False]}, expand="product")
+    train_task = TaskSpec(
+        task=TrainTask,
+        config={"max_iter": [50, 100], "balanced": [True, False]},
+        expand="product",
+    )
     evaluate_task = TaskSpec(task=EvaluateTask)
     model_selection_task = TaskSpec(task=ModelSelectionTask, reduce=True)
 
@@ -176,8 +220,10 @@ def main():
     pre_process_task.requires(dataset_fetch_task)
     featurize_task_1.requires(pre_process_task)
     featurize_task_2.requires(pre_process_task)
-    train_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2])
-    evaluate_task.requires([dataset_fetch_task, featurize_task_1, featurize_task_2, train_task])
+    train_task.requires(dataset_fetch_task, featurize_task_1, featurize_task_2)
+    evaluate_task.requires(
+        dataset_fetch_task, featurize_task_1, featurize_task_2, train_task
+    )
     model_selection_task.requires(evaluate_task)
 
     # all tasks
@@ -199,7 +245,9 @@ def main():
     visualize_graph_interactive(flow.task_graph)
 
     # run the pipeline
-    results = flow.run(project_name="sklearn_text_classification_example")
+    results = flow.run(
+        num_workers=1, project_name="sklearn_text_classification_example"
+    )
 
     print(results["ModelSelectionTask"]["results"]["best_config"])
     print(results["ModelSelectionTask"]["results"]["best_performance"])

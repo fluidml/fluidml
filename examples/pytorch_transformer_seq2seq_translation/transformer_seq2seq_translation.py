@@ -6,7 +6,7 @@ import os
 import random
 from dataclasses import dataclass
 from datetime import datetime
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import requests
@@ -16,21 +16,23 @@ from tokenizers import Tokenizer
 from tokenizers.implementations import CharBPETokenizer
 from tokenizers.processors import TemplateProcessing
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torchtext.data.metrics import bleu_score
 from tqdm import tqdm
+from transformer_model import Decoder, Encoder, Seq2SeqTransformer
 
 from fluidml import Flow, Task, TaskSpec
-from fluidml.common.logging import configure_logging
-from fluidml.storage import LocalFileStore, TypeInfo
+from fluidml.logging import configure_logging
+from fluidml.storage import LocalFileStore, Sweep, TypeInfo
 from fluidml.visualization import visualize_graph_in_console
-from transformer_model import Seq2SeqTransformer, Encoder, Decoder
 
 logger = logging.getLogger(__name__)
 
 
 def get_balanced_devices(
-    count: Optional[int] = None, use_cuda: bool = True, cuda_ids: Optional[List[int]] = None
+    count: Optional[int] = None,
+    use_cuda: bool = True,
+    cuda_ids: Optional[List[int]] = None,
 ) -> List[str]:
     count = count if count is not None else multiprocessing.cpu_count()
     if use_cuda and torch.cuda.is_available():
@@ -58,10 +60,16 @@ class MyLocalFileStore(LocalFileStore):
         super().__init__(base_dir=base_dir)
 
         self._type_registry["torch"] = TypeInfo(
-            save_fn=self._save_torch, load_fn=self._load_torch, extension="pt", needs_path=True
+            save_fn=self._save_torch,
+            load_fn=self._load_torch,
+            extension="pt",
+            needs_path=True,
         )
         self._type_registry["tokenizer"] = TypeInfo(
-            save_fn=self._save_tokenizer, load_fn=self._load_tokenizer, extension="json", needs_path=True
+            save_fn=self._save_tokenizer,
+            load_fn=self._load_tokenizer,
+            extension="json",
+            needs_path=True,
         )
 
     @staticmethod
@@ -185,9 +193,15 @@ class DatasetEncoding(Task):
     ):
         task_run_dir = self.get_store_context().run_dir
 
-        train_encoded = DatasetEncoding.encode_data(train_data, de_tokenizer, en_tokenizer)
-        valid_encoded = DatasetEncoding.encode_data(valid_data, de_tokenizer, en_tokenizer)
-        test_encoded = DatasetEncoding.encode_data(test_data, de_tokenizer, en_tokenizer)
+        train_encoded = DatasetEncoding.encode_data(
+            train_data, de_tokenizer, en_tokenizer
+        )
+        valid_encoded = DatasetEncoding.encode_data(
+            valid_data, de_tokenizer, en_tokenizer
+        )
+        test_encoded = DatasetEncoding.encode_data(
+            test_data, de_tokenizer, en_tokenizer
+        )
 
         logger.info(f'Save encoded dataset to "{task_run_dir}".')
         self.save(obj=train_encoded, name="train_encoded", type_="json")
@@ -206,8 +220,12 @@ class BatchCollator:
         for de_item, en_item in batch:
             de_batch.append(torch.tensor(de_item, dtype=torch.long))
             en_batch.append(torch.tensor(en_item, dtype=torch.long))
-        de_batch = pad_sequence(de_batch, batch_first=True, padding_value=self.de_pad_idx).to(self.device)
-        en_batch = pad_sequence(en_batch, batch_first=True, padding_value=self.en_pad_idx).to(self.device)
+        de_batch = pad_sequence(
+            de_batch, batch_first=True, padding_value=self.de_pad_idx
+        ).to(self.device)
+        en_batch = pad_sequence(
+            en_batch, batch_first=True, padding_value=self.en_pad_idx
+        ).to(self.device)
         return de_batch, en_batch
 
 
@@ -266,7 +284,9 @@ class Training(Task):
         self.num_epochs = num_epochs
         self.seed = seed
 
-    def _init_training(self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int):
+    def _init_training(
+        self, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int
+    ):
         """Initialize all training components."""
 
         # initialize the encoder and decoder block
@@ -291,7 +311,9 @@ class Training(Task):
         )
 
         # initialize the full transformer sequence to sequence model
-        model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
+        model = Seq2SeqTransformer(
+            enc, dec, src_pad_idx, trg_pad_idx, self.resource.device
+        ).to(self.resource.device)
 
         # initialize the optimizer
         optimizer = torch.optim.Adam(model.parameters(), lr=self.learning_rate)
@@ -312,7 +334,9 @@ class Training(Task):
 
             output, _ = model(src, trg[:, :-1])
             output_dim = output.shape[-1]
-            output = output.contiguous().view(-1, output_dim)  # [batch size * trg len - 1, output dim]
+            output = output.contiguous().view(
+                -1, output_dim
+            )  # [batch size * trg len - 1, output dim]
             trg = trg[:, 1:].contiguous().view(-1)  # [batch size * trg len - 1]
 
             loss = criterion(output, trg)
@@ -336,7 +360,9 @@ class Training(Task):
 
                 output, _ = model(src, trg[:, :-1])
                 output_dim = output.shape[-1]
-                output = output.contiguous().view(-1, output_dim)  # [batch size * trg len - 1, output dim]
+                output = output.contiguous().view(
+                    -1, output_dim
+                )  # [batch size * trg len - 1, output dim]
                 trg = trg[:, 1:].contiguous().view(-1)  # [batch size * trg len - 1]
 
                 loss = criterion(output, trg)
@@ -365,7 +391,11 @@ class Training(Task):
                 best_valid_loss = valid_loss
                 best_model = model.state_dict()
                 self.save(obj=best_model, name="best_model", type_="torch")
-                self.save(obj={"epoch": epoch, "valid_loss": best_valid_loss}, name="best_model_metric", type_="json")
+                self.save(
+                    obj={"epoch": epoch, "valid_loss": best_valid_loss},
+                    name="best_model_metric",
+                    type_="json",
+                )
 
             logger.info(
                 f"\nEpoch: {epoch + 1:02} | Time: {end_time - start_time}\n"
@@ -398,10 +428,16 @@ class Training(Task):
 
         # instantiate train and validation dataloader
         train_iterator = DataLoader(
-            train_dataset, batch_size=self.train_batch_size, shuffle=True, collate_fn=batch_collator
+            train_dataset,
+            batch_size=self.train_batch_size,
+            shuffle=True,
+            collate_fn=batch_collator,
         )
         valid_iterator = DataLoader(
-            valid_dataset, batch_size=self.valid_batch_size, shuffle=False, collate_fn=batch_collator
+            valid_dataset,
+            batch_size=self.valid_batch_size,
+            shuffle=False,
+            collate_fn=batch_collator,
         )
 
         input_dim = de_tokenizer.get_vocab_size()
@@ -411,7 +447,10 @@ class Training(Task):
 
         # instantiate all training components
         model, optimizer, criterion = self._init_training(
-            input_dim=input_dim, output_dim=output_dim, src_pad_idx=src_pad_idx, trg_pad_idx=trg_pad_idx
+            input_dim=input_dim,
+            output_dim=output_dim,
+            src_pad_idx=src_pad_idx,
+            trg_pad_idx=trg_pad_idx,
         )
 
         # train the model on the training set and evaluate after every epoch on the validation set
@@ -429,21 +468,23 @@ class ModelSelection(Task):
         super().__init__()
 
     @staticmethod
-    def _select_best_model_from_sweeps(training_results: List[Dict]) -> Dict:
+    def _select_best_model_from_sweeps(best_model_metric: List[Sweep]) -> Dict:
         config = None
         best_valid_loss = float("inf")
-        for sweep in training_results:
-            if sweep["result"]["best_model_metric"]["valid_loss"] <= best_valid_loss:
-                best_valid_loss = sweep["result"]["best_model_metric"]["valid_loss"]
-                config = sweep["config"]
+        for sweep in best_model_metric:
+            if sweep.value["valid_loss"] <= best_valid_loss:
+                best_valid_loss = sweep.value["valid_loss"]
+                config = sweep.config
         return config
 
-    def run(self, reduced_results: List[Dict]):
+    def run(self, best_model_metric: List[Sweep]):
         task_run_dir = self.get_store_context().run_dir
 
         # select the best run config by comparing model performances from different parameter sweeps
         # on the validation set
-        best_run_config = self._select_best_model_from_sweeps(training_results=reduced_results)
+        best_run_config = self._select_best_model_from_sweeps(
+            best_model_metric=best_model_metric
+        )
 
         logger.info(f'Save best run config to "{task_run_dir}".')
         self.save(obj=best_run_config, name="best_run_config", type_="json")
@@ -457,7 +498,12 @@ class Evaluation(Task):
         self.seed = seed
 
     def _init_model(
-        self, train_config: Dict, input_dim: int, output_dim: int, src_pad_idx: int, trg_pad_idx: int
+        self,
+        train_config: Dict,
+        input_dim: int,
+        output_dim: int,
+        src_pad_idx: int,
+        trg_pad_idx: int,
     ) -> nn.Module:
         """Initialize the model and its components."""
 
@@ -481,7 +527,9 @@ class Evaluation(Task):
             self.resource.device,
         )
 
-        model = Seq2SeqTransformer(enc, dec, src_pad_idx, trg_pad_idx, self.resource.device).to(self.resource.device)
+        model = Seq2SeqTransformer(
+            enc, dec, src_pad_idx, trg_pad_idx, self.resource.device
+        ).to(self.resource.device)
         return model
 
     def translate_sentence(self, src_encoded, bos_idx, eos_idx, model, max_len=50):
@@ -497,10 +545,14 @@ class Evaluation(Task):
 
         trg_indices = [bos_idx]
         for i in range(max_len):
-            trg_tensor = torch.LongTensor(trg_indices).unsqueeze(0).to(self.resource.device)
+            trg_tensor = (
+                torch.LongTensor(trg_indices).unsqueeze(0).to(self.resource.device)
+            )
             trg_mask = model.make_trg_mask(trg_tensor)
             with torch.no_grad():
-                output, attention = model.decoder(trg_tensor, enc_src, trg_mask, src_mask)
+                output, attention = model.decoder(
+                    trg_tensor, enc_src, trg_mask, src_mask
+                )
             pred_token = output.argmax(2)[:, -1].item()
             trg_indices.append(pred_token)
             if pred_token == eos_idx:
@@ -525,7 +577,9 @@ class Evaluation(Task):
         ) as progress_bar:
             for src, trg in data_encoded:
 
-                pred_trg = self.translate_sentence(src, bos_idx, eos_idx, model, max_len)
+                pred_trg = self.translate_sentence(
+                    src, bos_idx, eos_idx, model, max_len
+                )
 
                 # cut off <eos> token
                 pred_trg = pred_trg[:-1]
@@ -543,10 +597,24 @@ class Evaluation(Task):
         set_seed(self.seed)
 
         # load the best model, test-data and the tokenizers based on the previously selected best run config
-        model_state_dict = self.load(name="best_model", task_name="Training", task_unique_config=best_run_config)
-        test_encoded = self.load(name="test_encoded", task_name="DatasetEncoding", task_unique_config=best_run_config)
-        de_tokenizer = self.load(name="de_tokenizer", task_name="TokenizerTraining", task_unique_config=best_run_config)
-        en_tokenizer = self.load(name="en_tokenizer", task_name="TokenizerTraining", task_unique_config=best_run_config)
+        model_state_dict = self.load(
+            name="best_model", task_name="Training", task_unique_config=best_run_config
+        )
+        test_encoded = self.load(
+            name="test_encoded",
+            task_name="DatasetEncoding",
+            task_unique_config=best_run_config,
+        )
+        de_tokenizer = self.load(
+            name="de_tokenizer",
+            task_name="TokenizerTraining",
+            task_unique_config=best_run_config,
+        )
+        en_tokenizer = self.load(
+            name="en_tokenizer",
+            task_name="TokenizerTraining",
+            task_unique_config=best_run_config,
+        )
 
         # instantiate the batch collator
         batch_collator = BatchCollator(
@@ -559,7 +627,12 @@ class Evaluation(Task):
         test_dataset = TranslationDataset(data=test_encoded)
 
         # instantiate the test dataloader
-        test_iterator = DataLoader(test_dataset, batch_size=self.batch_size, shuffle=False, collate_fn=batch_collator)
+        test_iterator = DataLoader(
+            test_dataset,
+            batch_size=self.batch_size,
+            shuffle=False,
+            collate_fn=batch_collator,
+        )
 
         input_dim = de_tokenizer.get_vocab_size()
         output_dim = en_tokenizer.get_vocab_size()
@@ -580,8 +653,12 @@ class Evaluation(Task):
         criterion = nn.CrossEntropyLoss(ignore_index=trg_pad_idx)
 
         # evaluate the model on the test set -> calculate the test set loss and perplexity
-        test_loss = Training.validate_epoch(model=model, iterator=test_iterator, criterion=criterion)
-        logger.info(f"| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |")
+        test_loss = Training.validate_epoch(
+            model=model, iterator=test_iterator, criterion=criterion
+        )
+        logger.info(
+            f"| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |"
+        )
 
         # calculate the model's bleu score on the test set
         bleu = self.calculate_bleu(test_encoded, en_tokenizer, model)
@@ -592,7 +669,6 @@ def main():
     current_dir = os.path.abspath("")
     base_dir = os.path.join(current_dir, "seq2seq_experiments")
 
-    num_workers = 1
     # choices [<task_name>, <task_name+>, [<task_name1+>, <task_name2>], all, None]
     #  "+" registers successor tasks for force execution as well
     force = None
@@ -603,7 +679,8 @@ def main():
     configure_logging(level="INFO")
 
     dataset_loading_params = {
-        "base_url": "https://raw.githubusercontent.com/multi30k/dataset/" "master/data/task1/raw/",
+        "base_url": "https://raw.githubusercontent.com/multi30k/dataset/"
+        "master/data/task1/raw/",
         "data_split_names": {
             "train": ["train.de.gz", "train.en.gz"],
             "valid": ["val.de.gz", "val.en.gz"],
@@ -635,7 +712,9 @@ def main():
 
     # create all task specs
     dataset_loading = TaskSpec(task=DatasetLoading, config=dataset_loading_params)
-    tokenizer_training = TaskSpec(task=TokenizerTraining, config=tokenizer_training_params)
+    tokenizer_training = TaskSpec(
+        task=TokenizerTraining, config=tokenizer_training_params
+    )
     dataset_encoding = TaskSpec(task=DatasetEncoding)
     training = TaskSpec(task=Training, config=training_params, expand="product")
     model_selection = TaskSpec(task=ModelSelection, reduce=True)
@@ -659,8 +738,8 @@ def main():
     ]
 
     # create list of resources
-    devices = get_balanced_devices(count=num_workers, use_cuda=use_cuda, cuda_ids=cuda_ids)
-    resources = [TaskResource(device=devices[i]) for i in range(num_workers)]
+    devices = get_balanced_devices(use_cuda=use_cuda, cuda_ids=cuda_ids)
+    resources = [TaskResource(device=devices[i]) for i in range(len(devices))]
 
     # create local file storage used for versioning
     results_store = MyLocalFileStore(base_dir=base_dir)
@@ -677,7 +756,6 @@ def main():
     # create list of resources which is distributed among workers
     # e.g. to manage that each worker has dedicated access to specific gpus
     flow.run(
-        num_workers=num_workers,
         resources=resources,
         results_store=results_store,
         project_name="transformer_seq2seq_translation_example",

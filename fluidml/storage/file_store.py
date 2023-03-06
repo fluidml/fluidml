@@ -4,12 +4,12 @@ import os
 import pickle
 import shutil
 from dataclasses import dataclass
-from typing import List, Dict, Optional, Any, Callable, AnyStr, Tuple, IO, TYPE_CHECKING
+from typing import IO, TYPE_CHECKING, Any, AnyStr, Callable, Dict, List, Optional, Tuple
 
-from fluidml.storage.base import ResultsStore, Promise, StoreContext, Names
+from fluidml.storage.base import Names, Promise, ResultsStore, StoreContext
 
 if TYPE_CHECKING:
-    from fluidml.common.task import TaskInfo
+    from fluidml.task import TaskInfo
 
 logger = logging.getLogger(__name__)
 
@@ -146,29 +146,32 @@ class File:
 
     @classmethod
     def from_promise(cls, promise: FilePromise):
-        return cls(promise.path, promise.mode, promise.save_fn, promise.load_fn, promise.open_fn, **promise.open_kwargs)
+        return cls(
+            promise.path,
+            promise.mode,
+            promise.save_fn,
+            promise.load_fn,
+            promise.open_fn,
+            **promise.open_kwargs,
+        )
 
 
 @dataclass
 class TypeInfo:
-    """
-    Initializes saving and loading information for a specific type.
-
-    Args:
-        save_fn (Callable): save function used to save the object to store.
-        load_fn (Callable): load function used to load the object from store.
-        extension (Optional[str]): file extension the object is saved with.
-        is_binary (Optional[bool]): read, write and append in binary mode.
-        open_fn (Optional[Callable]): function used to open a file object (default is builtin open()).
-        needs_path (bool): Whether save and load fn should operate on path and not on file like object. Default: false.
-    """
+    """Initializes saving and loading information for a specific type."""
 
     save_fn: Callable
+    """Save function used to save the object to store."""
     load_fn: Callable
+    """Load function used to load the object from store."""
     extension: Optional[str] = None
+    """File extension the object is saved with."""
     is_binary: Optional[bool] = None
+    """Read, write and append in binary mode."""
     open_fn: Optional[Callable] = None
+    """Function used to open a file object (default is builtin open())."""
     needs_path: bool = False
+    """Whether save and load fn should operate on path and not on file like object. Default: false."""
 
 
 class LocalFileStore(ResultsStore):
@@ -213,7 +216,12 @@ class LocalFileStore(ResultsStore):
 
     @staticmethod
     def _save_load_info(
-        name: str, run_dir: str, obj_dir: str, type_: str, open_kwargs: Dict[str, Any], load_kwargs: Dict[str, Any]
+        name: str,
+        run_dir: str,
+        obj_dir: str,
+        type_: str,
+        open_kwargs: Dict[str, Any],
+        load_kwargs: Dict[str, Any],
     ):
         load_info = {
             "open_kwargs": open_kwargs,
@@ -226,16 +234,23 @@ class LocalFileStore(ResultsStore):
         load_info_dir = os.path.join(run_dir, Names.FLUIDML_DIR)
         os.makedirs(load_info_dir, exist_ok=True)
 
-        pickle.dump(load_info, open(os.path.join(load_info_dir, f'.{name.lstrip(".")}_load_info.p'), "wb"))
+        pickle.dump(
+            load_info,
+            open(os.path.join(load_info_dir, f'.{name.lstrip(".")}_load_info.p'), "wb"),
+        )
 
     @staticmethod
     def _get_load_info(run_dir: str, name: str) -> Optional[Tuple]:
         # get load information from run dir
-        load_info_file_path = os.path.join(run_dir, Names.FLUIDML_DIR, f'.{name.lstrip(".")}_load_info.p')
+        load_info_file_path = os.path.join(
+            run_dir, Names.FLUIDML_DIR, f'.{name.lstrip(".")}_load_info.p'
+        )
         try:
             load_info = pickle.load(open(load_info_file_path, "rb"))
         except FileNotFoundError:
-            logger.warning(f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.')
+            logger.warning(
+                f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.'
+            )
             return None
 
         # unpack load info
@@ -246,13 +261,22 @@ class LocalFileStore(ResultsStore):
         return type_, obj_dir, open_kwargs, load_kwargs, load_info_file_path
 
     @staticmethod
-    def _create_promise(type_info: TypeInfo, name: str, path: str, open_kwargs: Dict, load_kwargs: Dict) -> FilePromise:
+    def _create_promise(
+        type_info: TypeInfo, name: str, path: str, open_kwargs: Dict, load_kwargs: Dict
+    ) -> FilePromise:
         # load the saved object from run dir
         mode = "rb" if type_info.is_binary else "r"
         if type_info.needs_path:
             mode = None
         return FilePromise(
-            name, path, type_info.save_fn, type_info.load_fn, type_info.open_fn, mode, load_kwargs, **open_kwargs
+            name,
+            path,
+            type_info.save_fn,
+            type_info.load_fn,
+            type_info.open_fn,
+            mode,
+            load_kwargs,
+            **open_kwargs,
         )
 
     def save(
@@ -321,7 +345,9 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+            run_dir = self._get_run_dir(
+                task_dir=task_dir, task_config=task_unique_config
+            )
         if run_dir is None:
             return None
 
@@ -365,7 +391,9 @@ class LocalFileStore(ResultsStore):
                 ) as file:
                     obj = file.load(**load_kwargs)
             except FileNotFoundError:
-                logger.warning(f'Task "{task_name}" could not find "{name}" in results store. ')
+                logger.warning(
+                    f'Task "{task_name}" could not find "{name}" in results store. '
+                )
                 return None
 
         return obj
@@ -375,7 +403,9 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+            run_dir = self._get_run_dir(
+                task_dir=task_dir, task_config=task_unique_config
+            )
         if run_dir is None:
             logger.warning(
                 f'"{name}" could not be deleted. '
@@ -399,7 +429,9 @@ class LocalFileStore(ResultsStore):
         try:
             os.remove(path_to_delete)
         except FileNotFoundError:
-            logger.warning(f'"{path_to_delete}" could not be deleted from store since it was not found.')
+            logger.warning(
+                f'"{path_to_delete}" could not be deleted from store since it was not found.'
+            )
         except IsADirectoryError:
             shutil.rmtree(path_to_delete)
 
@@ -411,9 +443,13 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+            run_dir = self._get_run_dir(
+                task_dir=task_dir, task_config=task_unique_config
+            )
         if run_dir is None:
-            logger.warning(f'No run directory for task "{task_name}" and the provided unique_config exists.')
+            logger.warning(
+                f'No run directory for task "{task_name}" and the provided unique_config exists.'
+            )
             return None
 
         # delete retrieved run dir
@@ -430,19 +466,21 @@ class LocalFileStore(ResultsStore):
         sub_dir: Optional[str] = None,
         **open_kwargs,
     ) -> Optional[File]:
+        """Custom open function that allows the user to open a file leveraging FluidML's ResultStore."""
+        # The available file pointer methods per open mode are:
+        #                       | r   r+   w   w+   a   a+   x   x+
+        #     ------------------|-----------------------------------
+        #     read              | +   +        +        +        +
+        #     write             |     +    +   +    +   +    +   +
+        #     write after seek  |     +    +   +             +   +
+        #     create            |          +   +    +   +    +   +
+        #     truncate          |          +   +
+        #     position at start | +   +    +   +             +   +
+        #     position at end   |                   +   +
 
-        """
-                          | r   r+   w   w+   a   a+   x   x+
-        ------------------|-----------------------------------
-        read              | +   +        +        +        +
-        write             |     +    +   +    +   +    +   +
-        write after seek  |     +    +   +             +   +
-        create            |          +   +    +   +    +   +
-        truncate          |          +   +
-        position at start | +   +    +   +             +   +
-        position at end   |                   +   +
-        """
-        assert promise is not None or all(arg is not None for arg in (name, task_name, task_unique_config, mode))
+        assert promise is not None or all(
+            arg is not None for arg in (name, task_name, task_unique_config, mode)
+        )
 
         if promise:
             if mode:
@@ -456,7 +494,9 @@ class LocalFileStore(ResultsStore):
 
             # try to get existing run dir
             with self.lock:
-                run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+                run_dir = self._get_run_dir(
+                    task_dir=task_dir, task_config=task_unique_config
+                )
             if run_dir is None:
                 raise FileNotFoundError
 
@@ -477,7 +517,13 @@ class LocalFileStore(ResultsStore):
             load_info = self._get_load_info(run_dir, name)
 
             if load_info:
-                type_, obj_dir, open_kwargs, load_kwargs, load_info_file_path = load_info
+                (
+                    type_,
+                    obj_dir,
+                    open_kwargs,
+                    load_kwargs,
+                    load_info_file_path,
+                ) = load_info
 
                 # get type info used for file loading
                 type_info = self._type_registry[type_]
@@ -496,7 +542,9 @@ class LocalFileStore(ResultsStore):
                 obj_dir = self._get_obj_dir(run_dir, sub_dir)
 
                 # save load info
-                self._save_load_info(name, run_dir, obj_dir, type_, open_kwargs, load_kwargs)
+                self._save_load_info(
+                    name, run_dir, obj_dir, type_, open_kwargs, load_kwargs
+                )
 
         else:
             run_dir = self.get_context(task_name, task_unique_config).run_dir
@@ -515,7 +563,9 @@ class LocalFileStore(ResultsStore):
             obj_dir = self._get_obj_dir(run_dir, sub_dir)
 
             # save load info
-            self._save_load_info(name, run_dir, obj_dir, type_, open_kwargs, load_kwargs)
+            self._save_load_info(
+                name, run_dir, obj_dir, type_, open_kwargs, load_kwargs
+            )
 
         # return file object
         name = f"{name}.{type_info.extension}" if type_info.extension else name
@@ -532,6 +582,7 @@ class LocalFileStore(ResultsStore):
 
     def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
         """Method to get the current task's storage context.
+
         E.g. the current run directory in case of LocalFileStore.
         Creates a new run dir if none exists.
         """
@@ -539,12 +590,20 @@ class LocalFileStore(ResultsStore):
 
         with self.lock:
             # try to get existing run dir
-            run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
+            run_dir = LocalFileStore._get_run_dir(
+                task_dir=task_dir, task_config=task_unique_config
+            )
 
             # create new run dir if run dir does not exist
             if run_dir is None:
-                run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_info=self.run_info)
-                json.dump(task_unique_config, open(os.path.join(run_dir, Names.CONFIG), "w"), indent=4)
+                run_dir = LocalFileStore._make_run_dir(
+                    task_dir=task_dir, run_info=self.run_info
+                )
+                json.dump(
+                    task_unique_config,
+                    open(os.path.join(run_dir, Names.CONFIG), "w"),
+                    indent=4,
+                )
 
             sweep_counter = os.path.split(run_dir)[-1].rsplit("-")[-1]
         return StoreContext(run_dir=run_dir, sweep_counter=sweep_counter)
@@ -553,7 +612,9 @@ class LocalFileStore(ResultsStore):
     def _scan_task_dir(task_dir: str) -> List[str]:
         if not os.path.isdir(task_dir):
             return []
-        exist_run_dirs = [os.path.join(task_dir, d.name) for d in os.scandir(task_dir) if d.is_dir()]
+        exist_run_dirs = [
+            os.path.join(task_dir, d.name) for d in os.scandir(task_dir) if d.is_dir()
+        ]
         return exist_run_dirs
 
     @staticmethod
@@ -561,7 +622,9 @@ class LocalFileStore(ResultsStore):
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         for exist_run_dir in exist_run_dirs:
             try:
-                exist_config = json.load(open(os.path.join(exist_run_dir, Names.CONFIG), "r"))
+                exist_config = json.load(
+                    open(os.path.join(exist_run_dir, Names.CONFIG), "r")
+                )
             except FileNotFoundError:
                 continue
 
@@ -584,7 +647,11 @@ class LocalFileStore(ResultsStore):
             if run_info:
                 run_name = run_info.run_name
                 # find dirs that start with run_name and extract their suffix (usually a numeric counter)
-                dir_names = [name.rsplit("-", 1)[-1] for name in dir_names if name.startswith(run_name)]
+                dir_names = [
+                    name.rsplit("-", 1)[-1]
+                    for name in dir_names
+                    if name.startswith(run_name)
+                ]
 
             # get all numeric dir names in task dir and convert to ids
             ids = [int(d_name) for d_name in dir_names if d_name.isdigit()]
@@ -594,7 +661,9 @@ class LocalFileStore(ResultsStore):
             new_id = str(new_id).zfill(3)
 
             # create the new run dir name
-            new_dir_name = new_id if run_info is None else f"{run_info.run_name}-{new_id}"
+            new_dir_name = (
+                new_id if run_info is None else f"{run_info.run_name}-{new_id}"
+            )
 
         # create and return new run dir
         new_run_dir = os.path.join(task_dir, new_dir_name)

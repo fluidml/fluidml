@@ -1,14 +1,12 @@
 import contextlib
-
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import RLock
-from typing import Optional, Dict, Any, List
+from typing import Any, Dict, List, Optional
 
 from metadict import MetaDict
-
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +59,23 @@ class ResultsStore(ABC):
         self._lock = lock
 
     @abstractmethod
-    def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
+    def load(
+        self, name: str, task_name: str, task_unique_config: Dict, **kwargs
+    ) -> Optional[Any]:
         """Query method to load an object based on its name, task_name and task_config if it exists"""
         raise NotImplementedError
 
     @abstractmethod
     # @_save_object_names
-    def save(self, obj: Any, name: str, type_: str, task_name: str, task_unique_config: Dict, **kwargs):
+    def save(
+        self,
+        obj: Any,
+        name: str,
+        type_: str,
+        task_name: str,
+        task_unique_config: Dict,
+        **kwargs,
+    ):
         """Method to save/update any artifact"""
         raise NotImplementedError
 
@@ -98,21 +106,30 @@ class ResultsStore(ABC):
     @abstractmethod
     def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
         """Method to get store specific storage context, e.g. the current run directory for Local File Store"""
+        raise NotImplementedError
 
-    def get_results(self, task_name: str, task_unique_config: Dict, saved_results: List[str]) -> Optional[Dict]:
+    def get_results(
+        self, task_name: str, task_unique_config: Dict, saved_results: List[str]
+    ) -> Optional[Dict]:
         # if a task publishes no results, we always execute the task
         if not saved_results:
             return None
 
         # if a task is not yet finished, we again execute the task
-        if not self.is_finished(task_name=task_name, task_unique_config=task_unique_config):
+        if not self.is_finished(
+            task_name=task_name, task_unique_config=task_unique_config
+        ):
             return None
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
         results = {}
         for item_name in saved_results:
             # load object
-            obj: Optional[Any] = self.load(name=item_name, task_name=task_name, task_unique_config=task_unique_config)
+            obj: Optional[Any] = self.load(
+                name=item_name,
+                task_name=task_name,
+                task_unique_config=task_unique_config,
+            )
 
             # if at least one expected and non-optional result object of the task cannot be loaded,
             # return None and re-run the task.
@@ -125,11 +142,13 @@ class ResultsStore(ABC):
         return results
 
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
-        from fluidml.common.task import TaskState
+        from fluidml.task import TaskState
 
         # try to load task completed object; if it is None we return None and re-run the task
         run_info: Optional[Dict] = self.load(
-            name=Names.FLUIDML_INFO_FILE, task_name=task_name, task_unique_config=task_unique_config
+            name=Names.FLUIDML_INFO_FILE,
+            task_name=task_name,
+            task_unique_config=task_unique_config,
         )
         if run_info and run_info["state"] == TaskState.FINISHED:
             return True

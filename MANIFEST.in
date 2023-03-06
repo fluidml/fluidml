@@ -1,1 +1,1 @@
-recursive-include fluidml/common/word_lists *.txt
+recursive-include fluidml/word_lists *.txt

@@ -1,9 +1,8 @@
-from typing import List, Dict, Optional
-
-from fluidml import Flow, Task
-from fluidml.flow import TaskSpec
-from fluidml.storage import Sweep, LocalFileStore
 import pathlib
+from typing import Dict, List, Optional
+
+from fluidml import Flow, Task, TaskSpec
+from fluidml.storage import LocalFileStore, Sweep
 
 
 class Parsing(Task):
@@ -30,7 +29,16 @@ def featurize_cells(res2: Dict, type_: str, batch_size: int, task: Task):
     task.save(obj={}, name="res4", type_="pickle")
 
 
-def train(res4: Dict, model, dataloader, evaluator, optimizer, num_epochs, task: Task, res3: Optional[Dict] = None):
+def train(
+    res4: Dict,
+    model,
+    dataloader,
+    evaluator,
+    optimizer,
+    num_epochs,
+    task: Task,
+    res3: Optional[Dict] = None,
+):
     task.save(obj={}, name="res5", type_="pickle")
 
 
@@ -58,15 +66,29 @@ def test_pipeline(dummy_resource, tmp_path: pathlib.Path):
     num_workers = 4
 
     # initialize all task specs
-    parse_task = TaskSpec(task=Parsing, config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1})
-    preprocess_task = TaskSpec(task=preprocess, config={"pipeline": ["a", "b"], "abc": 1}, expand="product")
-    featurize_tokens_task = TaskSpec(
-        task=featurize_tokens, config={"type_": "flair", "batch_size": [2, 3]}, expand="product"
+    parse_task = TaskSpec(
+        task=Parsing, config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1}
     )
-    featurize_cells_task = TaskSpec(task=featurize_cells, config={"type_": "glove", "batch_size": 4})
+    preprocess_task = TaskSpec(
+        task=preprocess, config={"pipeline": ["a", "b"], "abc": 1}, expand="product"
+    )
+    featurize_tokens_task = TaskSpec(
+        task=featurize_tokens,
+        config={"type_": "flair", "batch_size": [2, 3]},
+        expand="product",
+    )
+    featurize_cells_task = TaskSpec(
+        task=featurize_cells, config={"type_": "glove", "batch_size": 4}
+    )
     train_task = TaskSpec(
         task=train,
-        config={"model": "mlp", "dataloader": "x", "evaluator": "y", "optimizer": "adam", "num_epochs": 10},
+        config={
+            "model": "mlp",
+            "dataloader": "x",
+            "evaluator": "y",
+            "optimizer": "adam",
+            "num_epochs": 10,
+        },
     )
     evaluate_task = TaskSpec(task=evaluate, reduce=True, config={"metric": "accuracy"})
 
@@ -78,7 +100,14 @@ def test_pipeline(dummy_resource, tmp_path: pathlib.Path):
     evaluate_task.requires(train_task)
 
     # pack all tasks in a list
-    tasks = [parse_task, preprocess_task, featurize_tokens_task, featurize_cells_task, train_task, evaluate_task]
+    tasks = [
+        parse_task,
+        preprocess_task,
+        featurize_tokens_task,
+        featurize_cells_task,
+        train_task,
+        evaluate_task,
+    ]
 
     # devices = get_balanced_devices(count=num_workers, use_cuda=True)
     resources = [dummy_resource(device="cpu") for i in range(num_workers)]
@@ -88,7 +117,12 @@ def test_pipeline(dummy_resource, tmp_path: pathlib.Path):
 
     # create flow -> expand task graphs -> execute graph
     flow = Flow(tasks)
-    results = flow.run(num_workers=num_workers, resources=resources, results_store=results_store, return_results="all")
+    results = flow.run(
+        num_workers=num_workers,
+        resources=resources,
+        results_store=results_store,
+        return_results="all",
+    )
 
     num_expanded_tasks = 0
     for name, gs_runs in results.items():

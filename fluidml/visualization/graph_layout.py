@@ -15,15 +15,20 @@ class VertexViewer:
 
     HEIGHT = 3
 
-    def __init__(self, name: str, height: Optional[int] = None, width: Optional[int] = None):
+    def __init__(
+        self, name: str, height: Optional[int] = None, width: Optional[int] = None
+    ):
         # height of the node (top and bottom box edges + name).
         self.h = height if height is not None else self.HEIGHT
         # width of the node (right and left bottom edges + name).
         self.w = width if width is not None else len(name) + 2
 
 
-def build_sugiyama_layout(
-    graph: DiGraph, iterations: int = 1, node_height: Optional[int] = None, node_width: Optional[int] = None
+def _build_sugiyama_layout(
+    graph: DiGraph,
+    iterations: int = 1,
+    node_height: Optional[int] = None,
+    node_width: Optional[int] = None,
 ):
     """Function to build a sugiyama layout for a graph
 

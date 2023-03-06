@@ -1,11 +1,11 @@
 import inspect
 from collections import defaultdict
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
 
-from fluidml.common import Task
-from fluidml.common.exception import TaskResultKeyAlreadyExists, TaskResultObjectMissing
-from fluidml.common.utils import change_logging_level
-from fluidml.storage import ResultsStore, Promise, Sweep, LazySweep
+from fluidml.exception import TaskResultKeyAlreadyExists, TaskResultObjectMissing
+from fluidml.storage.base import LazySweep, Promise, ResultsStore, Sweep
+from fluidml.task import Task
+from fluidml.utils import change_logging_level
 
 
 class TaskDataController:
@@ -86,7 +86,9 @@ class TaskDataController:
 
             # remove args from missing inputs if a default value is registered in the task run signature
             missing_inputs = [
-                arg for arg in missing_inputs if self._task_expects[arg].default is self._task_expects[arg].empty
+                arg
+                for arg in missing_inputs
+                if self._task_expects[arg].default is self._task_expects[arg].empty
             ]
             if missing_inputs:
                 raise TaskResultObjectMissing(
@@ -96,7 +98,9 @@ class TaskDataController:
         return predecessor_results
 
 
-def pack_pipeline_results(all_tasks: List[Task], return_results: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def pack_pipeline_results(
+    all_tasks: List[Task], return_results: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
     pipeline_results = defaultdict(list)
     if return_results is None:
         return None
@@ -123,7 +127,9 @@ def _get_saved_task_results(task: Task) -> Dict:
         ".saved_results", task_name=task.name, task_unique_config=task.unique_config
     )
     results = task.results_store.get_results(
-        task_name=task.name, task_unique_config=task.unique_config, saved_results=saved_results
+        task_name=task.name,
+        task_unique_config=task.unique_config,
+        saved_results=saved_results,
     )
     return {"results": results, "config": task.unique_config}
 

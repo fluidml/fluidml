@@ -1,19 +1,68 @@
 import datetime
 import json
 import logging
-from multiprocessing import Queue, RLock, Event
+import sys
+from abc import abstractmethod
+from multiprocessing import Event, Process, Queue, RLock
 from queue import Empty
-from typing import Dict, Any, Union, Optional
+from typing import Any, Dict, Optional, Union
 
-from fluidml.common import Task, TaskInfo
-from fluidml.common.utils import change_logging_level
-from fluidml.storage import Names
+from fluidml.logging import QueueHandler, StderrHandler, StdoutHandler
+from fluidml.storage.base import Names
 from fluidml.storage.controller import TaskDataController
-from fluidml.swarm import Whale
-
-from fluidml.common.task import TaskState
+from fluidml.task import Task, TaskInfo, TaskState
+from fluidml.utils import change_logging_level
 
 logger = logging.getLogger(__name__)
+
+
+class Whale(Process):
+    def __init__(
+        self,
+        exit_event: Event,
+        exit_on_error: bool,
+        logging_queue: Queue,
+        error_queue: Queue,
+        logging_lvl: int,
+        lock: RLock,
+        use_multiprocessing: bool = True,
+    ):
+        self.use_multiprocessing = use_multiprocessing
+        # only init the Process parent class if multiprocessing is configured.
+        if self.use_multiprocessing:
+            super().__init__(target=self.work, args=())
+            self._logging_queue = logging_queue
+            self._logging_lvl = logging_lvl
+
+        self.exit_event = exit_event
+        self._exit_on_error = exit_on_error
+        self._error_queue = error_queue
+        self._lock = lock
+
+    def _configure_logging(self):
+        h = QueueHandler(self._logging_queue, self.name)
+        root = logging.getLogger()
+        root.addHandler(h)
+        root.setLevel(self._logging_lvl)
+
+    def _redirect_stdout_stderr(self):
+        sys.stdout = StdoutHandler(self._logging_queue, self.name)
+        sys.stderr = StderrHandler(self._logging_queue, self.name)
+
+    @abstractmethod
+    def _work(self):
+        raise NotImplementedError
+
+    def work(self):
+        try:
+            if self.use_multiprocessing:
+                self._redirect_stdout_stderr()
+                self._configure_logging()
+            self._work()
+        except Exception as e:
+            logger.exception(e)
+            self._error_queue.put(e)
+            self.exit_event.set()
 
 
 class Dolphin(Whale):
@@ -51,7 +100,10 @@ class Dolphin(Whale):
 
     def _detect_upstream_error(self, task: Task) -> bool:
         for predecessor in task.predecessors:
-            if self.task_states[predecessor.unique_name] in [TaskState.FAILED, TaskState.UPSTREAM_FAILED]:
+            if self.task_states[predecessor.unique_name] in [
+                TaskState.FAILED,
+                TaskState.UPSTREAM_FAILED,
+            ]:
                 return True
         return False
 
@@ -82,9 +134,12 @@ class Dolphin(Whale):
         else:
             msg = f'Finished task "{task.unique_name}"'
 
-        num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
+        num_finished_task = sum(
+            1 for t in self.task_states.values() if t == TaskState.FINISHED
+        )
         logger.info(
-            f"{msg} [{num_finished_task}/{self.num_tasks} " f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
+            f"{msg} [{num_finished_task}/{self.num_tasks} "
+            f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
         )
 
     def _on_task_start(self, task: Task, stored_task_info: Optional[Dict] = None):
@@ -94,7 +149,9 @@ class Dolphin(Whale):
         """
 
         if stored_task_info:
-            logger.info(f'Started task "{task.unique_name}" with existing id "{task.id}"')
+            logger.info(
+                f'Started task "{task.unique_name}" with existing id "{task.id}"'
+            )
         else:
             logger.info(f'Started task "{task.unique_name}"')
 
@@ -106,8 +163,15 @@ class Dolphin(Whale):
         # call user defined __init__ of task object
         task._init()
 
-    def _on_task_end(self, task: Task, completed: Optional[bool] = None, exception: Optional[BaseException] = None):
-        logger.debug(f'Enter "_on_task_end()" with status "{self.task_states[task.unique_name]}"')
+    def _on_task_end(
+        self,
+        task: Task,
+        completed: Optional[bool] = None,
+        exception: Optional[BaseException] = None,
+    ):
+        logger.debug(
+            f'Enter "_on_task_end()" with status "{self.task_states[task.unique_name]}"'
+        )
 
         # register ended timestamp
         task.ended = datetime.datetime.now()
@@ -125,7 +189,9 @@ class Dolphin(Whale):
 
         elif self.task_states[task.unique_name] == TaskState.FAILED:
             # Log exception and put it in error queue
-            logger.exception(f'Task "{task.unique_name}" failed with error:\n{exception}')
+            logger.exception(
+                f'Task "{task.unique_name}" failed with error:\n{exception}'
+            )
             self._error_queue.put(exception)
             # set exit event to stop process only if exit on error is set to True
             if self._exit_on_error:
@@ -134,7 +200,9 @@ class Dolphin(Whale):
         # save the fluidml info object as json
         task.state = self.task_states[task.unique_name]
         task.results_store.save(
-            json.loads(task.info.json()),  # we use pydantics json() fn, load the json str as dict and save it
+            json.loads(
+                task.info.json()
+            ),  # we use pydantics json() fn, load the json str as dict and save it
             Names.FLUIDML_INFO_FILE,
             type_="json",
             task_name=task.name,
@@ -172,7 +240,9 @@ class Dolphin(Whale):
                 task.delete_run()
 
         # check if task was successfully completed before
-        completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
+        completed: bool = task.results_store.is_finished(
+            task_name=task.name, task_unique_config=task.unique_config
+        )
 
         # if task is not completed, run the task now
         if not completed:
@@ -190,9 +260,14 @@ class Dolphin(Whale):
                 task.run_history = {task.name: task.id}
                 for pred in task.predecessors:
                     pred_run_info = task.load(
-                        Names.FLUIDML_INFO_FILE, task_name=pred.name, task_unique_config=pred.unique_config
+                        Names.FLUIDML_INFO_FILE,
+                        task_name=pred.name,
+                        task_unique_config=pred.unique_config,
                     )
-                    task.run_history = {**pred_run_info["run_history"], **task.run_history}
+                    task.run_history = {
+                        **pred_run_info["run_history"],
+                        **task.run_history,
+                    }
 
             try:
                 # start the task
@@ -224,7 +299,9 @@ class Dolphin(Whale):
     def _stop(self) -> bool:
 
         return self.exit_event.is_set() or all(
-            True if t in [TaskState.FINISHED, TaskState.FAILED, TaskState.UPSTREAM_FAILED] else False
+            True
+            if t in [TaskState.FINISHED, TaskState.FAILED, TaskState.UPSTREAM_FAILED]
+            else False
             for t in self.task_states.values()
         )
 
@@ -242,12 +319,16 @@ class Dolphin(Whale):
                 if self._detect_upstream_error(task):
                     self.task_states[task.unique_name] = TaskState.UPSTREAM_FAILED
                     self._schedule_successors(task)
-                    logger.warning(f'Task "{task.unique_name}" cannot be executed due to an upstream task failure.')
+                    logger.warning(
+                        f'Task "{task.unique_name}" cannot be executed due to an upstream task failure.'
+                    )
                     continue
 
                 # run task only if all dependencies are satisfied
                 if not self._is_task_ready(task=task):
-                    logger.debug(f"Dependencies are not satisfied yet for task {task.unique_name}")
+                    logger.debug(
+                        f"Dependencies are not satisfied yet for task {task.unique_name}"
+                    )
                     self.scheduled_queue.put(task.unique_name)
                     continue
 

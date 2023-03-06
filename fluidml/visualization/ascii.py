@@ -7,13 +7,13 @@ See: https://github.com/iterative/dvc/blob/master/dvc/dagascii.py
 import logging
 import math
 import os
-from typing import Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
-from fluidml.visualization.graph_layout import build_sugiyama_layout
+from fluidml.visualization.graph_layout import _build_sugiyama_layout
 
 if TYPE_CHECKING:
-    from grandalf.layouts import SugiyamaLayout
     import networkx as nx
+    from grandalf.layouts import SugiyamaLayout
 
 
 logger = logging.getLogger(__name__)
@@ -24,7 +24,15 @@ class AsciiCanvas:
 
     TIMEOUT = 10
 
-    def __init__(self, sug: "SugiyamaLayout", cols: int, rows: int, chars: Dict[str, str], minx: int, miny: int):
+    def __init__(
+        self,
+        sug: "SugiyamaLayout",
+        cols: int,
+        rows: int,
+        chars: Dict[str, str],
+        minx: int,
+        miny: int,
+    ):
         """Initializes class for drawing graph in ASCII.
 
         Args:
@@ -174,7 +182,11 @@ class AsciiCanvas:
                 vertex.view.h,
             )
 
-            self.text(int(round(x - self.minx)) + 1, int(round(y - self.miny)) + 1, vertex.data)
+            self.text(
+                int(round(x - self.minx)) + 1,
+                int(round(y - self.miny)) + 1,
+                vertex.data,
+            )
 
     def to_str(self) -> str:
         """Draws ASCII canvas on the screen."""
@@ -210,7 +222,9 @@ def _get_graph_char_set(use_unicode: bool) -> Dict[str, str]:
             }
 
         except UnicodeEncodeError:
-            logger.warning(f"Console does not support unicode chars. Defaulting to ascii.")
+            logger.warning(
+                f"Console does not support unicode chars. Defaulting to ascii."
+            )
     return chars
 
 
@@ -223,7 +237,7 @@ def create_graph_in_ascii(graph: "nx.DiGraph", use_unicode: bool = False) -> str
 
     chars = _get_graph_char_set(use_unicode=use_unicode)
 
-    sug = build_sugiyama_layout(graph=graph)
+    sug = _build_sugiyama_layout(graph=graph)
 
     # NOTE: coordinates might be negative, so we need to shift
     # everything to the positive plane before we actually draw the graph.

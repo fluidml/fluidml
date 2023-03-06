@@ -1,8 +1,8 @@
-from typing import Union, List, Tuple, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, List, Tuple, Union
 
 if TYPE_CHECKING:
-    from fluidml.common.task import Task
-    from fluidml.flow.task_spec import TaskSpec
+    from fluidml.task import Task
+    from fluidml.task_spec import TaskSpec
 
 
 class DependencyMixin:
@@ -17,11 +17,20 @@ class DependencyMixin:
         self._predecessors = []
         self._successors = []
 
-    def requires(self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]):
+    def requires(
+        self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]
+    ):
         """Adds predecessor task specs"""
         if len(predecessors) == 1:
-            predecessors = predecessors[0] if isinstance(predecessors[0], List) else [predecessors[0]]
-        elif any(True if isinstance(task_spec, (List, Tuple)) else False for task_spec in predecessors):
+            predecessors = (
+                predecessors[0]
+                if isinstance(predecessors[0], List)
+                else [predecessors[0]]
+            )
+        elif any(
+            True if isinstance(task_spec, (List, Tuple)) else False
+            for task_spec in predecessors
+        ):
             raise TypeError(
                 f"task_spec.requires() either takes a single list of predecessors, "
                 f"task_spec.requires([a, b, c]) or a sequence of individual predecessor args"
