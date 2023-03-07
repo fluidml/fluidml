@@ -3,10 +3,7 @@ import logging
 import pickle
 from typing import Any, Dict, Optional
 
-try:
-    import mongoengine as me
-except ImportError:
-    me = None
+import mongoengine as me
 
 from fluidml.storage.base import ResultsStore, StoreContext
 
