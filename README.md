@@ -117,7 +117,7 @@ Below, we define standard machine learning tasks such as dataset preparation, pr
 Notice that:
 
 - Each task is implemented individually and it's clear what the inputs are (check arguments of `run()` method)
-- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. ~~~~
+- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. 
   This unique name corresponds to input names in successor task definitions.
 
 ```Python
@@ -244,7 +244,7 @@ results = flow.run()
 The following sections highlight the most important features and options when specifying and executing a task pipeline.
 For a complete documentation of all available options we refer to the [API documentation](https://fluidml.readthedocs.io/en/latest/).
 
-### Grid Search - Automatic Task Expansion~~~~
+### Grid Search - Automatic Task Expansion
 
 We can easily enable grid search for our tasks with just one line of code. 
 We just have to provide the `expand` argument with the `product` and `zip` expansion option to the `TaskSpec` constructor. 
@@ -436,7 +436,7 @@ Jupyter Notebook tutorials:
   author = {Hillebrand, Lars and Ramamurthy, Rajkumar},
   year = {2020},
   publisher = {GitHub},
-  journal = {GitHub repository},~~~~
+  journal = {GitHub repository},
   howpublished = {\url{https://github.com/fluidml/fluidml}},
 }
 ```
