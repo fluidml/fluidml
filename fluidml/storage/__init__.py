@@ -1,11 +1,12 @@
 from .base import LazySweep, Promise, ResultsStore, StoreContext, Sweep
 from .file_store import File, FilePromise, LocalFileStore, TypeInfo
 from .in_memory_store import InMemoryStore
+from .mongo_db_store import MongoDBStore
 
-try:
-    from .mongo_db_store import MongoDBStore
-except ImportError:
-    MongoDBStore = None
+# try:
+#     from .mongo_db_store import MongoDBStore
+# except ImportError:
+#     MongoDBStore = None
 
 
 __all__ = [

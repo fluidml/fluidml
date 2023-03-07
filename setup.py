@@ -78,7 +78,7 @@ setup(
             "torch",
             "tqdm",
         ],
-        "mongo-store": ["mongoengine"],
+        "mongo-store": ["mongoengine>=0.27.0"],
         "tests": test_deps,
     },
     tests_require=test_deps,

@@ -6,12 +6,7 @@ if TYPE_CHECKING:
 
 
 class DependencyMixin:
-    """Mixin to register dependencies between tasks.
-
-    Properties:
-        predecessors: A List of predecessor `TaskSpec` objects, registered to this task.
-        successors: A List of successor `TaskSpec` objects, registered to this task.
-    """
+    """Mixin to register dependencies between tasks."""
 
     def __init__(self):
         self._predecessors = []
@@ -20,7 +15,11 @@ class DependencyMixin:
     def requires(
         self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]
     ):
-        """Adds predecessor task specs"""
+        """Registers one or more predecessor task/task spec objects to the current task/task spec
+
+        Args:
+            *predecessors: A sequence of predecessor task/task spec objects.
+        """
         if len(predecessors) == 1:
             predecessors = (
                 predecessors[0]
@@ -46,12 +45,17 @@ class DependencyMixin:
             predecessor.required_by(self)
 
     def required_by(self, successor: Any):
-        """Adds a successor"""
+        """Registers a successor task/task spec object to the current task/task spec
+
+        Args:
+           successor: A successor task/task spec objects.
+        """
 
         self._successors.append(successor)
 
     @property
     def predecessors(self) -> List[Union["TaskSpec", "Task"]]:
+        """A List of predecessor task/task spec objects, registered to this task/task spec."""
         return self._predecessors
 
     @predecessors.setter
@@ -60,6 +64,7 @@ class DependencyMixin:
 
     @property
     def successors(self) -> List[Union["TaskSpec", "Task"]]:
+        """A List of successor task/task spec objects, registered to this task/task spec."""
         return self._successors
 
     @successors.setter

@@ -249,8 +249,8 @@ def main():
         num_workers=1, project_name="sklearn_text_classification_example"
     )
 
-    print(results["ModelSelectionTask"]["results"]["best_config"])
-    print(results["ModelSelectionTask"]["results"]["best_performance"])
+    print(results["ModelSelectionTask"][0].results["best_config"])
+    print(results["ModelSelectionTask"][0].results["best_performance"])
 
 
 if __name__ == "__main__":

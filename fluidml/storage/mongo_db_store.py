@@ -3,7 +3,10 @@ import logging
 import pickle
 from typing import Any, Dict, Optional
 
-import mongoengine as me
+try:
+    import mongoengine as me
+except ImportError:
+    me = None
 
 from fluidml.storage.base import ResultsStore, StoreContext
 
@@ -30,6 +33,14 @@ class ResultObject(me.EmbeddedDocument):
 
 
 class MongoDBStore(ResultsStore):
+    """A mongo db result store implementation.
+
+    Args:
+        db: The database name to be used.
+        collection_name: The name of the collection.
+        host: The host name of the :program: `mongod` instance.
+    """
+
     def __init__(
         self, db: str, collection_name: Optional[str] = None, host: Optional[str] = None
     ):

@@ -9,13 +9,13 @@ from multiprocessing import RLock, set_start_method
 from multiprocessing.managers import SyncManager
 from queue import Queue
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Optional, Type
 
 from fluidml.dolphin import Dolphin
 from fluidml.logging import LoggingListener, TmuxManager
 from fluidml.storage import InMemoryStore, ResultsStore
 from fluidml.storage.controller import pack_pipeline_results
-from fluidml.task import Task, TaskState
+from fluidml.task import Task, TaskResults, TaskState
 from fluidml.utils import create_unique_hash_from_config
 
 logger = logging.getLogger(__name__)
@@ -234,7 +234,7 @@ class Swarm:
         project_name: str = "uncategorized",
         results_store: Optional[ResultsStore] = None,
         return_results: Optional[str] = None,
-    ) -> Dict[str, Union[List[Dict], Dict]]:
+    ) -> Optional[Dict[str, List[TaskResults]]]:
         """Handles the sequential or parallel (multiprocessing) execution of a directed Task Graph.
 
         Schedules the entry point tasks to the Task Queue and executes the Graph.
@@ -291,7 +291,7 @@ class Swarm:
             raise err
 
         # return all results
-        results: Dict[str, Any] = pack_pipeline_results(
+        results: Optional[Dict[str, List[TaskResults]]] = pack_pipeline_results(
             all_tasks=list(self.tasks.values()), return_results=return_results
         )
         return results

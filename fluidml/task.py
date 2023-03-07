@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 from metadict import MetaDict
 
 from fluidml.dependency import DependencyMixin
-from fluidml.storage.base import Names, Promise, ResultsStore
+from fluidml.storage.base import Names, Promise, ResultsStore, StoreContext
 from fluidml.storage.file_store import File
 from fluidml.utils import BaseModel, change_logging_level
 
@@ -16,6 +16,19 @@ if TYPE_CHECKING:
     from fluidml.task_spec import TaskSpec
 
 logger = logging.getLogger(__name__)
+
+
+class TaskResults(BaseModel):
+    """Holds the results and unique config of a task."""
+
+    task_name: str
+    """The name of the task, e.g. "training"."""
+    task_unique_name: str
+    """The unique name of the task, e.g. "training-3", in the context of the current run."""
+    unique_config: Dict
+    """The unique config specifying the task."""
+    results: Optional[Dict[str, Any]] = None
+    """The results dictionary. Each key-value pair represents a result name and value."""
 
 
 class TaskState(str, Enum):
@@ -38,20 +51,39 @@ class TaskState(str, Enum):
 
 
 class TaskInfo(BaseModel):
+    """A wrapper class to store important task information.
+
+    Used for serializing the information to the results store.
+    """
+
     project_name: str
+    """Name of the project."""
     run_name: str
+    """Name of the task's current run."""
     state: Optional[TaskState] = None
+    """The current state of the task, e.g. "running", "finished", etc."""
     started: Optional[datetime.datetime] = None
+    """The start time of the task."""
     ended: Optional[datetime.datetime] = None
+    """The end time of the task."""
     duration: Optional[datetime.timedelta] = None
+    """The current running time of the task."""
     run_history: Optional[Dict] = None
+    """Holds the task ids of all predecessor task including the task itself."""
     sweep_counter: Optional[str] = None
+    """A dynamically created counter to distinguish different task instances with the same run name 
+    in the results store. E.g. used in the LocalFileStore to name run directories.
+    """
     unique_config_hash: Optional[str] = None
+    """An 8 character hash of the unique run config."""
     id: Optional[str] = None
+    """A combination of the run-name and the sweep counter or unique config hash if the former does not exist."""
 
 
 class Task(ABC, DependencyMixin):
-    """Base class for a FluidML `Task`.
+    """The base ``Task`` that provides the user with additional features such as result store and run name access.
+
+    When implementing a task as a Class
 
     Args:
         name: Name of the task, e.g. "Processing".
@@ -59,6 +91,9 @@ class Task(ABC, DependencyMixin):
             e.g. "Processing-3".
         project_name: Name of the project.
         run_name: Name of the task's current run.
+        state: The current state of the task, e.g. "running", "finished", etc.
+        started: The start time of the task.
+        ended: The end time of the task.
         run_history: Holds the task ids of all predecessor task including the task itself.
         sweep_counter: A dynamically created counter to distinguish different task instances with the same run name
             in the results store. E.g. used in the LocalFileStore to name run directories.
@@ -71,9 +106,10 @@ class Task(ABC, DependencyMixin):
             Resource objects can be assigned in a multiprocessing context, so that each worker process
             uses a dedicated resource, e.g. cuda device.
         force: Indicator if the task is force executed or not.
-        expects: A dict of expected input arguments and their inspect.Parameter objects
+        expects: A dict of expected input arguments and their :func:`inspect.Parameter` objects
             of the task's run method signature.
-        reduce: A boolean indicating whether this is a reduce-task. Defaults to None.
+        reduce: A boolean indicating whether this is a reduce-task. Defaults to ``None``.
+        config: The config dictionary of the task. Only contains the config parameters of the task (no predecessors).
     """
 
     # needed to avoid overwriting already initialized Task attributes, when the user task's __init__ method
@@ -82,6 +118,8 @@ class Task(ABC, DependencyMixin):
 
     def __init__(
         self,
+        name: Optional[str] = None,
+        unique_name: Optional[str] = None,
         project_name: Optional[str] = None,
         run_name: Optional[str] = None,
         state: Optional[TaskState] = None,
@@ -90,21 +128,20 @@ class Task(ABC, DependencyMixin):
         run_history: Optional[Dict] = None,
         sweep_counter: Optional[str] = None,
         unique_config_hash: Optional[str] = None,
-        name: Optional[str] = None,
-        unique_name: Optional[str] = None,
+        unique_config: Optional[Union[Dict, MetaDict]] = None,
         results_store: Optional[ResultsStore] = None,
         resource: Optional[Any] = None,
-        reduce: Optional[bool] = None,
-        expects: Optional[Dict[str, inspect.Parameter]] = None,
-        config: Optional[Dict[str, Any]] = None,
-        additional_kwargs: Optional[Dict[str, Any]] = None,
-        unique_config: Optional[Union[Dict, MetaDict]] = None,
         force: Optional[bool] = None,
+        expects: Optional[Dict[str, inspect.Parameter]] = None,
+        reduce: Optional[bool] = None,
+        config: Optional[Dict[str, Any]] = None,
     ):
 
         if not self._is_initialized:
             DependencyMixin.__init__(self)
 
+            self.name = name
+            self.unique_name = unique_name
             self.project_name = project_name
             self.run_name = run_name
             self.state = state
@@ -113,21 +150,19 @@ class Task(ABC, DependencyMixin):
             self.run_history = run_history
             self.sweep_counter = sweep_counter
             self.unique_config_hash = unique_config_hash
-            self.name = name
-            self.unique_name = unique_name
+            self.unique_config = unique_config
             self.results_store = results_store
             self.resource = resource
-            self.reduce = reduce
-            self.expects = expects
-            self.config = config
-            self.additional_kwargs = additional_kwargs
-            self.unique_config = unique_config
             self.force = force
+            self.expects = expects
+            self.reduce = reduce
+            self.config = config
 
             self._is_initialized = True
 
     @property
     def id(self) -> str:
+        """A combination of the run-name and the sweep counter or unique config hash if the former does not exist."""
         return (
             f"{self.run_name}-{self.sweep_counter}"
             if self.sweep_counter
@@ -136,6 +171,7 @@ class Task(ABC, DependencyMixin):
 
     @property
     def duration(self) -> Optional[datetime.timedelta]:
+        """The current running time of the task."""
         if self.started and self.ended:
             return self.ended - self.started
         elif self.started:
@@ -145,6 +181,7 @@ class Task(ABC, DependencyMixin):
 
     @property
     def info(self) -> TaskInfo:
+        """A ``TaskInfo`` object that summarizes the important task information for serialization."""
         return TaskInfo(
             project_name=self.project_name,
             run_name=self.run_name,
@@ -163,7 +200,7 @@ class Task(ABC, DependencyMixin):
         """Implementation of core logic of task.
 
         Args:
-            **results: results from predecessors (automatically passed by flow or swarm (multiprocessing))
+            **results: results from predecessors (automatically passed)
         """
         raise NotImplementedError
 
@@ -231,7 +268,7 @@ class Task(ABC, DependencyMixin):
         Args:
             obj: Any object that is to be saved
             name: A unique name given to this object
-            type_: Additional type specification (e.g. json, which is to be passed to results store).
+            type\_: Additional type specification (e.g. json, which is to be passed to results store).
                 Defaults to ``None``.
             **kwargs: Additional keyword args.
         """
@@ -255,10 +292,13 @@ class Task(ABC, DependencyMixin):
         """Loads the given object from results store.
 
         Args:
-            name: An unique name given to this object.
+            name: A unique name given to this object.
             task_name: Task name which saved the loaded object.
             task_unique_config: Unique config which specifies the run of the loaded object.
             **kwargs: Additional keyword args.
+
+        Returns:
+            The loaded object.
         """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = (
@@ -278,7 +318,13 @@ class Task(ABC, DependencyMixin):
         task_name: Optional[str] = None,
         task_unique_config: Optional[Union[Dict, MetaDict]] = None,
     ):
-        """Deletes object with specified name from results store"""
+        """Deletes object with specified name from results store
+
+        Args:
+            name: A unique name given to this object.
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = (
             task_unique_config if task_unique_config is not None else self.unique_config
@@ -294,7 +340,12 @@ class Task(ABC, DependencyMixin):
         task_name: Optional[str] = None,
         task_unique_config: Optional[Union[Dict, MetaDict]] = None,
     ):
-        """Deletes run with specified name from results store"""
+        """Deletes run with specified name from results store
+
+        Args:
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = (
             task_unique_config if task_unique_config is not None else self.unique_config
@@ -308,8 +359,16 @@ class Task(ABC, DependencyMixin):
         self,
         task_name: Optional[str] = None,
         task_unique_config: Optional[Union[Dict, MetaDict]] = None,
-    ) -> Any:
-        """Wrapper to get store specific storage context, e.g. the current run directory for Local File Store"""
+    ) -> StoreContext:
+        """Wrapper to get store specific storage context, e.g. the current run directory for Local File Store
+
+        Args:
+            task_name: Task name.
+            task_unique_config: Unique config which specifies the run.
+
+        Returns:
+            The store context object holding information like the current run dir.
+        """
         task_name = task_name if task_name is not None else self.name
         task_unique_config = (
             task_unique_config if task_unique_config is not None else self.unique_config
@@ -330,7 +389,21 @@ class Task(ABC, DependencyMixin):
         sub_dir: Optional[str] = None,
         **open_kwargs,
     ) -> Optional[File]:
-        """Wrapper to open a file from Local File Store (only available for Local File Store)."""
+        """Wrapper to open a file from Local File Store (only available for Local File Store).
+
+        Args:
+            name: An unique name given to this object.
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+            mode: The open mode, e.g. "r", "w", etc.
+            promise: An optional ``Promise`` object used for creating the returned file like object.
+            type\_: Additional type specification (e.g. json, which is to be passed to results store).
+            sub_dir: A path of a subdirectory used for opening the file.
+            **open_kwargs: Additional keyword arguments passed to the registered ``open()`` function.
+
+        Returns:
+            A ``File`` object that behaves like a file like object.
+        """
 
         if promise:
             return self.results_store.open(promise=promise, mode=mode)
@@ -360,9 +433,9 @@ class Task(ABC, DependencyMixin):
         Args:
             task_spec: A task specification object.
             half_initialize: A boolean to indicate whether only the parent Task object is initialized and the
-                child class initialization is delayed until task._init() is called.
+                child class initialization is delayed until ``task._init()`` is called.
                 The half initialization is only needed internally to create a task object without directly executing the
-                __init__ method of the actual task implemented by the user.
+                ``__init__`` method of the actual task implemented by the user.
 
         Returns:
             A task object (fully or half initialized).

@@ -24,26 +24,28 @@ class TaskSpec(DependencyMixin):
         config_ignore_prefix: Optional[str] = None,
         config_group_prefix: Optional[str] = None,
     ):
-        """A class to hold specification of a plain task.
+        """The task specification of a task.
+
+        This class holds meta information of a task that is used when initializing and expanding the task
+        based on the config.
 
         Args:
-            task: Task class
+            task: The provided task object, either a `Callable` or a class that inherits `Task`.
             config: Task configuration parameters that are used while instantiating. Defaults to ``None``.
             additional_kwargs: Additional kwargs provided to the task.
-            name: Name of the task. Defaults to None.
-            reduce: A boolean indicating whether this is a reduce task. Defaults to None.
+            name: Name of the task. If no name is provided the function or class name of the provided task is used.
+                Defaults to ``None``.
+            reduce: A boolean indicating whether this is a reduce task. Defaults to ``None``.
             expand: Config expansion method, choose between "zip" and "product".
             config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
                 "unique_config", which is used to determine whether a run has been executed or not.
             config_group_prefix: A config grouping prefix, to indicate that to parameters are grouped and expanded
                 using the "zip" method. The grouping prefix enables the "zip" expansion of specific parameters, while
                 all remaining grid parameters are expanded via "product".
-                Example:
-                    cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]
-
-                    Without grouping "product" expansion would yield: 2 * 2 * 3 = 12 configs.
-                    With grouping "product" expansion yields : 2 * 3 = 6 configs, since the grouped parameters are
-                    "zip" expanded.
+                Example: ```python cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]```
+                Without grouping "product" expansion would yield: `2 * 2 * 3 = 12` configs.
+                With grouping "product" expansion yields : `2 * 3 = 6` configs, since the grouped parameters are
+                "zip" expanded.
         """
         DependencyMixin.__init__(self)
 
@@ -92,12 +94,19 @@ class TaskSpec(DependencyMixin):
         self.unique_config: Optional[Dict] = None
 
     def expand(self) -> List["Task"]:
+        """Expands a task specification based on the provided config.
+
+        This function is called internally in ``Flow`` when building the task graph.
+
+        Returns:
+            A list of expanded ``Task`` objects.
+        """
         tasks = []
         for config in expand_config(
             self.config, self.expand_fn, group_prefix=self.config_group_prefix
         ):
-            relevant_config = self.create_relevant_config(config)
-            config = self.prepare_config(config)
+            relevant_config = self._create_relevant_config(config)
+            config = self._prepare_config(config)
 
             task_spec = TaskSpec(
                 task=self.task, config=config, name=self.name, reduce=self.reduce
@@ -108,7 +117,7 @@ class TaskSpec(DependencyMixin):
 
         return tasks
 
-    def create_relevant_config(self, config: Dict) -> Dict:
+    def _create_relevant_config(self, config: Dict) -> Dict:
         """Remove keys with None values as well as prefixed keys to ignore from config.
 
         Args:
@@ -122,8 +131,8 @@ class TaskSpec(DependencyMixin):
         )
         return relevant_config
 
-    def prepare_config(self, config: Dict) -> Dict:
-        """Prepare the config for feedint it into the task.
+    def _prepare_config(self, config: Dict) -> Dict:
+        """Prepare the config for feeding it into the task.
 
         Removes the ignore_prefix from all keys in config.
         Merges the additional keyword arguments.

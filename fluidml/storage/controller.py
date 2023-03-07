@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from fluidml.exception import TaskResultKeyAlreadyExists, TaskResultObjectMissing
 from fluidml.storage.base import LazySweep, Promise, ResultsStore, Sweep
-from fluidml.task import Task
+from fluidml.task import Task, TaskResults
 from fluidml.utils import change_logging_level
 
 
@@ -100,7 +100,8 @@ class TaskDataController:
 
 def pack_pipeline_results(
     all_tasks: List[Task], return_results: Optional[str] = None
-) -> Optional[Dict[str, Any]]:
+) -> Optional[Dict[str, List[TaskResults]]]:
+
     pipeline_results = defaultdict(list)
     if return_results is None:
         return None
@@ -119,23 +120,18 @@ def pack_pipeline_results(
         choices = ", ".join(['"all"', '"latest"', "None"])
         raise ValueError(f"return_results must be set to one of: {choices}.")
 
-    return _simplify_results(pipeline_results=pipeline_results)
+    return pipeline_results
 
 
-def _get_saved_task_results(task: Task) -> Dict:
-    saved_results = task.results_store.load(
-        ".saved_results", task_name=task.name, task_unique_config=task.unique_config
-    )
+def _get_saved_task_results(task: Task) -> TaskResults:
     results = task.results_store.get_results(
         task_name=task.name,
         task_unique_config=task.unique_config,
-        saved_results=saved_results,
     )
-    return {"results": results, "config": task.unique_config}
 
-
-def _simplify_results(pipeline_results: Dict[str, Any]) -> Dict[str, Any]:
-    for task_name, task_results in pipeline_results.items():
-        if len(task_results) == 1:
-            pipeline_results[task_name] = task_results[0]
-    return pipeline_results
+    return TaskResults(
+        task_name=task.name,
+        task_unique_name=task.unique_name,
+        results=results,
+        unique_config=task.unique_config,
+    )

@@ -60,6 +60,17 @@ class FilePromise(Promise):
 
 
 class File:
+    """A file like wrapper class to support opening files using the ``LocalFileStore``.
+
+    Args:
+        path: The path to the file to open.
+        mode: The open mode, e.g. "r", "w", etc.
+        save_fn: A callable used for ``file.save()`` calls.
+        load_fn: A callable used for ``file.load()`` calls.
+        open_fn: An optional callable used for file opening. The default is the inbuilt ``open()`` function.
+        load_kwargs: Additional keyword arguments passed to the open function.
+    """
+
     def __init__(
         self,
         path: str,
@@ -146,6 +157,7 @@ class File:
 
     @classmethod
     def from_promise(cls, promise: FilePromise):
+        """Creates a ``File`` object from a `´FilePromise``."""
         return cls(
             promise.path,
             promise.mode,
@@ -175,12 +187,27 @@ class TypeInfo:
 
 
 class LocalFileStore(ResultsStore):
+    """A local file store that allows to easily save and load task results to/from a base directory in a file system.
+
+    Out of the box the local file store supports three common file types, "json", "pickle" and "text".
+    It can be easily extended to arbitrary file types by subclassing the LocalFileStore and registering new
+    Types to the `self._type_registry` dictionary. A new type needs to register a load and save function
+    using the ``TypeInfo`` data class.
+
+    Args:
+        base_dir: The base directory that is used to store results from tasks.
+
+    Attributes:
+        base_dir: The base directory that is used to store results from tasks.
+        type_registry: The dictionary to register new types with a save and load function.
+    """
+
     def __init__(self, base_dir: str):
         super().__init__()
 
         self.base_dir = base_dir
 
-        self._type_registry = {
+        self.type_registry: Dict[str, TypeInfo] = {
             "event": TypeInfo(self._write, self._read),
             "json": TypeInfo(json.dump, json.load, "json"),
             "pickle": TypeInfo(pickle.dump, pickle.load, "p", is_binary=True),
@@ -192,6 +219,7 @@ class LocalFileStore(ResultsStore):
 
     @property
     def run_info(self):
+        """The current run info of a task, which is used for naming newly created directories."""
         return self._run_info
 
     @run_info.setter
@@ -292,6 +320,22 @@ class LocalFileStore(ResultsStore):
         load_kwargs: Optional[Dict[str, Any]] = None,
         **kwargs,
     ):
+        """Saves an object to the local file store.
+
+        If no task and run directory for the provided unique config exists, a new directory will be created.
+
+        Args:
+            obj: The object to save.
+            name: An unique name given to this object.
+            type\_: Additional type specification (e.g. json, which is to be passed to results store).
+            task_name: Task name which saves the object.
+            task_unique_config: Unique config which specifies the run of the object.
+            sub_dir: A path of a subdirectory used for saving the file.
+            mode: The mode to save the file, e.g. "w" or "wb".
+            open_kwargs: Additional keyword arguments passed to the registered ``open()`` function.
+            load_kwargs: Additional keyword arguments passed to the registered ``load()`` function.
+            **kwargs: Additional keyword arguments passed to the registered ``save()`` function.
+        """
 
         open_kwargs = {} if open_kwargs is None else open_kwargs
         load_kwargs = {} if load_kwargs is None else load_kwargs
@@ -300,12 +344,12 @@ class LocalFileStore(ResultsStore):
 
         # get save function and file extension for type
         try:
-            type_info = self._type_registry[type_]
+            type_info = self.type_registry[type_]
         except KeyError:
             raise KeyError(
                 f'Object type "{type_}" is not supported in {self.__class__.__name__}. Either extend it by '
                 f"implementing specific load and save functions for this type, or save the object as one "
-                f'of the following supported types: {", ".join(self._type_registry)}.'
+                f'of the following supported types: {", ".join(self.type_registry)}.'
             )
 
         # set and return save directory for object
@@ -341,6 +385,21 @@ class LocalFileStore(ResultsStore):
         lazy: bool = False,
         **kwargs,
     ) -> Optional[Any]:
+        """Loads an object from the local file store.
+
+        The object is retrieved based on the name and the provided task name and unique task config.
+
+        Args:
+            name: An unique name given to this object.
+            task_name: Task name which saves the object.
+            task_unique_config: Unique config which specifies the run of the object.
+            lazy: A boolean whether the object should be lazily loaded. If True, a ``FilePromise`` object will be
+                returned, that can be loaded into memory on demand with the ``promise.load()`` function.
+            **kwargs: Additional keyword arguments passed to the registered ``load()`` function.
+
+        Returns:
+            The specified object if it is found.
+        """
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
@@ -362,7 +421,7 @@ class LocalFileStore(ResultsStore):
         load_kwargs = {**load_kwargs, **kwargs}
 
         # get type info used for file loading
-        type_info = self._type_registry[type_]
+        type_info = self.type_registry[type_]
 
         # get path
         full_name = f"{name}.{type_info.extension}" if type_info.extension else name
@@ -399,6 +458,16 @@ class LocalFileStore(ResultsStore):
         return obj
 
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
+        """Deletes an object from the local file store.
+
+        The object is deleted based on the name and the provided task name and unique task config.
+
+        Args:
+            name: The name of the to be deleted object.
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
+
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
@@ -420,7 +489,7 @@ class LocalFileStore(ResultsStore):
         type_, obj_dir, _, _, load_info_file_path = load_info
 
         # get type info used for file loading
-        type_info = self._type_registry[type_]
+        type_info = self.type_registry[type_]
 
         name = f"{name}.{type_info.extension}" if type_info.extension else name
         path_to_delete = os.path.join(obj_dir, name)
@@ -439,6 +508,14 @@ class LocalFileStore(ResultsStore):
         os.remove(load_info_file_path)
 
     def delete_run(self, task_name: str, task_unique_config: Dict):
+        """Deletes an entire task run directory from the local file store.
+
+        The run is deleted based on the task name and the unique task config.
+
+        Args:
+            task_name: The name of the task.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
         task_dir = os.path.join(self.base_dir, task_name)
 
         # try to get existing run dir
@@ -466,7 +543,27 @@ class LocalFileStore(ResultsStore):
         sub_dir: Optional[str] = None,
         **open_kwargs,
     ) -> Optional[File]:
-        """Custom open function that allows the user to open a file leveraging FluidML's ResultStore."""
+        """Wrapper to open a file from Local File Store (only available for Local File Store).
+
+        It returns a file like object that has additional ``save()`` and ``load()`` methods that can be used to
+        save/load objects with a registered type to/from the file store.
+        The ``File`` like object allows for an incremental write or read process of objects that for example don't fit
+        into memory.
+
+        Args:
+            name: An unique name given to this object.
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+            mode: The open mode, e.g. "r", "w", etc.
+            promise: An optional ``Promise`` object used for creating the returned file like object.
+            type\_: Additional type specification (e.g. json, which is to be passed to results store).
+            sub_dir: A path of a subdirectory used for opening the file.
+            **open_kwargs: Additional keyword arguments passed to the registered ``open()`` function.
+
+        Returns:
+            A ``File`` object that wraps a file like object and enables incremental result store reading and writing.
+        """
+
         # The available file pointer methods per open mode are:
         #                       | r   r+   w   w+   a   a+   x   x+
         #     ------------------|-----------------------------------
@@ -507,7 +604,7 @@ class LocalFileStore(ResultsStore):
             type_, obj_dir, open_kwargs, load_kwargs, load_info_file_path = load_info
 
             # get type info used for file loading
-            type_info = self._type_registry[type_]
+            type_info = self.type_registry[type_]
 
         elif "a" in mode:
             # try to get existing run dir
@@ -526,16 +623,16 @@ class LocalFileStore(ResultsStore):
                 ) = load_info
 
                 # get type info used for file loading
-                type_info = self._type_registry[type_]
+                type_info = self.type_registry[type_]
             else:
                 # get type_info
                 try:
-                    type_info = self._type_registry[type_]
+                    type_info = self.type_registry[type_]
                 except KeyError:
                     raise KeyError(
                         f'Object type "{type_}" is not supported in {self.__class__.__name__}. Either extend it by '
                         f"implementing specific load and save functions for this type, or save the object as one "
-                        f'of the following supported types: {", ".join(self._type_registry)}.'
+                        f'of the following supported types: {", ".join(self.type_registry)}.'
                     )
 
                 # set and return save directory for object
@@ -551,12 +648,12 @@ class LocalFileStore(ResultsStore):
 
             # get type_info
             try:
-                type_info = self._type_registry[type_]
+                type_info = self.type_registry[type_]
             except KeyError:
                 raise KeyError(
                     f'Object type "{type_}" is not supported in {self.__class__.__name__}. Either extend it by '
                     f"implementing specific load and save functions for this type, or save the object as one "
-                    f'of the following supported types: {", ".join(self._type_registry)}.'
+                    f'of the following supported types: {", ".join(self.type_registry)}.'
                 )
 
             # set and return save directory for object
@@ -585,6 +682,10 @@ class LocalFileStore(ResultsStore):
 
         E.g. the current run directory in case of LocalFileStore.
         Creates a new run dir if none exists.
+
+        Args:
+            task_name: Task name.
+            task_unique_config: Unique config which specifies the run.
         """
         task_dir = os.path.join(self.base_dir, task_name)
 

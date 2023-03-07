@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum
 from multiprocessing import RLock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from metadict import MetaDict
 
@@ -19,30 +19,51 @@ class Names(str, Enum):
 
 
 class Promise(ABC):
+    """An interface for future objects, that can be lazy loaded."""
+
     @abstractmethod
     def load(self, **kwargs):
+        """Loads the actual object."""
         raise NotImplementedError
 
 
 @dataclass
 class Sweep:
+    """A sweep class holding the value and config of a specific task result.
+
+    List of Sweeps are the standard inputs for ``reduce`` tasks that gather results from grid search expanded tasks.
+    """
+
     value: Any
+    """The value of the object."""
     config: MetaDict
+    """The unique config of the object#s task."""
 
 
 @dataclass
 class LazySweep:
+    """A lazy variation of the ``Sweep`` class."""
+
     value: Promise
+    """The lazy value of the object."""
     config: MetaDict
+    """The unique config of the object#s task."""
 
 
 @dataclass
 class StoreContext:
+    """The store context of the current task."""
+
     run_dir: Optional[str] = None
+    """The run directory of the task. Relevant for File Stores."""
     sweep_counter: Optional[str] = None
+    """The sweep counter of the task. Relevant for File Stores. A dynamically created counter to distinguish different 
+    task instances with the same run name in the results store."""
 
 
 class ResultsStore(ABC):
+    """The interface of a results store."""
+
     def __init__(self):
         self._lock: Optional[RLock] = None
 
@@ -62,11 +83,20 @@ class ResultsStore(ABC):
     def load(
         self, name: str, task_name: str, task_unique_config: Dict, **kwargs
     ) -> Optional[Any]:
-        """Query method to load an object based on its name, task_name and task_config if it exists"""
+        """Loads the given object from results store based on its name, task_name and task_config if it exists.
+
+        Args:
+            name: A unique name given to this object.
+            task_name: Task name which saved the loaded object.
+            task_unique_config: Unique config which specifies the run of the loaded object.
+            **kwargs: Additional keyword argumentss.
+
+        Returns:
+            The loaded object.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    # @_save_object_names
     def save(
         self,
         obj: Any,
@@ -76,18 +106,37 @@ class ResultsStore(ABC):
         task_unique_config: Dict,
         **kwargs,
     ):
-        """Method to save/update any artifact"""
+        """Method to save/update any artifact.
+
+        Args:
+            obj: The object to save/update
+            name: The object name.
+            type\_: The type of the object. Only required for file stores.
+            task_name: The task name that saves/updates the object.
+            task_unique_config: The unique config of that task.
+            **kwargs: Additional keyword arguments.
+        """
         raise NotImplementedError
 
     @abstractmethod
-    # @_delete_object_names
     def delete(self, name: str, task_name: str, task_unique_config: Dict):
-        """Method to delete any artifact"""
+        """Method to delete any artifact.
+
+        Args:
+            name: The object name.
+            task_name: The task name that saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
         raise NotImplementedError
 
     @abstractmethod
     def delete_run(self, task_name: str, task_unique_config: Dict):
-        """Method to delete all task results from a given run config"""
+        """Method to delete all task results from a given run config
+
+        Args:
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+        """
         raise NotImplementedError
 
     def open(
@@ -101,24 +150,55 @@ class ResultsStore(ABC):
         sub_dir: Optional[str] = None,
         **open_kwargs,
     ):
-        """Method to open a file from Local File Store (only available for Local File Store)."""
+        """Method to open a file from Local File Store (only available for file stores).
+
+        Args:
+            name: An unique name given to this object.
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+            mode: The open mode, e.g. "r", "w", etc.
+            promise: An optional ``Promise`` object used for creating the returned file like object.
+            type\_: Additional type specification (e.g. json, which is to be passed to results store).
+            sub_dir: A path of a subdirectory used for opening the file.
+            **open_kwargs: Additional keyword arguments passed to the registered ``open()`` function.
+
+        Returns:
+            A ``File`` object that behaves like a file like object.
+        """
 
     @abstractmethod
     def get_context(self, task_name: str, task_unique_config: Dict) -> StoreContext:
-        """Method to get store specific storage context, e.g. the current run directory for Local File Store"""
+        """Wrapper to get store specific storage context, e.g. the current run directory for Local File Store
+
+        Args:
+            task_name: Task name.
+            task_unique_config: Unique config which specifies the run.
+
+        Returns:
+            The store context object holding information like the current run dir.
+        """
         raise NotImplementedError
 
-    def get_results(
-        self, task_name: str, task_unique_config: Dict, saved_results: List[str]
-    ) -> Optional[Dict]:
-        # if a task publishes no results, we always execute the task
-        if not saved_results:
-            return None
+    def get_results(self, task_name: str, task_unique_config: Dict) -> Optional[Dict]:
+        """Collects all saved results based that have been tracked when using ``Task.save()``.
 
-        # if a task is not yet finished, we again execute the task
-        if not self.is_finished(
-            task_name=task_name, task_unique_config=task_unique_config
-        ):
+        Args:
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+
+        Returns:
+            A dictionary of all saved result objects.
+        """
+
+        # try to load saved results
+        saved_results = self.load(
+            Names.SAVED_RESULTS_FILE,
+            task_name=task_name,
+            task_unique_config=task_unique_config,
+        )
+
+        # if a no saved results can be found, we return None and exit
+        if not saved_results:
             return None
 
         # here we loop over individual item names and call user provided self.load() to get individual item data
@@ -131,17 +211,22 @@ class ResultsStore(ABC):
                 task_unique_config=task_unique_config,
             )
 
-            # if at least one expected and non-optional result object of the task cannot be loaded,
-            # return None and re-run the task.
-            if obj is None:
-                return None
-
-            # store object in results
-            results[item_name] = obj
+            if obj is not None:
+                # store object in results
+                results[item_name] = obj
 
         return results
 
     def is_finished(self, task_name: str, task_unique_config: Dict) -> bool:
+        """Checks if a task is finished.
+
+        Args:
+            task_name: Task name which saved the object.
+            task_unique_config: Unique config which specifies the run of the object.
+
+        Returns:
+            A boolean indicating whether the task is finished or not.
+        """
         from fluidml.task import TaskState
 
         # try to load task completed object; if it is None we return None and re-run the task

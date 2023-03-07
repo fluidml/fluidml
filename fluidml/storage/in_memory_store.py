@@ -8,9 +8,10 @@ logger = logging.getLogger(__name__)
 
 
 class InMemoryStore(ResultsStore):
-    """This is an in-memory results store implemented using a dict.
+    """An in-memory results store implemented using a dict.
 
-    When used alongside ``Swarm`` a ``manager.dict()`` is used for multiprocessing compatibility.
+    When multiprocessing is used a ``manager.dict()`` is used for inter process communication.
+    If no result store is provided to ``flow.run()`` this in-memory store is the default.
     """
 
     def __init__(self, manager: Optional[Manager] = None):

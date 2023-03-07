@@ -65,6 +65,18 @@ def visualize_graph_interactive(
     scale_width: bool = True,
     browser: Optional[str] = None,
 ):
+    """Visualizes the task graph interactively in a browser or jupyter notebook.
+
+    Args:
+        graph: A networkx directed graph object
+        plot_width: The width of the plot.
+        plot_height: The height of the plot.
+        node_width: Influences the horizontal space between nodes.
+        node_height: Influences the vertical space between nodes.
+        scale_width: If true, scales the graph to the screen width.
+        browser: If provided, renders the graph in the browser, e.g. "chrome" or "firefox". Note the browser might need
+            to be registered using Python's ``webbrowser`` library.
+    """
     # reformat the graph with attributes
     reformatted_graph = reformat_graph(graph)
 

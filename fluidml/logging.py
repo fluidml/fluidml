@@ -27,7 +27,7 @@ def configure_logging(
     rich_logging: bool = True,
     rich_traceback: bool = True,
 ):
-    """Convenience function to configure logging.
+    """A Convenience function to initialize and configure logging in the application.
 
     Args:
         level: Logging level to use, e.g. "DEBUG", "INFO", etc.

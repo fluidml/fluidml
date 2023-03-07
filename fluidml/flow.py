@@ -13,7 +13,7 @@ from networkx.algorithms.dag import topological_sort
 from fluidml.exception import CyclicGraphError, NoTasksError, TaskNameError
 from fluidml.storage import InMemoryStore, ResultsStore
 from fluidml.swarm import Swarm
-from fluidml.task import Task
+from fluidml.task import Task, TaskResults
 from fluidml.task_spec import TaskSpec
 from fluidml.utils import generate_run_name, reformat_config, update_merge
 
@@ -21,12 +21,24 @@ logger = logging.getLogger(__name__)
 
 
 class Flow:
-    """A class that implements the core logic of building tasks from task specifications.
+    """Flow implements the core logic of building and expanding task graphs from task specifications.
 
-    * It automatically expands the tasks based on task spec and task config.
-    * It extends the dependencies to the expanded tasks.
-    * It provides the task graph objects and simple console graph visualization.
-    * Finally, it composes a list of tasks which are then run through the provided swarm.
+    * It automatically expands the tasks based on task specifications and task configs.
+    * It extends the registered dependencies to the expanded tasks.
+    * It provides the task graph objects for introspection and visualization.
+    * Finally, it executes the task graph using multiprocessing if necessary.
+
+    Args:
+        tasks: List of task specifications.
+        config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
+            "unique_config", which is used to determine whether a run has been executed or not.
+        config_group_prefix: A config grouping prefix, to indicate that to parameters are grouped and expanded
+            using the "zip" method. The grouping prefix enables the "zip" expansion of specific parameters, while
+            all remaining grid parameters are expanded via "product".
+            Example: ``cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]``
+            Without grouping "product" expansion would yield: `2 * 2 * 3 = 12` configs.
+            With grouping "product" expansion yields : `2 * 3 = 6` configs, since the grouped parameters are
+            "zip" expanded.
     """
 
     def __init__(
@@ -35,23 +47,6 @@ class Flow:
         config_ignore_prefix: Optional[str] = None,
         config_group_prefix: Optional[str] = None,
     ):
-        """Creates the Flow (task graph) by expanding all GridTaskSpecs.
-
-        Args:
-            tasks: List of task specifications.
-            config_ignore_prefix: A config key prefix, e.g. "_". Prefixed keys will be not included in the
-                "unique_config", which is used to determine whether a run has been executed or not.
-            config_group_prefix: A config grouping prefix, to indicate that to parameters are grouped and expanded
-                using the "zip" method. The grouping prefix enables the "zip" expansion of specific parameters, while
-                all remaining grid parameters are expanded via "product".
-                Example:
-                    cfg = {"a": [1, 2, "@x"], "b": [1, 2, 3], "c": [1, 2, "@x"]
-
-                    Without grouping "product" expansion would yield: 2 * 2 * 3 = 12 configs.
-                    With grouping "product" expansion yields : 2 * 3 = 6 configs, since the grouped parameters are
-                    "zip" expanded.
-        """
-
         # assign config_ignore_prefix and config_group_prefix to all tasks if the task has no prefix assigned, yet
         for task_spec in tasks:
             if (
@@ -77,7 +72,8 @@ class Flow:
         self._create(task_specs=tasks)
 
     @property
-    def num_tasks(self):
+    def num_tasks(self) -> int:
+        """The total number of expanded tasks in the task graph."""
         return len(self._expanded_tasks)
 
     def _create(self, task_specs: List[TaskSpec]):
@@ -496,8 +492,8 @@ class Flow:
         run_name: Optional[str] = None,
         results_store: Optional[ResultsStore] = None,
         return_results: Optional[str] = None,
-    ) -> Dict[str, Dict[str, Any]]:
-        """Runs the specified tasks sequentially or in parallel via Swarm (multiprocessing) and returns the results.
+    ) -> Optional[Dict[str, List[TaskResults]]]:
+        """Runs the expanded task graph sequentially or in parallel using multiprocessing and returns the results.
 
         Args:
             num_workers: Number of parallel processes (dolphins) used. Internally, the optimal number of processes
@@ -529,10 +525,11 @@ class Flow:
             results_store: An instance of results store for results management.
                 If nothing is provided, a non-persistent InMemoryStore store is used.
             return_results: Return results-dictionary after ``run()``. Defaults to ``all``.
-                Choices: "all", "latest", None
+                Choices: ``"all", "latest", None``.
 
         Returns:
-            A nested dict of results.
+            A results dictionary with the following schema.
+                ``{"task_name_1": List[TaskResults], "task_name_2": List[TaskResults]}``
         """
 
         if force is not None:

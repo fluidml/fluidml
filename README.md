@@ -13,14 +13,11 @@ _Develop ML pipelines fluently with no boilerplate code. Focus only on your task
   <a href="#citation">Citation</a>
 </p>
 
-https://img.shields.io/pypi/pyversions/fluidml
-
 [![Python Versions](https://img.shields.io/pypi/pyversions/fluidml.svg)](https://pypi.org/project/fluidml/)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![CircleCI](https://circleci.com/gh/fluidml/fluidml/tree/main.svg?style=shield)](https://circleci.com/gh/fluidml/fluidml/tree/main)
 [![codecov](https://codecov.io/gh/fluidml/fluidml/branch/main/graph/badge.svg?token=XG4UDWF8RE)](https://codecov.io/gh/fluidml/fluidml)
 [![Documentation Status](https://readthedocs.org/projects/fluidml/badge/?version=latest)](https://fluidml.readthedocs.io/en/latest/?badge=latest)
-[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-v2.0%20adopted-ff69b4.svg)](https://github.com/fluidml/fluidml/blob/main/CODE_OF_CONDUCT.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/fluidml/fluidml/blob/main/CODE_OF_CONDUCT.md)
 
 [//]: # (?style=flat-square)
@@ -120,7 +117,7 @@ Below, we define standard machine learning tasks such as dataset preparation, pr
 Notice that:
 
 - Each task is implemented individually and it's clear what the inputs are (check arguments of `run()` method)
-- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. 
+- Each task saves its results using `self.save(...)` by providing the object to be saved and a unique name for it. ~~~~
   This unique name corresponds to input names in successor task definitions.
 
 ```Python
@@ -223,7 +220,7 @@ from fluidml import configure_logging
 configure_logging()
 ```
 
-#### 5. Run tasks using Flow and Swarm
+#### 5. Run tasks using Flow
 
 Now that we have all the tasks specified, we can just run the task graph. 
 For that, we create the task flow by passing all tasks to the `Flow()` class.
@@ -245,9 +242,9 @@ results = flow.run()
 ## Functionality
 
 The following sections highlight the most important features and options when specifying and executing a task pipeline.
-For a complete documentation of all available options we refer to the API documentation LINK.
+For a complete documentation of all available options we refer to the [API documentation](https://fluidml.readthedocs.io/en/latest/).
 
-### Grid Search - Automatic Task Expansion
+### Grid Search - Automatic Task Expansion~~~~
 
 We can easily enable grid search for our tasks with just one line of code. 
 We just have to provide the `expand` argument with the `product` and `zip` expansion option to the `TaskSpec` constructor. 
@@ -258,7 +255,7 @@ If a list itself is an argument and should not be expanded, it has to be wrapped
 train_task = TaskSpec(
   task=TrainTask,
   config={"max_iter": [50, 100], "balanced": [True, False], "layers": [[50, 100, 50]]},
-  expand='product',  # or 'zip'
+  expand="product",  # or 'zip'
 )
 ```
 
@@ -271,7 +268,7 @@ value will be passed to the task.
 Further, any successor tasks (for instance, evaluate task) in the task graph will also be automatically expanded. 
 Therefore, in our example, we would have 4 evaluate tasks, each one corresponding to the 4 train tasks.
 
-For more advanced Gird Search Expansion options we refer to the documentation LINK.
+For more advanced Gird Search Expansion options we refer to the documentation.
 
 
 ### Model Selection
@@ -318,7 +315,7 @@ and implementing `load()`, `save()`, `delete()`, `delete_run()` and `get_context
 Note these methods rely on task name and its config parameters, which act as lookup-key for results. 
 In this way, tasks are skipped by FluidML when task results are already available for the given config. 
 But users can override and force execute tasks by passing `force` parameter to the `Flow.run()` methods. 
-For details check the API documentation LINK.
+For details check the API documentation.
 
 ```Python
 class MyResultsStore(ResultsStore):
@@ -346,7 +343,7 @@ class MyResultsStore(ResultsStore):
 We can instantiate for example a `LocalFileStore`
 
 ```python
-results_store = LocalFileStore(base_dir='/some/dir')
+results_store = LocalFileStore(base_dir="/some/dir")
 ```
 
 and use it to enable persistent results storing via `flow.run(results_store=results_store)`.
@@ -365,7 +362,7 @@ Internally, FluidML makes use of Python's `logging` library to visualize and log
 in the console. We recommend to configure `logging` in your fluidml application for a better user experience.
 For convenience, we provide a simple utility function `configure_logging()` which configures a visually appealing logger 
 (using a specific handler from the [rich](https://github.com/willmcgugan/rich) library). For different logging options 
-we refer to the documentation LINK.
+we refer to the documentation.
 
 In the case of executing the task graph in parallel with multiple workers using multiprocessing, the console output might become
 garbled and unreadable. In that scenario you can turn on [tmux](https://github.com/tmux/tmux/wiki) logging py providing the `log_to_tmux` argument:
