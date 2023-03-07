@@ -1,4 +1,5 @@
 from typing import Optional
+
 from grandalf.graphs import Edge, Graph, Vertex
 from grandalf.layouts import SugiyamaLayout
 from grandalf.routing import EdgeViewer, route_with_lines
@@ -11,18 +12,25 @@ class VertexViewer:
     Args:
         name (str): name of the vertex.
     """
+
     HEIGHT = 3
 
-    def __init__(self, name: str, height: Optional[int] = None, width: Optional[int] = None):
+    def __init__(
+        self, name: str, height: Optional[int] = None, width: Optional[int] = None
+    ):
         # height of the node (top and bottom box edges + name).
         self.h = height if height is not None else self.HEIGHT
         # width of the node (right and left bottom edges + name).
         self.w = width if width is not None else len(name) + 2
 
 
-def build_sugiyama_layout(graph: DiGraph, iterations: int = 1, node_height: Optional[int] = None,
-                          node_width: Optional[int] = None):
-    """ Function to build a sugiyama layout for a graph
+def _build_sugiyama_layout(
+    graph: DiGraph,
+    iterations: int = 1,
+    node_height: Optional[int] = None,
+    node_width: Optional[int] = None,
+):
+    """Function to build a sugiyama layout for a graph
 
     Just a reminder about naming conventions:
     +------------X
@@ -33,7 +41,7 @@ def build_sugiyama_layout(graph: DiGraph, iterations: int = 1, node_height: Opti
     Y
     """
 
-    vertexes = {v: Vertex(f' {v} ') for v in list(graph.nodes())}
+    vertexes = {v: Vertex(f" {v} ") for v in list(graph.nodes())}
     edges = [Edge(vertexes[s], vertexes[e]) for s, e in list(graph.edges())]
     vertexes = vertexes.values()
 

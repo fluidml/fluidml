@@ -1,47 +1,78 @@
 version: 2
 orbs:
   codecov: codecov/codecov@1.0.2jobs
+
+shared: &shared
+  working_directory: ~/repo
+  steps:
+    - checkout
+
+    - run:
+        name: install dependencies
+        command: |
+          python3 -m venv venv
+          . venv/bin/activate
+          pip install pytest
+          pip install coverage
+          pip install codecov
+          pip install .[mongo-store,rich-logging]
+
+    - run:
+        name: run unit tests
+        command: |
+          . venv/bin/activate
+          mkdir test-reports
+          coverage run --source=./fluidml -m pytest --junitxml=test-reports/results.xml tests/unit
+          coverage report
+          coverage html --directory=test-reports
+          coverage xml
+          mv coverage.xml test-reports
+          codecov -f test-reports/coverage.xml
+
+    - run:
+        name: run integration tests
+        command: |
+          . venv/bin/activate
+          pytest --junitxml=test-reports/results_integration.xml tests/integration
+
+    - store_test_results:
+        path: test-reports
+
+    - store_artifacts:
+        path: test-reports
+        destination: test-reports
 jobs:
-  build:
+  "py37":
     docker:
-      - image: circleci/python:3.6
+      - image: cimg/python:3.7
+    <<: *shared
 
-    working_directory: ~/repo
+  "py38":
+    docker:
+      - image: cimg/python:3.8
+    <<: *shared
 
-    steps:
-      - checkout
-      
-      - run:
-          name: install dependencies
-          command: |
-            python3 -m venv venv
-            . venv/bin/activate
-            pip install pytest
-            pip install coverage
-            pip install codecov
-            pip install .[mongo-store,rich-logging]
-    
-      - run:
-          name: run unit tests
-          command: |
-            . venv/bin/activate
-            mkdir test-reports
-            coverage run --source=./fluidml -m pytest --junitxml=test-reports/results.xml tests/unit
-            coverage report
-            coverage html --directory=test-reports
-            coverage xml
-            mv coverage.xml test-reports
-            codecov -f test-reports/coverage.xml
+  "py39":
+    docker:
+      - image: cimg/python:3.9
+    <<: *shared
 
-      - run:
-          name: run integration tests
-          command: |
-            . venv/bin/activate
-            pytest --junitxml=test-reports/results_integration.xml tests/integration
+  "py310":
+    docker:
+      - image: cimg/python:3.10
+    <<: *shared
 
-      - store_test_results:
-          path: test-reports
+  "py311":
+    docker:
+      - image: cimg/python:3.11
+    <<: *shared
 
-      - store_artifacts:
-          path: test-reports
-          destination: test-reports
+workflows:
+  version: 2
+  build:
+    jobs:
+      - "py37"
+      - "py38"
+      - "py39"
+      - "py310"
+      - "py311"

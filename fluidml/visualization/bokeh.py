@@ -1,14 +1,11 @@
+from typing import Optional
+
 import networkx as nx
-
-from bokeh.io import output_file, show
-from bokeh.plotting import figure
-from bokeh.models import (BoxZoomTool, HoverTool,
-                          MultiLine, Plot, Range1d, ResetTool, BoxSelectTool, PanTool, WheelZoomTool)
-from bokeh.palettes import Spectral4
-from bokeh.plotting import from_networkx
+from bokeh.io import show
 from bokeh.models import ColumnDataSource, LabelSet
+from bokeh.plotting import figure
 
-from fluidml.visualization import build_sugiyama_layout
+from fluidml.visualization.graph_layout import _build_sugiyama_layout
 
 
 def reformat_graph(graph):
@@ -24,9 +21,9 @@ def reformat_graph(graph):
     return reformatted_graph
 
 
-def flip_positions(positons, height):
+def flip_positions(positions, height):
     flipped = {}
-    for key, (x, y) in positons.items():
+    for key, (x, y) in positions.items():
         flipped[key] = (x, height - y - 1)
     return flipped
 
@@ -38,7 +35,7 @@ def get_edges(sug_layout, height):
 
         # get corresponding start and end nodes
         start_node, end_node = edge.v[0].view.xy, edge.v[1].view.xy
-        
+
         # get computed multi-line edges
         node_x, node_y = [], []
         for index in range(1, len(edge.view._pts)):
@@ -48,9 +45,7 @@ def get_edges(sug_layout, height):
             node_x.append(end[0])
             node_y.append(height - start[1] - 1)
             node_y.append(height - end[1] - 1)
-            #node_y.append(start[1])
-            #node_y.append(end[1])
-        
+
         # in these, we first have to manipulate the first and last co-ordindates
         # so that they have extend upto node positions
         node_x[0], node_y[0] = start_node[0], (height - start_node[1] - 1)
@@ -61,36 +56,67 @@ def get_edges(sug_layout, height):
     return xs, ys
 
 
-def visualize_graph_interactive(graph: nx.Graph, plot_width: int = 500, plot_height: int = 500,
-                                node_width: int = 50, node_height: int = 50,
-                                scale_width: bool = True):
+def visualize_graph_interactive(
+    graph: nx.Graph,
+    plot_width: int = 500,
+    plot_height: int = 200,
+    node_width: int = 50,
+    node_height: int = 50,
+    scale_width: bool = True,
+    browser: Optional[str] = None,
+):
+    """Visualizes the task graph interactively in a browser or jupyter notebook.
+
+    Args:
+        graph: A networkx directed graph object
+        plot_width: The width of the plot.
+        plot_height: The height of the plot.
+        node_width: Influences the horizontal space between nodes.
+        node_height: Influences the vertical space between nodes.
+        scale_width: If true, scales the graph to the screen width.
+        browser: If provided, renders the graph in the browser, e.g. "chrome" or "firefox". Note the browser might need
+            to be registered using Python's ``webbrowser`` library.
+    """
     # reformat the graph with attributes
     reformatted_graph = reformat_graph(graph)
 
     # bokeh plot settings
-    plot = figure(plot_width=plot_width, plot_height=plot_height)
+    plot = figure(width=plot_width, height=plot_height)
     plot.title.text = "Task Graph"
+    plot.title.text_font_size = "20pt"
     plot.grid.visible = False
     plot.sizing_mode = "scale_width" if scale_width else "auto"
     plot.xaxis.visible = False
     plot.yaxis.visible = False
 
     # get sugiyama layout
-    layout = build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
-    positions = {vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1]) for vertex in layout.g.sV}
+    layout = _build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
+    positions = {
+        vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1])
+        for vertex in layout.g.sV
+    }
     positions = flip_positions(positions, plot_height)
 
-    # plot nodes
+    # get positions
     x, y = zip(*positions.values())
-    node_labels = nx.get_node_attributes(reformatted_graph, 'task_name')
-    source = ColumnDataSource({'x': x, 'y': y,
-                             'task_name': list(positions.keys())})
-    labels = LabelSet(x='x', y='y', text='task_name', source=source, text_align="center",
-                      background_fill_color='white', text_font_size="12px", border_line_color="black", name="task_name")
-    plot.renderers.append(labels)
 
     # plot edges
     xs, ys = get_edges(layout, plot_height)
     plot.multi_line(xs, ys)
 
-    show(plot)
+    # plot nodes
+    source = ColumnDataSource({"x": x, "y": y, "task_name": list(positions.keys())})
+    labels = LabelSet(
+        x="x",
+        y="y",
+        text="task_name",
+        source=source,
+        text_align="center",
+        background_fill_color="white",
+        text_font_size="16px",
+        border_line_color="black",
+        name="task_name",
+    )
+    plot.renderers.append(labels)
+
+    show(plot, browser=browser)

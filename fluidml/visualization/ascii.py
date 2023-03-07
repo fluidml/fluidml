@@ -7,38 +7,43 @@ See: https://github.com/iterative/dvc/blob/master/dvc/dagascii.py
 import logging
 import math
 import os
-from typing import Dict, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict
 
-from fluidml.visualization import build_sugiyama_layout
+from fluidml.visualization.graph_layout import _build_sugiyama_layout
 
 if TYPE_CHECKING:
-    from grandalf.layouts import SugiyamaLayout
     import networkx as nx
+    from grandalf.layouts import SugiyamaLayout
 
 
 logger = logging.getLogger(__name__)
 
 
 class AsciiCanvas:
-    """Class for drawing graph in ASCII.
-    Args:
-        sug (SugiyamaLayout): calculated sugiyama layout for the input graph
-        cols (int): number of columns in the canvas. Should be > 1.
-        rows (int): number of rows in the canvas. Should be > 1.
-        chars (Dict): character set used for graph rendering (can be ascii or unicode)
-        minx (int): minimum x coordinate drawn on canvas.
-        miny (int): minimum y coordinate drawn on canvas.
-    """
+    """Class for drawing graph in ASCII."""
 
     TIMEOUT = 10
 
-    def __init__(self,
-                 sug: 'SugiyamaLayout',
-                 cols: int,
-                 rows: int,
-                 chars: Dict[str, str],
-                 minx: int,
-                 miny: int):
+    def __init__(
+        self,
+        sug: "SugiyamaLayout",
+        cols: int,
+        rows: int,
+        chars: Dict[str, str],
+        minx: int,
+        miny: int,
+    ):
+        """Initializes class for drawing graph in ASCII.
+
+        Args:
+            sug: Calculated sugiyama layout for the input graph.
+            cols: Number of columns in the canvas. Should be > 1.
+            rows: Number of rows in the canvas. Should be > 1.
+            chars: Character set used for graph rendering (can be ascii or unicode).
+            minx: Minimum x coordinate drawn on canvas.
+            miny: Minimum y coordinate drawn on canvas.
+        """
+
         assert cols > 1
         assert rows > 1
 
@@ -55,12 +60,9 @@ class AsciiCanvas:
     def point(self, x: int, y: int, char: str):
         """Create a point on ASCII canvas.
         Args:
-            x (int): x coordinate. Should be >= 0 and < number of columns in
-                the canvas.
-            y (int): y coordinate. Should be >= 0 an < number of lines in the
-                canvas.
-            char (str): character to place in the specified point on the
-                canvas.
+            x: x coordinate. Should be >= 0 and < number of columns in the canvas.
+            y: y coordinate. Should be >= 0 an < number of lines in the canvas.
+            char: character to place in the specified point on the canvas.
         """
         assert len(char) == 1
         assert x >= 0
@@ -73,11 +75,11 @@ class AsciiCanvas:
     def line(self, x0: int, y0: int, x1: int, y1: int, char: str):
         """Create a line on ASCII canvas.
         Args:
-            x0 (int): x coordinate where the line should start.
-            y0 (int): y coordinate where the line should start.
-            x1 (int): x coordinate where the line should end.
-            y1 (int): y coordinate where the line should end.
-            char (str): character to draw the line with.
+            x0: x coordinate where the line should start.
+            y0: y coordinate where the line should start.
+            x1: x coordinate where the line should end.
+            y1: y coordinate where the line should end.
+            char: character to draw the line with.
         """
 
         if x0 > x1:
@@ -114,9 +116,9 @@ class AsciiCanvas:
     def text(self, x: int, y: int, text: str):
         """Print a text on ASCII canvas.
         Args:
-            x (int): x coordinate where the text should start.
-            y (int): y coordinate where the text should start.
-            text (str): string that should be printed.
+            x: x coordinate where the text should start.
+            y: y coordinate where the text should start.
+            text: string that should be printed.
         """
         for i, char in enumerate(text):
             self.point(x + i, y, char)
@@ -124,10 +126,10 @@ class AsciiCanvas:
     def box(self, x0: int, y0: int, width: int, height: int):
         """Create a box on ASCII canvas.
         Args:
-            x0 (int): x coordinate of the box corner.
-            y0 (int): y coordinate of the box corner.
-            width (int): box width.
-            height (int): box height.
+            x0: x coordinate of the box corner.
+            y0: y coordinate of the box corner.
+            width: box width.
+            height: box height.
         """
         assert width > 1
         assert height > 1
@@ -136,17 +138,17 @@ class AsciiCanvas:
         height -= 1
 
         for x in range(x0, x0 + width):
-            self.point(x, y0, self.chars['horizontal_box'])
-            self.point(x, y0 + height, self.chars['horizontal_box'])
+            self.point(x, y0, self.chars["horizontal_box"])
+            self.point(x, y0 + height, self.chars["horizontal_box"])
 
         for y in range(y0, y0 + height):
-            self.point(x0, y, self.chars['vertical_box'])
-            self.point(x0 + width, y, self.chars['vertical_box'])
+            self.point(x0, y, self.chars["vertical_box"])
+            self.point(x0 + width, y, self.chars["vertical_box"])
 
-        self.point(x0, y0, self.chars['top_left_box'])
-        self.point(x0 + width, y0, self.chars['top_right_box'])
-        self.point(x0, y0 + height, self.chars['bottom_left_box'])
-        self.point(x0 + width, y0 + height, self.chars['bottom_right_box'])
+        self.point(x0, y0, self.chars["top_left_box"])
+        self.point(x0 + width, y0, self.chars["top_right_box"])
+        self.point(x0, y0 + height, self.chars["bottom_left_box"])
+        self.point(x0 + width, y0 + height, self.chars["bottom_right_box"])
 
     def draw_edges(self):
         for edge in self.sug.g.sE:
@@ -165,7 +167,7 @@ class AsciiCanvas:
                 assert end_x >= 0
                 assert end_y >= 0
 
-                self.line(start_x, start_y, end_x, end_y, self.chars['line'])
+                self.line(start_x, start_y, end_x, end_y, self.chars["line"])
 
     def draw_nodes(self):
         for vertex in self.sug.g.sV:
@@ -181,7 +183,9 @@ class AsciiCanvas:
             )
 
             self.text(
-                int(round(x - self.minx)) + 1, int(round(y - self.miny)) + 1, vertex.data
+                int(round(x - self.minx)) + 1,
+                int(round(y - self.miny)) + 1,
+                vertex.data,
             )
 
     def to_str(self) -> str:
@@ -192,32 +196,39 @@ class AsciiCanvas:
 
 
 def _get_graph_char_set(use_unicode: bool) -> Dict[str, str]:
-    chars = {'line': '*',
-             'top_left_box': '+',
-             'top_right_box': '+',
-             'bottom_left_box': '+',
-             'bottom_right_box': '+',
-             'horizontal_box': '-',
-             'vertical_box': '|'}
+    chars = {
+        "line": "*",
+        "top_left_box": "+",
+        "top_right_box": "+",
+        "bottom_left_box": "+",
+        "bottom_right_box": "+",
+        "horizontal_box": "-",
+        "vertical_box": "|",
+    }
 
     if use_unicode:
         try:
             import sys
-            '╭╮╰╯·─|'.encode(sys.stdout.encoding).decode(sys.stdout.encoding)
-            chars = {'line': '·',
-                     'top_left_box': '╭',
-                     'top_right_box': '╮',
-                     'bottom_left_box': '╰',
-                     'bottom_right_box': '╯',
-                     'horizontal_box': '─',
-                     'vertical_box': '│'}
+
+            "╭╮╰╯·─|".encode(sys.stdout.encoding).decode(sys.stdout.encoding)
+            chars = {
+                "line": "·",
+                "top_left_box": "╭",
+                "top_right_box": "╮",
+                "bottom_left_box": "╰",
+                "bottom_right_box": "╯",
+                "horizontal_box": "─",
+                "vertical_box": "│",
+            }
 
         except UnicodeEncodeError:
-            logger.warning(f'Console does not support unicode chars. Defaulting to ascii.')
+            logger.warning(
+                f"Console does not support unicode chars. Defaulting to ascii."
+            )
     return chars
 
 
-def create_graph_in_ascii(graph: 'nx.DiGraph', use_unicode: bool = False) -> str:
+def create_graph_in_ascii(graph: "nx.DiGraph", use_unicode: bool = False) -> str:
     """Create ascii (or unicode) graph and return as str ready for printing.
     Args:
         graph (DiGraph): a networkx directed graph object
@@ -226,7 +237,7 @@ def create_graph_in_ascii(graph: 'nx.DiGraph', use_unicode: bool = False) -> str
 
     chars = _get_graph_char_set(use_unicode=use_unicode)
 
-    sug = build_sugiyama_layout(graph=graph)
+    sug = _build_sugiyama_layout(graph=graph)
 
     # NOTE: coordinates might be negative, so we need to shift
     # everything to the positive plane before we actually draw the graph.

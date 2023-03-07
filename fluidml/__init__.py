@@ -1,29 +1,15 @@
-import logging
-import time
+import logging as logging_
+import os
 
-try:
-    # This variable is injected in the __builtins__ by the build
-    # process. It used to enable importing subpackages of skimage when
-    # the binaries are not built
-    _ = None if __FLUIDML_SETUP__ else None
-except NameError:
-    __FLUIDML_SETUP__: bool = False
+from .__about__ import *
+from .flow import Flow
+from .logging import configure_logging
+from .task import Task
+from .task_spec import TaskSpec
 
-if not __FLUIDML_SETUP__:
-    from .flow import Flow
-    from .swarm import Swarm
-    from .common import Task
+logging_.getLogger(__name__)
 
-_this_year = time.strftime("%Y")
-__version__ = '0.2.0'
-__author__ = 'Rajkumar Ramamurthy, Lars Hillebrand'
-__author_email__ = 'raj1514@gmail.com'
-__license__ = 'Apache-2.0'
-__copyright__ = f'Copyright (c) 2020-{_this_year}, {__author__}.'
-__homepage__ = 'https://github.com/fluidml/fluidml/'
-__docs__ = (
-    "FluidML is a lightweight framework for developing machine learning pipelines."
-    " Focus only on your tasks and not the boilerplate!"
-)
+package_path = os.path.dirname(os.path.abspath(__file__))
+project_path = os.path.dirname(package_path)
 
-logging.getLogger(__name__)
+__all__ = ["Flow", "TaskSpec", "Task", "configure_logging", "package_path"]
