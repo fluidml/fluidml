@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional
 
 from metadict import MetaDict
 
+from fluidml.utils import change_logging_level
+
 logger = logging.getLogger(__name__)
 
 
@@ -16,6 +18,9 @@ class Names(str, Enum):
     SAVED_RESULTS_FILE = ".saved_results"
     FLUIDML_DIR = ".fluidml"
     CONFIG = "config.json"
+
+    def __str__(self):
+        return self.value
 
 
 class Promise(ABC):
@@ -80,9 +85,7 @@ class ResultsStore(ABC):
         self._lock = lock
 
     @abstractmethod
-    def load(
-        self, name: str, task_name: str, task_unique_config: Dict, **kwargs
-    ) -> Optional[Any]:
+    def load(self, name: str, task_name: str, task_unique_config: Dict, **kwargs) -> Optional[Any]:
         """Loads the given object from results store based on its name, task_name and task_config if it exists.
 
         Args:
@@ -230,11 +233,12 @@ class ResultsStore(ABC):
         from fluidml.task import TaskState
 
         # try to load task completed object; if it is None we return None and re-run the task
-        run_info: Optional[Dict] = self.load(
-            name=Names.FLUIDML_INFO_FILE,
-            task_name=task_name,
-            task_unique_config=task_unique_config,
-        )
+        with change_logging_level(40):
+            run_info: Optional[Dict] = self.load(
+                name=Names.FLUIDML_INFO_FILE,
+                task_name=task_name,
+                task_unique_config=task_unique_config,
+            )
         if run_info and run_info["state"] == TaskState.FINISHED:
             return True
         else:

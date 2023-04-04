@@ -1,6 +1,5 @@
 # See https://pre-commit.com for more information
 # See https://pre-commit.com/hooks.html for more hooks
-# exclude: benchmarks/
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.0.1
@@ -34,10 +33,9 @@ repos:
     rev: 22.3.0
     hooks:
       - id: black
-#        exclude: ^benchmarks/
+        args: [--line-length=120]
   - repo: https://github.com/PyCQA/isort
     rev: 5.12.0
     hooks:
       - id: isort
-#        exclude: ^benchmarks/
-        args: ["--profile", "black"]
+        args: [--profile=black]

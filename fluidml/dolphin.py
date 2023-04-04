@@ -134,12 +134,9 @@ class Dolphin(Whale):
         else:
             msg = f'Finished task "{task.unique_name}"'
 
-        num_finished_task = sum(
-            1 for t in self.task_states.values() if t == TaskState.FINISHED
-        )
+        num_finished_task = sum(1 for t in self.task_states.values() if t == TaskState.FINISHED)
         logger.info(
-            f"{msg} [{num_finished_task}/{self.num_tasks} "
-            f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
+            f"{msg} [{num_finished_task}/{self.num_tasks} " f"- {round((num_finished_task / self.num_tasks) * 100)}%]"
         )
 
     def _on_task_start(self, task: Task, stored_task_info: Optional[Dict] = None):
@@ -149,9 +146,7 @@ class Dolphin(Whale):
         """
 
         if stored_task_info:
-            logger.info(
-                f'Started task "{task.unique_name}" with existing id "{task.id}"'
-            )
+            logger.info(f'Started task "{task.unique_name}" with existing id "{task.id}"')
         else:
             logger.info(f'Started task "{task.unique_name}"')
 
@@ -169,9 +164,7 @@ class Dolphin(Whale):
         completed: Optional[bool] = None,
         exception: Optional[BaseException] = None,
     ):
-        logger.debug(
-            f'Enter "_on_task_end()" with status "{self.task_states[task.unique_name]}"'
-        )
+        logger.debug(f'Enter "_on_task_end()" with status "{self.task_states[task.unique_name]}"')
 
         # register ended timestamp
         task.ended = datetime.datetime.now()
@@ -189,9 +182,7 @@ class Dolphin(Whale):
 
         elif self.task_states[task.unique_name] == TaskState.FAILED:
             # Log exception and put it in error queue
-            logger.exception(
-                f'Task "{task.unique_name}" failed with error:\n{exception}'
-            )
+            logger.exception(f'Task "{task.unique_name}" failed with error:\n{exception}')
             self._error_queue.put(exception)
             # set exit event to stop process only if exit on error is set to True
             if self._exit_on_error:
@@ -200,9 +191,7 @@ class Dolphin(Whale):
         # save the fluidml info object as json
         task.state = self.task_states[task.unique_name]
         task.results_store.save(
-            json.loads(
-                task.info.json()
-            ),  # we use pydantics json() fn, load the json str as dict and save it
+            json.loads(task.info.json()),  # we use pydantics json() fn, load the json str as dict and save it
             Names.FLUIDML_INFO_FILE,
             type_="json",
             task_name=task.name,
@@ -218,7 +207,8 @@ class Dolphin(Whale):
 
         # try to load existing task info object
         # if task info object was found, overwrite run info attributes with cached run info
-        stored_task_info = task.load(Names.FLUIDML_INFO_FILE)
+        with change_logging_level(40):
+            stored_task_info = task.load(Names.FLUIDML_INFO_FILE)
         if stored_task_info:
             # assign loaded objects to current task
             for k, v in TaskInfo(**stored_task_info).dict().items():
@@ -240,9 +230,7 @@ class Dolphin(Whale):
                 task.delete_run()
 
         # check if task was successfully completed before
-        completed: bool = task.results_store.is_finished(
-            task_name=task.name, task_unique_config=task.unique_config
-        )
+        completed: bool = task.results_store.is_finished(task_name=task.name, task_unique_config=task.unique_config)
 
         # if task is not completed, run the task now
         if not completed:
@@ -299,9 +287,7 @@ class Dolphin(Whale):
     def _stop(self) -> bool:
 
         return self.exit_event.is_set() or all(
-            True
-            if t in [TaskState.FINISHED, TaskState.FAILED, TaskState.UPSTREAM_FAILED]
-            else False
+            True if t in [TaskState.FINISHED, TaskState.FAILED, TaskState.UPSTREAM_FAILED] else False
             for t in self.task_states.values()
         )
 
@@ -319,16 +305,12 @@ class Dolphin(Whale):
                 if self._detect_upstream_error(task):
                     self.task_states[task.unique_name] = TaskState.UPSTREAM_FAILED
                     self._schedule_successors(task)
-                    logger.warning(
-                        f'Task "{task.unique_name}" cannot be executed due to an upstream task failure.'
-                    )
+                    logger.warning(f'Task "{task.unique_name}" cannot be executed due to an upstream task failure.')
                     continue
 
                 # run task only if all dependencies are satisfied
                 if not self._is_task_ready(task=task):
-                    logger.debug(
-                        f"Dependencies are not satisfied yet for task {task.unique_name}"
-                    )
+                    logger.debug(f"Dependencies are not satisfied yet for task {task.unique_name}")
                     self.scheduled_queue.put(task.unique_name)
                     continue
 

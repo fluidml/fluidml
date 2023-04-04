@@ -270,16 +270,21 @@ class LocalFileStore(ResultsStore):
     @staticmethod
     def _get_load_info(run_dir: str, name: str) -> Optional[Tuple]:
         # get load information from run dir
-        load_info_file_path = os.path.join(
-            run_dir, Names.FLUIDML_DIR, f'.{name.lstrip(".")}_load_info.p'
-        )
+        load_info_file_path = os.path.join(run_dir, Names.FLUIDML_DIR, f'.{name.lstrip(".")}_load_info.p')
+
         try:
             load_info = pickle.load(open(load_info_file_path, "rb"))
         except FileNotFoundError:
-            logger.warning(
-                f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.'
-            )
-            return None
+            load_info = None
+
+        # Fallback to old load info dir name ".load_info" -> for backward compatibility with old results
+        if load_info is None:
+            load_info_old_file_path = os.path.join(run_dir, ".load_info", f'.{name.lstrip(".")}_load_info.p')
+            try:
+                load_info = pickle.load(open(load_info_old_file_path, "rb"))
+            except FileNotFoundError:
+                logger.warning(f'"{name}" could not be found in store, since "{load_info_file_path}" does not exist.')
+                return None
 
         # unpack load info
         type_ = load_info["type_"]
@@ -289,9 +294,7 @@ class LocalFileStore(ResultsStore):
         return type_, obj_dir, open_kwargs, load_kwargs, load_info_file_path
 
     @staticmethod
-    def _create_promise(
-        type_info: TypeInfo, name: str, path: str, open_kwargs: Dict, load_kwargs: Dict
-    ) -> FilePromise:
+    def _create_promise(type_info: TypeInfo, name: str, path: str, open_kwargs: Dict, load_kwargs: Dict) -> FilePromise:
         # load the saved object from run dir
         mode = "rb" if type_info.is_binary else "r"
         if type_info.needs_path:
@@ -404,9 +407,7 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(
-                task_dir=task_dir, task_config=task_unique_config
-            )
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             return None
 
@@ -450,9 +451,7 @@ class LocalFileStore(ResultsStore):
                 ) as file:
                     obj = file.load(**load_kwargs)
             except FileNotFoundError:
-                logger.warning(
-                    f'Task "{task_name}" could not find "{name}" in results store. '
-                )
+                logger.warning(f'Task "{task_name}" could not find "{name}" in results store. ')
                 return None
 
         return obj
@@ -472,9 +471,7 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(
-                task_dir=task_dir, task_config=task_unique_config
-            )
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
             logger.warning(
                 f'"{name}" could not be deleted. '
@@ -498,9 +495,7 @@ class LocalFileStore(ResultsStore):
         try:
             os.remove(path_to_delete)
         except FileNotFoundError:
-            logger.warning(
-                f'"{path_to_delete}" could not be deleted from store since it was not found.'
-            )
+            logger.warning(f'"{path_to_delete}" could not be deleted from store since it was not found.')
         except IsADirectoryError:
             shutil.rmtree(path_to_delete)
 
@@ -520,13 +515,9 @@ class LocalFileStore(ResultsStore):
 
         # try to get existing run dir
         with self.lock:
-            run_dir = self._get_run_dir(
-                task_dir=task_dir, task_config=task_unique_config
-            )
+            run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
         if run_dir is None:
-            logger.warning(
-                f'No run directory for task "{task_name}" and the provided unique_config exists.'
-            )
+            logger.warning(f'No run directory for task "{task_name}" and the provided unique_config exists.')
             return None
 
         # delete retrieved run dir
@@ -575,9 +566,7 @@ class LocalFileStore(ResultsStore):
         #     position at start | +   +    +   +             +   +
         #     position at end   |                   +   +
 
-        assert promise is not None or all(
-            arg is not None for arg in (name, task_name, task_unique_config, mode)
-        )
+        assert promise is not None or all(arg is not None for arg in (name, task_name, task_unique_config, mode))
 
         if promise:
             if mode:
@@ -591,9 +580,7 @@ class LocalFileStore(ResultsStore):
 
             # try to get existing run dir
             with self.lock:
-                run_dir = self._get_run_dir(
-                    task_dir=task_dir, task_config=task_unique_config
-                )
+                run_dir = self._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
             if run_dir is None:
                 raise FileNotFoundError
 
@@ -639,9 +626,7 @@ class LocalFileStore(ResultsStore):
                 obj_dir = self._get_obj_dir(run_dir, sub_dir)
 
                 # save load info
-                self._save_load_info(
-                    name, run_dir, obj_dir, type_, open_kwargs, load_kwargs
-                )
+                self._save_load_info(name, run_dir, obj_dir, type_, open_kwargs, load_kwargs)
 
         else:
             run_dir = self.get_context(task_name, task_unique_config).run_dir
@@ -660,9 +645,7 @@ class LocalFileStore(ResultsStore):
             obj_dir = self._get_obj_dir(run_dir, sub_dir)
 
             # save load info
-            self._save_load_info(
-                name, run_dir, obj_dir, type_, open_kwargs, load_kwargs
-            )
+            self._save_load_info(name, run_dir, obj_dir, type_, open_kwargs, load_kwargs)
 
         # return file object
         name = f"{name}.{type_info.extension}" if type_info.extension else name
@@ -691,15 +674,11 @@ class LocalFileStore(ResultsStore):
 
         with self.lock:
             # try to get existing run dir
-            run_dir = LocalFileStore._get_run_dir(
-                task_dir=task_dir, task_config=task_unique_config
-            )
+            run_dir = LocalFileStore._get_run_dir(task_dir=task_dir, task_config=task_unique_config)
 
             # create new run dir if run dir does not exist
             if run_dir is None:
-                run_dir = LocalFileStore._make_run_dir(
-                    task_dir=task_dir, run_info=self.run_info
-                )
+                run_dir = LocalFileStore._make_run_dir(task_dir=task_dir, run_info=self.run_info)
                 json.dump(
                     task_unique_config,
                     open(os.path.join(run_dir, Names.CONFIG), "w"),
@@ -713,9 +692,7 @@ class LocalFileStore(ResultsStore):
     def _scan_task_dir(task_dir: str) -> List[str]:
         if not os.path.isdir(task_dir):
             return []
-        exist_run_dirs = [
-            os.path.join(task_dir, d.name) for d in os.scandir(task_dir) if d.is_dir()
-        ]
+        exist_run_dirs = [os.path.join(task_dir, d.name) for d in os.scandir(task_dir) if d.is_dir()]
         return exist_run_dirs
 
     @staticmethod
@@ -723,9 +700,7 @@ class LocalFileStore(ResultsStore):
         exist_run_dirs = LocalFileStore._scan_task_dir(task_dir=task_dir)
         for exist_run_dir in exist_run_dirs:
             try:
-                exist_config = json.load(
-                    open(os.path.join(exist_run_dir, Names.CONFIG), "r")
-                )
+                exist_config = json.load(open(os.path.join(exist_run_dir, Names.CONFIG), "r"))
             except FileNotFoundError:
                 continue
 
@@ -748,11 +723,7 @@ class LocalFileStore(ResultsStore):
             if run_info:
                 run_name = run_info.run_name
                 # find dirs that start with run_name and extract their suffix (usually a numeric counter)
-                dir_names = [
-                    name.rsplit("-", 1)[-1]
-                    for name in dir_names
-                    if name.startswith(run_name)
-                ]
+                dir_names = [name.rsplit("-", 1)[-1] for name in dir_names if name.startswith(run_name)]
 
             # get all numeric dir names in task dir and convert to ids
             ids = [int(d_name) for d_name in dir_names if d_name.isdigit()]
@@ -762,9 +733,7 @@ class LocalFileStore(ResultsStore):
             new_id = str(new_id).zfill(3)
 
             # create the new run dir name
-            new_dir_name = (
-                new_id if run_info is None else f"{run_info.run_name}-{new_id}"
-            )
+            new_dir_name = new_id if run_info is None else f"{run_info.run_name}-{new_id}"
 
         # create and return new run dir
         new_run_dir = os.path.join(task_dir, new_dir_name)
