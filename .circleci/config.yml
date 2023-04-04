@@ -15,7 +15,7 @@ shared: &shared
           pip install pytest
           pip install coverage
           pip install codecov
-          pip install .[mongo-store,rich-logging]
+          pip install .[mongo-store]
 
     - run:
         name: run unit tests
