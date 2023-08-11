@@ -39,23 +39,18 @@ def _expand(
 ) -> List[Dict]:
 
     # get list of dict values and wrap all non-list values in lists for product expansion
-    param_grid = [
-        [params] if not isinstance(params, list) else params
-        for params in splits_by_keys.values()
-    ]
+    param_grid = [[params] if not isinstance(params, list) else params for params in splits_by_keys.values()]
     keys = list(splits_by_keys)
 
     # extract zip identifiers and zip position ids from param grid
     zip_identifiers = [
-        params.pop(-1) if _has_zip_identifier(params, prefix=group_prefix) else None
-        for params in param_grid
+        params.pop(-1) if _has_zip_identifier(params, prefix=group_prefix) else None for params in param_grid
     ]
     param_grid_ids = [[i for i in range(len(pair))] for pair in param_grid]
 
     if method == "zip":
         zip_identifiers = [
-            f"{group_prefix}x" if isinstance(params, List) and len(params) > 1 else None
-            for params in param_grid
+            f"{group_prefix}x" if isinstance(params, List) and len(params) > 1 else None for params in param_grid
         ]
 
     for zip_identifier, params in zip(zip_identifiers, param_grid):
@@ -63,9 +58,7 @@ def _expand(
             zips[zip_identifier].add(len(params))
 
     # expand config via product
-    exp_configs: List[Dict] = _expand_product(
-        param_grid, keys, param_grid_ids, zip_identifiers
-    )
+    exp_configs: List[Dict] = _expand_product(param_grid, keys, param_grid_ids, zip_identifiers)
 
     return exp_configs
 
@@ -92,9 +85,7 @@ def expand_config_groups_and_parse_zip_identifiers(
         if not obj:  # in case of empty dict -> return dict without expanding
             return [obj]
         splits_per_key = {
-            key: expand_config_groups_and_parse_zip_identifiers(
-                child, zips, method, group_prefix
-            )
+            key: expand_config_groups_and_parse_zip_identifiers(child, zips, method, group_prefix)
             for key, child in obj.items()
         }
         return _expand(splits_per_key, zips, method, group_prefix)
@@ -102,12 +93,7 @@ def expand_config_groups_and_parse_zip_identifiers(
     elif isinstance(obj, List):
         if len(obj) == 1 and isinstance(obj[0], List):
             return [obj]
-        return [
-            expand_config_groups_and_parse_zip_identifiers(
-                item, zips, method, group_prefix
-            )
-            for item in obj
-        ]
+        return [expand_config_groups_and_parse_zip_identifiers(item, zips, method, group_prefix) for item in obj]
 
     else:
         return obj
@@ -118,9 +104,7 @@ def expand_grouped_configs(obj: Dict) -> Union[Any, List[Dict]]:
     if isinstance(obj, Dict):
         if not obj:  # in case of empty dict -> return dict without expanding
             return [obj]
-        splits_per_key = {
-            key: expand_grouped_configs(child) for key, child in obj.items()
-        }
+        splits_per_key = {key: expand_grouped_configs(child) for key, child in obj.items()}
         return _expand(splits_per_key, zips=None, method="product")
     elif isinstance(obj, List):
         if len(obj) == 1 and isinstance(obj[0], List):
@@ -166,22 +150,16 @@ def filter_and_process_configs(expanded_cfgs: List[Dict]) -> List[Dict]:
     for cfg in expanded_cfgs:
         zip_counts = defaultdict(set)
         cleaned_cfg = pop_zip_identifiers_from_config(cfg, zip_counts)
-        if all(
-            True if len(zip_count) == 1 else False for zip_count in zip_counts.values()
-        ):
+        if all(True if len(zip_count) == 1 else False for zip_count in zip_counts.values()):
             filtered_cfgs.append(cleaned_cfg)
     return filtered_cfgs
 
 
-def expand_default(
-    config: Dict[str, Any], method: str = "product", group_prefix: Optional[str] = None
-) -> List[Dict]:
+def expand_default(config: Dict[str, Any], method: str = "product", group_prefix: Optional[str] = None) -> List[Dict]:
     expanded_cfg_groups = expand_config_groups_and_parse_zip_identifiers(
         config, zips=defaultdict(set), method=method, group_prefix=group_prefix
     )
-    expanded_cfgs = [
-        cfg for group in expanded_cfg_groups for cfg in expand_grouped_configs(group)
-    ]
+    expanded_cfgs = [cfg for group in expanded_cfg_groups for cfg in expand_grouped_configs(group)]
     filtered_cfgs = filter_and_process_configs(expanded_cfgs)
     return filtered_cfgs
 
@@ -201,9 +179,7 @@ def expand_config(
                 f"or register your own method via the 'ConfigExpansionRegistry.add()' function."
             )
 
-        expanded_configs: List[Dict] = expansion_method(
-            config, group_prefix=group_prefix
-        )
+        expanded_configs: List[Dict] = expansion_method(config, group_prefix=group_prefix)
     else:
         expanded_configs: List[Dict] = [config]
 

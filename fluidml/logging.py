@@ -58,9 +58,7 @@ def configure_logging(
     logger.setLevel(level)
 
 
-def create_stream_handler(
-    stream: Optional[IO] = None, rich_logging: bool = True
-) -> logging.Handler:
+def create_stream_handler(stream: Optional[IO] = None, rich_logging: bool = True) -> logging.Handler:
     if rich_logging:
         console_ = Console(file=stream, color_system="standard") if stream else None
         formatter = logging.Formatter("%(processName)-13s%(message)s")
@@ -76,9 +74,7 @@ def create_stream_handler(
             fmt="%(asctime)s %(levelname)-8s %(processName)-13s %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
-        stream_handler = (
-            logging.StreamHandler(stream) if stream else logging.StreamHandler()
-        )
+        stream_handler = logging.StreamHandler(stream) if stream else logging.StreamHandler()
 
     stream_handler.setFormatter(formatter)
     return stream_handler
@@ -247,9 +243,7 @@ class TmuxManager:
         tmux_pipes = {}
         for i, worker_name in enumerate(self.worker_names):
             # create named pipes (fifos) for stdout and stderr messages
-            stdout_pipe, stderr_pipe = TmuxManager._create_stdout_stderr_pipes(
-                worker_name
-            )
+            stdout_pipe, stderr_pipe = TmuxManager._create_stdout_stderr_pipes(worker_name)
 
             # command enables tmux session to read from pipes to show stdout and stderr from child process
             # read_from_pipe_cmd = f"cat {stdout_pipe} & cat {stderr_pipe}"
@@ -317,9 +311,7 @@ class TmuxManager:
         try:
             subprocess.check_output(cmd, shell=True, stderr=subprocess.PIPE)
         except subprocess.CalledProcessError as e:
-            raise TmuxError(
-                f"Please resolve the following tmux error: '{e.stderr.decode('utf-8').strip()}'."
-            ) from None
+            raise TmuxError(f"Please resolve the following tmux error: '{e.stderr.decode('utf-8').strip()}'.") from None
 
 
 class LoggingListener(Thread):
@@ -347,9 +339,7 @@ class LoggingListener(Thread):
         self._lock = lock
 
     @staticmethod
-    def _handle_log_msg(
-        record: LogRecord, tmux_handler: Optional[logging.Handler] = None
-    ):
+    def _handle_log_msg(record: LogRecord, tmux_handler: Optional[logging.Handler] = None):
         logger = logging.getLogger(record.name)
         logger.handle(record)
 

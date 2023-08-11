@@ -15,9 +15,7 @@ class VertexViewer:
 
     HEIGHT = 3
 
-    def __init__(
-        self, name: str, height: Optional[int] = None, width: Optional[int] = None
-    ):
+    def __init__(self, name: str, height: Optional[int] = None, width: Optional[int] = None):
         # height of the node (top and bottom box edges + name).
         self.h = height if height is not None else self.HEIGHT
         # width of the node (right and left bottom edges + name).

@@ -31,7 +31,5 @@ def test_save_load(file_store: ResultsStore, type_: str):
         task_name=test_task_name,
         task_unique_config=test_config,
     )
-    loaded_json_obj = file_store.load(
-        name=test_item_name, task_name=test_task_name, task_unique_config=test_config
-    )
+    loaded_json_obj = file_store.load(name=test_item_name, task_name=test_task_name, task_unique_config=test_config)
     assert loaded_json_obj == test_json_obj

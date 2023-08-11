@@ -86,9 +86,7 @@ class TaskDataController:
 
             # remove args from missing inputs if a default value is registered in the task run signature
             missing_inputs = [
-                arg
-                for arg in missing_inputs
-                if self._task_expects[arg].default is self._task_expects[arg].empty
+                arg for arg in missing_inputs if self._task_expects[arg].default is self._task_expects[arg].empty
             ]
             if missing_inputs:
                 raise TaskResultObjectMissing(

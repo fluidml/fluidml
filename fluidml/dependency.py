@@ -12,24 +12,15 @@ class DependencyMixin:
         self._predecessors = []
         self._successors = []
 
-    def requires(
-        self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]
-    ):
+    def requires(self, *predecessors: Union["TaskSpec", List["TaskSpec"], "Task", List["Task"]]):
         """Registers one or more predecessor task/task spec objects to the current task/task spec
 
         Args:
             *predecessors: A sequence of predecessor task/task spec objects.
         """
         if len(predecessors) == 1:
-            predecessors = (
-                predecessors[0]
-                if isinstance(predecessors[0], List)
-                else [predecessors[0]]
-            )
-        elif any(
-            True if isinstance(task_spec, (List, Tuple)) else False
-            for task_spec in predecessors
-        ):
+            predecessors = predecessors[0] if isinstance(predecessors[0], List) else [predecessors[0]]
+        elif any(True if isinstance(task_spec, (List, Tuple)) else False for task_spec in predecessors):
             raise TypeError(
                 f"task_spec.requires() either takes a single list of predecessors, "
                 f"task_spec.requires([a, b, c]) or a sequence of individual predecessor args"

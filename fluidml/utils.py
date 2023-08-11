@@ -275,7 +275,7 @@ def change_logging_level(level: int):
         raise
 
 
-def removesuffix(text: str, suffix: str) -> str:
+def remove_suffix(text: str, suffix: str) -> str:
     if text.endswith(suffix):
         return text[: -len(suffix)]
     return text
@@ -322,7 +322,7 @@ def convert_legacy_file_store_structure(path: str):
         # get saved file names based on load_info files
         names = []
         for path in glob.glob(os.path.join(fluidml_dir, ".*_load_info.p")):
-            name = removesuffix(os.path.split(path)[-1].lstrip("."), suffix="_load_info.p")
+            name = remove_suffix(os.path.split(path)[-1].lstrip("."), suffix="_load_info.p")
             names.append(name)
 
         # remove legacy completed file from list of saved objects
