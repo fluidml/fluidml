@@ -254,9 +254,7 @@ class Task(ABC, DependencyMixin):
                     task_unique_config=self.unique_config,
                 )
         else:
-            raise ValueError(
-                f'"mode" argument is "{mode}" but must be "save" or "delete".'
-            )
+            raise ValueError(f'"mode" argument is "{mode}" but must be "save" or "delete".')
 
         debug_msg = f'Task "{self.unique_name}" {mode}s "{name}"'
         msg = debug_msg + f"." if type_ is None else debug_msg + f' of type "{type_}".'
@@ -301,9 +299,7 @@ class Task(ABC, DependencyMixin):
             The loaded object.
         """
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = (
-            task_unique_config if task_unique_config is not None else self.unique_config
-        )
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
         return self.results_store.load(
             name=name,
@@ -326,13 +322,9 @@ class Task(ABC, DependencyMixin):
             task_unique_config: Unique config which specifies the run of the object.
         """
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = (
-            task_unique_config if task_unique_config is not None else self.unique_config
-        )
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        self.results_store.delete(
-            name=name, task_name=task_name, task_unique_config=task_unique_config
-        )
+        self.results_store.delete(name=name, task_name=task_name, task_unique_config=task_unique_config)
         self._track_saved_object(name, mode="delete")
 
     def delete_run(
@@ -347,13 +339,9 @@ class Task(ABC, DependencyMixin):
             task_unique_config: Unique config which specifies the run of the object.
         """
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = (
-            task_unique_config if task_unique_config is not None else self.unique_config
-        )
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        self.results_store.delete_run(
-            task_name=task_name, task_unique_config=task_unique_config
-        )
+        self.results_store.delete_run(task_name=task_name, task_unique_config=task_unique_config)
 
     def get_store_context(
         self,
@@ -370,13 +358,9 @@ class Task(ABC, DependencyMixin):
             The store context object holding information like the current run dir.
         """
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = (
-            task_unique_config if task_unique_config is not None else self.unique_config
-        )
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
-        return self.results_store.get_context(
-            task_name=task_name, task_unique_config=task_unique_config
-        )
+        return self.results_store.get_context(task_name=task_name, task_unique_config=task_unique_config)
 
     def open(
         self,
@@ -409,9 +393,7 @@ class Task(ABC, DependencyMixin):
             return self.results_store.open(promise=promise, mode=mode)
 
         task_name = task_name if task_name is not None else self.name
-        task_unique_config = (
-            task_unique_config if task_unique_config is not None else self.unique_config
-        )
+        task_unique_config = task_unique_config if task_unique_config is not None else self.unique_config
 
         if mode is not None and ("w" in mode or "a" in mode):
             self._track_saved_object(name, mode="save", type_=type_)

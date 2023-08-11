@@ -66,20 +66,14 @@ def test_pipeline(dummy_resource, tmp_path: pathlib.Path):
     num_workers = 4
 
     # initialize all task specs
-    parse_task = TaskSpec(
-        task=Parsing, config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1}
-    )
-    preprocess_task = TaskSpec(
-        task=preprocess, config={"pipeline": ["a", "b"], "abc": 1}, expand="product"
-    )
+    parse_task = TaskSpec(task=Parsing, config={"in_dir": "/some/dir"}, additional_kwargs={"z": 1})
+    preprocess_task = TaskSpec(task=preprocess, config={"pipeline": ["a", "b"], "abc": 1}, expand="product")
     featurize_tokens_task = TaskSpec(
         task=featurize_tokens,
         config={"type_": "flair", "batch_size": [2, 3]},
         expand="product",
     )
-    featurize_cells_task = TaskSpec(
-        task=featurize_cells, config={"type_": "glove", "batch_size": 4}
-    )
+    featurize_cells_task = TaskSpec(task=featurize_cells, config={"type_": "glove", "batch_size": 4})
     train_task = TaskSpec(
         task=train,
         config={

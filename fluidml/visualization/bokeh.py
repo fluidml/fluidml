@@ -91,10 +91,7 @@ def visualize_graph_interactive(
 
     # get sugiyama layout
     layout = _build_sugiyama_layout(reformatted_graph, 10, node_height, node_width)
-    positions = {
-        vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1])
-        for vertex in layout.g.sV
-    }
+    positions = {vertex.data.strip(): (vertex.view.xy[0], vertex.view.xy[1]) for vertex in layout.g.sV}
     positions = flip_positions(positions, plot_height)
 
     # get positions

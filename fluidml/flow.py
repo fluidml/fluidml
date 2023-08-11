@@ -49,15 +49,9 @@ class Flow:
     ):
         # assign config_ignore_prefix and config_group_prefix to all tasks if the task has no prefix assigned, yet
         for task_spec in tasks:
-            if (
-                config_group_prefix is not None
-                and task_spec.config_group_prefix is None
-            ):
+            if config_group_prefix is not None and task_spec.config_group_prefix is None:
                 task_spec.config_group_prefix = config_group_prefix
-            if (
-                config_ignore_prefix is not None
-                and task_spec.config_ignore_prefix is None
-            ):
+            if config_ignore_prefix is not None and task_spec.config_ignore_prefix is None:
                 task_spec.config_ignore_prefix = config_ignore_prefix
 
         # contains the expanded graph as list of Task objects -> used internally in swarm
@@ -83,9 +77,7 @@ class Flow:
         Flow._check_no_task_name_clash(task_specs=task_specs)
 
         ordered_task_specs = self._order_task_specs(task_specs=task_specs)
-        self._expanded_tasks: List[Task] = Flow._expand_and_link_tasks(
-            ordered_task_specs
-        )
+        self._expanded_tasks: List[Task] = Flow._expand_and_link_tasks(ordered_task_specs)
         self.task_graph: DiGraph = Flow._create_graph_from_task_spec_list(
             task_specs=self._expanded_tasks, name="task graph"
         )
@@ -93,11 +85,7 @@ class Flow:
     def _infer_optimal_number_of_workers_from_graph(self) -> int:
         """Analyzes the graphs layout and finds the maximal number of tasks executed in parallel."""
         # get root tasks
-        root_tasks = [
-            task.unique_name
-            for task in self._expanded_tasks
-            if len(task.predecessors) == 0
-        ]
+        root_tasks = [task.unique_name for task in self._expanded_tasks if len(task.predecessors) == 0]
 
         # assign to each node the node's level in the directed graph
         node_to_lvl = {}
@@ -106,9 +94,7 @@ class Flow:
             lvl = 0
             node_to_lvl[root] = lvl
             # assign lvl to all successor nodes recursively
-            Flow._assign_lvl_to_node_recursively(
-                root, self.task_graph, lvl, node_to_lvl
-            )
+            Flow._assign_lvl_to_node_recursively(root, self.task_graph, lvl, node_to_lvl)
 
         # get the amount of nodes per lvl in the graph
         lvl_to_num = defaultdict(int)
@@ -121,9 +107,7 @@ class Flow:
         return optimal_num_workers
 
     @staticmethod
-    def _assign_lvl_to_node_recursively(
-        node: str, graph: nx.DiGraph, lvl: int, node_to_lvl: Dict[str, int]
-    ):
+    def _assign_lvl_to_node_recursively(node: str, graph: nx.DiGraph, lvl: int, node_to_lvl: Dict[str, int]):
         lvl += 1
         for successor in graph.successors(node):
             if successor not in node_to_lvl or node_to_lvl[successor] < lvl:
@@ -182,9 +166,7 @@ class Flow:
         return graph
 
     def _create_task_spec_graph(self, task_specs: List[TaskSpec]) -> DiGraph:
-        task_spec_graph = Flow._create_graph_from_task_spec_list(
-            task_specs=task_specs, name="task spec graph"
-        )
+        task_spec_graph = Flow._create_graph_from_task_spec_list(task_specs=task_specs, name="task spec graph")
 
         # assure that task spec graph contains no cyclic dependencies
         Flow._check_acyclic(graph=task_spec_graph)
@@ -197,9 +179,7 @@ class Flow:
             if len(force) == 1 and force[0] == "all":
                 force = force[0]
             elif "all" in force:
-                raise TypeError(
-                    '"all" must be provided as str or list of length 1 to the "force" argument.'
-                )
+                raise TypeError('"all" must be provided as str or list of length 1 to the "force" argument.')
 
         # if force == 'all' set force to True for all tasks
         if force == "all":
@@ -215,9 +195,7 @@ class Flow:
             raise TypeError('"force" argument has to be of type str or list of str.')
 
         # get all user provided task names to force execute
-        force_task_names = [
-            task_name[:-1] if task_name[-1] == "+" else task_name for task_name in force
-        ]
+        force_task_names = [task_name[:-1] if task_name[-1] == "+" else task_name for task_name in force]
         # get all task names defined in the task spec graph
         task_names = list(self.task_spec_graph.nodes)
         # find all user provided task names to force execute that don't exist in the task spec graph
@@ -225,8 +203,7 @@ class Flow:
         # if any unknown names are found, raise a ValueError
         if unknown_task_names:
             raise ValueError(
-                f'The following task names provided to "force" are unknown: '
-                f'{", ".join(unknown_task_names)}'
+                f'The following task names provided to "force" are unknown: ' f'{", ".join(unknown_task_names)}'
             )
 
         # create a list of unique task names to force execute
@@ -238,9 +215,7 @@ class Flow:
                 task_name = task_name[:-1]
                 successor_tasks = [
                     successor
-                    for successors in nx.dfs_successors(
-                        self.task_spec_graph, task_name
-                    ).values()
+                    for successors in nx.dfs_successors(self.task_spec_graph, task_name).values()
                     for successor in successors
                 ]
                 tasks_to_force_execute.extend(successor_tasks)
@@ -260,10 +235,7 @@ class Flow:
         task_spec_graph: DiGraph = self._create_task_spec_graph(task_specs=task_specs)
 
         # topological ordering of tasks in graph
-        sorted_specs = [
-            task_spec_graph.nodes[task_name]["task"]
-            for task_name in topological_sort(task_spec_graph)
-        ]
+        sorted_specs = [task_spec_graph.nodes[task_name]["task"] for task_name in topological_sort(task_spec_graph)]
         return sorted_specs
 
     @staticmethod
@@ -286,9 +258,7 @@ class Flow:
         # we validate the task combinations based on their path in the task graph
         # if two tasks have same parent task and their configs are different
         # then the combination is not valid
-        task_names_in_path = list(
-            set(name for task in task_combination for name in task.unique_config)
-        )
+        task_names_in_path = list(set(name for task in task_combination for name in task.unique_config))
 
         # for each defined task name in path config
         for name in task_names_in_path:
@@ -306,22 +276,11 @@ class Flow:
         return True
 
     @staticmethod
-    def _get_predecessor_product(
-        expanded_tasks_by_name: Dict[str, List[Task]], spec: TaskSpec
-    ) -> List[List[Task]]:
-        predecessor_tasks = [
-            expanded_tasks_by_name[predecessor.name]
-            for predecessor in spec.predecessors
-        ]
-        task_combinations = (
-            [list(item) for item in product(*predecessor_tasks)]
-            if predecessor_tasks
-            else [[]]
-        )
+    def _get_predecessor_product(expanded_tasks_by_name: Dict[str, List[Task]], spec: TaskSpec) -> List[List[Task]]:
+        predecessor_tasks = [expanded_tasks_by_name[predecessor.name] for predecessor in spec.predecessors]
+        task_combinations = [list(item) for item in product(*predecessor_tasks)] if predecessor_tasks else [[]]
         task_combinations = [
-            combination
-            for combination in task_combinations
-            if Flow._validate_task_combination(combination)
+            combination for combination in task_combinations if Flow._validate_task_combination(combination)
         ]
         return task_combinations
 
@@ -333,36 +292,20 @@ class Flow:
         return config
 
     @staticmethod
-    def _merge_task_combination_configs(
-        task_combinations: List[List[Task]], task_specs: List[TaskSpec]
-    ) -> Dict:
+    def _merge_task_combination_configs(task_combinations: List[List[Task]], task_specs: List[TaskSpec]) -> Dict:
 
-        task_configs = [
-            task.unique_config
-            for combination in task_combinations
-            for task in combination
-        ]
+        task_configs = [task.unique_config for combination in task_combinations for task in combination]
         merged_config = task_configs.pop(0)
         for config in task_configs:
             merged_config: Dict = update_merge(merged_config, config)
 
         if task_configs:
             # get all task names that were specified as GridTaskSpec
-            grid_task_names = [
-                spec.name for spec in task_specs if spec.expand_fn is not None
-            ]
+            grid_task_names = [spec.name for spec in task_specs if spec.expand_fn is not None]
 
             # split merged_config in grid_task_config and normal_task_config
-            grid_task_config = {
-                key: value
-                for key, value in merged_config.items()
-                if key in grid_task_names
-            }
-            normal_task_config = {
-                key: value
-                for key, value in merged_config.items()
-                if key not in grid_task_names
-            }
+            grid_task_config = {key: value for key, value in merged_config.items() if key in grid_task_names}
+            normal_task_config = {key: value for key, value in merged_config.items() if key not in grid_task_names}
 
             # reformat only grid_task_config (replace tuples by lists)
             grid_task_config: Dict = reformat_config(grid_task_config)
@@ -379,9 +322,7 @@ class Flow:
         # for each spec to expand
         for spec in specs:
             # get predecessor task combinations
-            task_combinations = Flow._get_predecessor_product(
-                expanded_tasks_by_name, spec
-            )
+            task_combinations = Flow._get_predecessor_product(expanded_tasks_by_name, spec)
 
             if spec.reduce:
                 # if it is a reduce task, just add the predecessor task combinations as parents
@@ -391,9 +332,7 @@ class Flow:
                     # merge configs from all predecessors to get a single reduced predecessor config
                     # note: this config might differ from the original grid config since original grid lists
                     #  containing dicts can not be recovered when merging expanded configs
-                    predecessor_config = Flow._merge_task_combination_configs(
-                        task_combinations, specs
-                    )
+                    predecessor_config = Flow._merge_task_combination_configs(task_combinations, specs)
 
                     # add dependencies
                     for task_combination in task_combinations:
@@ -456,20 +395,14 @@ class Flow:
         """
         max_num_workers = multiprocessing.cpu_count()
         optimal_num_workers = self._infer_optimal_number_of_workers_from_graph()
-        optimal_num_workers = (
-            optimal_num_workers
-            if optimal_num_workers <= max_num_workers
-            else max_num_workers
-        )
+        optimal_num_workers = optimal_num_workers if optimal_num_workers <= max_num_workers else max_num_workers
         if num_workers is None or num_workers > optimal_num_workers:
             num_workers = optimal_num_workers
 
         return num_workers
 
     @staticmethod
-    def _process_resources(
-        num_workers: int, resources: Optional[Any] = None
-    ) -> Optional[List[Any]]:
+    def _process_resources(num_workers: int, resources: Optional[Any] = None) -> Optional[List[Any]]:
         # convert resources to list if a single resource was provided
         # and trim list of resources to actual number of used workers
         if resources is None:
@@ -540,9 +473,7 @@ class Flow:
             run_name = generate_run_name()
 
         # if InMemoryStore is used, return the latest pipeline results
-        if return_results is None and (
-            results_store is None or isinstance(results_store, InMemoryStore)
-        ):
+        if return_results is None and (results_store is None or isinstance(results_store, InMemoryStore)):
             return_results = "latest"
 
         # get maximum number of available workers

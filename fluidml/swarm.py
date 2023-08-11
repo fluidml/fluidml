@@ -128,15 +128,15 @@ class Swarm:
             for i in range(self.n_dolphins)
         ]
 
-    def _init_mp_logging(
-        self, project_name: Optional[str] = None, run_name: Optional[str] = None
-    ) -> LoggingListener:
+        # rename workers
+        for i, dolphin in enumerate(self.dolphins, 1):
+            dolphin.name = f"{dolphin.__class__.__name__}-{i}"
+
+    def _init_mp_logging(self, project_name: Optional[str] = None, run_name: Optional[str] = None) -> LoggingListener:
         """Initialize logging in the case of multiprocessing."""
         tmux_manager = None
         if self.log_to_tmux and TmuxManager.is_tmux_installed():
-            session_name = (
-                project_name if run_name is None else f"{project_name}--{run_name}"
-            )
+            session_name = project_name if run_name is None else f"{project_name}--{run_name}"
             tmux_manager = TmuxManager(
                 worker_names=[dolphin.name for dolphin in self.dolphins],
                 session_name=session_name,
@@ -207,8 +207,10 @@ class Swarm:
         try:
             # start the workers
             for i, dolphin in enumerate(self.dolphins, 1):
-                dolphin.name = f"{dolphin.__class__.__name__}-{i}"
-                dolphin.daemon = True
+                # set workers as non-daemonic to allow for nested multiprocessing
+                # see https://superfastpython.com/daemon-process-in-python/#Need_for_Daemon_Processes for further
+                #  explanations
+                dolphin.daemon = False
                 dolphin.start()
 
             # join processes and logging thread
@@ -252,9 +254,7 @@ class Swarm:
             A Dict with the tasks results and configs.
         """
         # setup results store
-        results_store = (
-            results_store if results_store is not None else InMemoryStore(self.manager)
-        )
+        results_store = results_store if results_store is not None else InMemoryStore(self.manager)
 
         # get entry point task ids
         entry_point_tasks: List[str] = self._get_entry_point_tasks(tasks)
@@ -277,9 +277,7 @@ class Swarm:
             self.task_states[task_unique_name] = TaskState.SCHEDULED
 
         if self.n_dolphins > 1:
-            logger.info(
-                f'Execute run "{run_name}" using multiprocessing with {self.n_dolphins} workers'
-            )
+            logger.info(f'Execute run "{run_name}" using multiprocessing with {self.n_dolphins} workers')
             self._run_parallel(project_name, run_name)
         else:
             logger.info(f'Execute run "{run_name}" sequentially (no multiprocessing)')

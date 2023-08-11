@@ -1,10 +1,13 @@
 import contextlib
 import datetime
+import glob
 import hashlib
 import json
 import logging
 import os
+import pickle
 import random
+import shutil
 import string
 from typing import Any, Dict, Optional, Tuple, Union
 
@@ -44,10 +47,7 @@ def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
         return {
             **d1,
             **d2,
-            **{
-                k: d1[k] if d1[k] == d2[k] else update_merge(d1[k], d2[k])
-                for k in sorted({*d1} & {*d2})
-            },
+            **{k: d1[k] if d1[k] == d2[k] else update_merge(d1[k], d2[k]) for k in sorted({*d1} & {*d2})},
         }
     else:
         # This case happens when values are merged
@@ -61,9 +61,7 @@ def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:
             combined = d1 + d2
         else:
             combined = (d1, d2)
-        return tuple(
-            element for i, element in enumerate(combined) if element not in combined[:i]
-        )
+        return tuple(element for i, element in enumerate(combined) if element not in combined[:i])
 
 
 def reformat_config(d: Dict) -> Dict:
@@ -104,11 +102,7 @@ def remove_none_from_dict(obj: Dict) -> Dict:
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_none_from_dict(x) for x in obj if x is not None)
     elif isinstance(obj, dict):
-        return {
-            k: remove_none_from_dict(v)
-            for k, v in obj.items()
-            if k is not None and v is not None
-        }
+        return {k: remove_none_from_dict(v) for k, v in obj.items() if k is not None and v is not None}
     else:
         return obj
 
@@ -127,9 +121,7 @@ def remove_value_from_dict(obj: Dict, value: Any) -> Dict:
     if isinstance(obj, (list, tuple, set)):
         return type(obj)(remove_value_from_dict(x, value) for x in obj if x != value)
     elif isinstance(obj, dict):
-        return {
-            k: remove_value_from_dict(v, value) for k, v in obj.items() if v != value
-        }
+        return {k: remove_value_from_dict(v, value) for k, v in obj.items() if v != value}
     else:
         return obj
 
@@ -153,8 +145,7 @@ def remove_prefixed_keys_from_dict(obj: Dict, prefix: Optional[str] = None) -> D
         return {
             k: remove_prefixed_keys_from_dict(v, prefix)
             for k, v in obj.items()
-            if not isinstance(k, str)
-            or (isinstance(k, str) and not k.startswith(prefix))
+            if not isinstance(k, str) or (isinstance(k, str) and not k.startswith(prefix))
         }
     else:
         return obj
@@ -177,11 +168,9 @@ def remove_prefix_from_dict(obj: Dict, prefix: Optional[str] = None) -> Dict:
         return type(obj)(remove_prefix_from_dict(x, prefix) for x in obj)
     elif isinstance(obj, dict):
         return {
-            (
-                k.split(prefix, 1)[-1]
-                if isinstance(k, str) and k.startswith(prefix)
-                else k
-            ): remove_prefix_from_dict(v, prefix)
+            (k.split(prefix, 1)[-1] if isinstance(k, str) and k.startswith(prefix) else k): remove_prefix_from_dict(
+                v, prefix
+            )
             for k, v in obj.items()
         }
     else:
@@ -284,3 +273,114 @@ def change_logging_level(level: int):
     except Exception:
         root_logger.setLevel(old_logging_level)
         raise
+
+
+def remove_suffix(text: str, suffix: str) -> str:
+    if text.endswith(suffix):
+        return text[: -len(suffix)]
+    return text
+
+
+def convert_legacy_file_store_structure(path: str):
+    """Converts the fluidml 0.2.X file store structure to the new 0.3.X structure.
+
+    Args:
+        path: The base directory of legacy experiments. Recursively converts the entire directory to the new structure.
+    """
+
+    # recursively get all ".load_info" directories
+    load_info_dirs = list(glob.iglob(os.path.join(path, "**", ".load_info"), recursive=True))
+
+    for load_info_dir in load_info_dirs:
+        # get run dir
+        run_dir = os.path.split(load_info_dir)[0]
+
+        # load config
+        config_path = os.path.join(run_dir, "config.json")
+        config = json.load(open(config_path, "r"))
+
+        # create config hash
+        config_hash = create_unique_hash_from_config(cfg=config)
+
+        # infer run's start time based on config.json creation/modification date
+        start_time = datetime.datetime.fromtimestamp(os.path.getmtime(config_path))
+
+        # infer run's end_time based on creation/modification time of last saved result object
+        end_time = max(
+            datetime.datetime.fromtimestamp(os.path.getmtime(path))
+            for path in glob.iglob(os.path.join(run_dir, "**"), recursive=True)
+            if os.path.isfile(path)
+        )
+        duration = end_time - start_time
+
+        # copy legacy ".load_info" directory into new ".fluidml" directory if no ".fluidml" dir exists
+        fluidml_dir = os.path.join(run_dir, ".fluidml")
+        if os.path.isdir(fluidml_dir):
+            continue
+        shutil.copytree(src=load_info_dir, dst=fluidml_dir)
+
+        # get saved file names based on load_info files
+        names = []
+        for path in glob.glob(os.path.join(fluidml_dir, ".*_load_info.p")):
+            name = remove_suffix(os.path.split(path)[-1].lstrip("."), suffix="_load_info.p")
+            names.append(name)
+
+        # remove legacy completed file from list of saved objects
+        filtered_names = [name for name in names if name != "completed"]
+
+        # create new ".saved_results.json" file
+        json.dump(filtered_names, open(os.path.join(fluidml_dir, ".saved_results.json"), "w"))
+        # create new ".saved_results_load_info.p file
+        saved_results_load_info = {
+            "open_kwargs": {},
+            "load_kwargs": {},
+            "obj_dir": ".fluidml",
+            "type_": "json",
+        }
+        pickle.dump(
+            saved_results_load_info,
+            open(os.path.join(fluidml_dir, ".saved_results_load_info.p"), "wb"),
+        )
+
+        # create new fluidml_info.json file in run_dir
+        finished = "finished" if "completed" in names else "failed"
+        run_id = os.path.split(run_dir)[-1]
+        run_dir_name = run_id.rsplit("-", 1)
+        if len(run_dir_name) == 1 and run_dir_name[0].isnumeric():
+            run_name = run_dir_name[0]
+            sweep_counter = run_dir_name[0]
+        elif len(run_dir_name) == 1:
+            run_name = run_dir_name[0]
+            sweep_counter = "000"
+        else:
+            run_name = run_dir_name[0]
+            sweep_counter = run_dir_name[1] if run_dir_name[1].isnumeric() else "000"
+
+        fluidml_info = {
+            "project_name": "fluidml",
+            "run_name": run_name,
+            "state": finished,
+            "started": str(start_time),
+            "ended": str(end_time),
+            "duration": str(duration),
+            "run_history": {},  # this is currently not retrieved
+            "sweep_counter": sweep_counter,
+            "unique_config_hash": config_hash,
+            "id": run_id,
+        }
+        json.dump(
+            fluidml_info,
+            open(os.path.join(run_dir, "fluidml_info.json"), "w"),
+            indent=4,
+        )
+
+        # create new .fluidml_info_load_info.p file
+        fluidml_info_load_info = {"open_kwargs": {}, "load_kwargs": {}, "obj_dir": ".", "type_": "json"}
+        pickle.dump(
+            fluidml_info_load_info,
+            open(os.path.join(fluidml_dir, ".fluidml_info_load_info.p"), "wb"),
+        )
+
+        # remove .completed files from .fluidml dir
+        for file in glob.glob(os.path.join(fluidml_dir, ".completed*")):
+            os.remove(file)

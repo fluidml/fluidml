@@ -21,12 +21,7 @@ class Encoder(nn.Module):
         self.tok_embedding = nn.Embedding(input_dim, hid_dim)
         self.pos_embedding = nn.Embedding(max_length, hid_dim)
 
-        self.layers = nn.ModuleList(
-            [
-                EncoderLayer(hid_dim, n_heads, pf_dim, dropout, device)
-                for _ in range(n_layers)
-            ]
-        )
+        self.layers = nn.ModuleList([EncoderLayer(hid_dim, n_heads, pf_dim, dropout, device) for _ in range(n_layers)])
 
         self.dropout = nn.Dropout(dropout)
 
@@ -39,15 +34,11 @@ class Encoder(nn.Module):
         batch_size = src.shape[0]
         src_len = src.shape[1]
 
-        pos = (
-            torch.arange(0, src_len).unsqueeze(0).repeat(batch_size, 1).to(self.device)
-        )
+        pos = torch.arange(0, src_len).unsqueeze(0).repeat(batch_size, 1).to(self.device)
 
         # pos = [batch size, src len]
 
-        src = self.dropout(
-            (self.tok_embedding(src) * self.scale) + self.pos_embedding(pos)
-        )
+        src = self.dropout((self.tok_embedding(src) * self.scale) + self.pos_embedding(pos))
 
         # src = [batch size, src len, hid dim]
 
@@ -66,9 +57,7 @@ class EncoderLayer(nn.Module):
         self.self_attn_layer_norm = nn.LayerNorm(hid_dim)
         self.ff_layer_norm = nn.LayerNorm(hid_dim)
         self.self_attention = MultiHeadAttentionLayer(hid_dim, n_heads, dropout, device)
-        self.positionwise_feedforward = PositionwiseFeedforwardLayer(
-            hid_dim, pf_dim, dropout
-        )
+        self.positionwise_feedforward = PositionwiseFeedforwardLayer(hid_dim, pf_dim, dropout)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, src, src_mask):
@@ -209,12 +198,7 @@ class Decoder(nn.Module):
         self.tok_embedding = nn.Embedding(output_dim, hid_dim)
         self.pos_embedding = nn.Embedding(max_length, hid_dim)
 
-        self.layers = nn.ModuleList(
-            [
-                DecoderLayer(hid_dim, n_heads, pf_dim, dropout, device)
-                for _ in range(n_layers)
-            ]
-        )
+        self.layers = nn.ModuleList([DecoderLayer(hid_dim, n_heads, pf_dim, dropout, device) for _ in range(n_layers)])
 
         self.fc_out = nn.Linear(hid_dim, output_dim)
 
@@ -231,15 +215,11 @@ class Decoder(nn.Module):
         batch_size = trg.shape[0]
         trg_len = trg.shape[1]
 
-        pos = (
-            torch.arange(0, trg_len).unsqueeze(0).repeat(batch_size, 1).to(self.device)
-        )
+        pos = torch.arange(0, trg_len).unsqueeze(0).repeat(batch_size, 1).to(self.device)
 
         # pos = [batch size, trg len]
 
-        trg = self.dropout(
-            (self.tok_embedding(trg) * self.scale) + self.pos_embedding(pos)
-        )
+        trg = self.dropout((self.tok_embedding(trg) * self.scale) + self.pos_embedding(pos))
 
         # trg = [batch size, trg len, hid dim]
 
@@ -264,12 +244,8 @@ class DecoderLayer(nn.Module):
         self.enc_attn_layer_norm = nn.LayerNorm(hid_dim)
         self.ff_layer_norm = nn.LayerNorm(hid_dim)
         self.self_attention = MultiHeadAttentionLayer(hid_dim, n_heads, dropout, device)
-        self.encoder_attention = MultiHeadAttentionLayer(
-            hid_dim, n_heads, dropout, device
-        )
-        self.positionwise_feedforward = PositionwiseFeedforwardLayer(
-            hid_dim, pf_dim, dropout
-        )
+        self.encoder_attention = MultiHeadAttentionLayer(hid_dim, n_heads, dropout, device)
+        self.positionwise_feedforward = PositionwiseFeedforwardLayer(hid_dim, pf_dim, dropout)
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, trg, enc_src, trg_mask, src_mask):
@@ -341,9 +317,7 @@ class Seq2SeqTransformer(nn.Module):
 
         trg_len = trg.shape[1]
 
-        trg_sub_mask = torch.tril(
-            torch.ones((trg_len, trg_len), device=self.device)
-        ).bool()
+        trg_sub_mask = torch.tril(torch.ones((trg_len, trg_len), device=self.device)).bool()
 
         # trg_sub_mask = [trg len, trg len]
 

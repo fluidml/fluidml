@@ -32,9 +32,7 @@ class FluidPager:
             or not sys.stdin.isatty()
             or not sys.stdout.isatty()
         ):
-            logger.warning(
-                "Console does not support paging. Defaulting to print graph."
-            )
+            logger.warning("Console does not support paging. Defaulting to print graph.")
             return pydoc.plainpager
 
         self.use_pager = os.environ.get("MANPAGER") or os.environ.get("PAGER")
@@ -42,17 +40,13 @@ class FluidPager:
             if "less" in self.use_pager:
                 self.use_pager = FluidPager.IDEAL_PAGER
             if sys.platform == "win32":  # pipes completely broken in Windows
-                return lambda text: pydoc.tempfilepager(
-                    pydoc.plain(text), self.use_pager
-                )
+                return lambda text: pydoc.tempfilepager(pydoc.plain(text), self.use_pager)
             elif os.environ.get("TERM") in ("dumb", "emacs"):
                 return lambda text: pydoc.pipepager(pydoc.plain(text), self.use_pager)
             else:
                 return lambda text: pydoc.pipepager(text, self.use_pager)
         if os.environ.get("TERM") in ("dumb", "emacs"):
-            logger.warning(
-                "Console does not support paging. Defaulting to print graph."
-            )
+            logger.warning("Console does not support paging. Defaulting to print graph.")
             return pydoc.plainpager
         if sys.platform == "win32":
             logger.warning(
@@ -83,9 +77,7 @@ class FluidPager:
         self._pager(content)
 
 
-def visualize_graph_in_console(
-    graph: "nx.DiGraph", use_pager: bool = True, use_unicode: bool = False
-):
+def visualize_graph_in_console(graph: "nx.DiGraph", use_pager: bool = True, use_unicode: bool = False):
     """Visualizes the task graph by rendering it to the console.
 
     When using a pager the keyboard input ":q" is required to continue.

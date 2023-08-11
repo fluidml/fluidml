@@ -222,9 +222,7 @@ def _get_graph_char_set(use_unicode: bool) -> Dict[str, str]:
             }
 
         except UnicodeEncodeError:
-            logger.warning(
-                f"Console does not support unicode chars. Defaulting to ascii."
-            )
+            logger.warning(f"Console does not support unicode chars. Defaulting to ascii.")
     return chars
 
 

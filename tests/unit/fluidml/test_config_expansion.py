@@ -132,16 +132,6 @@ cfg_10 = {
 def test_expand_config(config: Dict, expansion_method: str, num_expanded_cfgs: int):
     if expansion_method not in ConfigExpansionRegistry.registered_ids():
         with pytest.raises(GridSearchExpansionError) as _:
-            assert (
-                len(
-                    expand_config(
-                        config=config, expand=expansion_method, group_prefix="@"
-                    )
-                )
-                == num_expanded_cfgs
-            )
+            assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs
     else:
-        assert (
-            len(expand_config(config=config, expand=expansion_method, group_prefix="@"))
-            == num_expanded_cfgs
-        )
+        assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs

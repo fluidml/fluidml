@@ -50,10 +50,7 @@ class TaskSpec(DependencyMixin):
         DependencyMixin.__init__(self)
 
         # task has to be a class object which inherits Task or it has to be a function
-        if not (
-            (inspect.isclass(task) and issubclass(task, Task))
-            or inspect.isfunction(task)
-        ):
+        if not ((inspect.isclass(task) and issubclass(task, Task)) or inspect.isfunction(task)):
             raise TypeError(
                 f'{task} needs to be a Class object which inherits Task (type="type") or a function.'
                 f'But it is of type "{type(task)}".'
@@ -61,9 +58,7 @@ class TaskSpec(DependencyMixin):
 
         # "reduce" can only be set to "True" if "expand" is "None".
         if reduce and expand:
-            raise ValueError(
-                f'"reduce" can only be set to "True" if "expand" is "None".'
-            )
+            raise ValueError(f'"reduce" can only be set to "True" if "expand" is "None".')
 
         # we assure that the provided config is json serializable since we use json to later store the config
         config = json.loads(json.dumps(config)) if config is not None else {}
@@ -86,9 +81,7 @@ class TaskSpec(DependencyMixin):
         self.additional_kwargs: Dict = additional_kwargs
         self.reduce = reduce
         # dynamically retrieve expected arguments from task implementation
-        self.expects = _get_expected_args_from_run_signature(
-            task, config, additional_kwargs
-        )
+        self.expects = _get_expected_args_from_run_signature(task, config, additional_kwargs)
 
         # dynamically set in expand fn
         self.unique_config: Optional[Dict] = None
@@ -102,15 +95,11 @@ class TaskSpec(DependencyMixin):
             A list of expanded ``Task`` objects.
         """
         tasks = []
-        for config in expand_config(
-            self.config, self.expand_fn, group_prefix=self.config_group_prefix
-        ):
+        for config in expand_config(self.config, self.expand_fn, group_prefix=self.config_group_prefix):
             relevant_config = self._create_relevant_config(config)
             config = self._prepare_config(config)
 
-            task_spec = TaskSpec(
-                task=self.task, config=config, name=self.name, reduce=self.reduce
-            )
+            task_spec = TaskSpec(task=self.task, config=config, name=self.name, reduce=self.reduce)
             task_spec.unique_config = relevant_config
 
             tasks.append(Task.from_spec(task_spec, half_initialize=True))
@@ -158,8 +147,7 @@ def _get_expected_args_from_run_signature(
         expected_inputs = {
             arg: value
             for arg, value in task_all_arguments.items()
-            if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
-            and value.name != "self"
+            if value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"] and value.name != "self"
         }
     elif inspect.isfunction(task):
         task_all_arguments = dict(inspect.signature(task).parameters)
@@ -167,8 +155,7 @@ def _get_expected_args_from_run_signature(
         expected_inputs = {
             arg: value
             for arg, value in task_all_arguments.items()
-            if arg not in task_extra_arguments
-            and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
+            if arg not in task_extra_arguments and value.kind.name not in ["VAR_POSITIONAL", "VAR_KEYWORD"]
         }
     else:
         # cannot be reached, check has been made in TaskSpec.

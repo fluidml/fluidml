@@ -7,9 +7,7 @@ _PATH_ROOT = os.path.dirname(__file__)
 
 
 def _load_py_module(file_name: str, pkg="fluidml"):
-    spec = spec_from_file_location(
-        os.path.join(pkg, file_name), os.path.join(_PATH_ROOT, pkg, file_name)
-    )
+    spec = spec_from_file_location(os.path.join(pkg, file_name), os.path.join(_PATH_ROOT, pkg, file_name))
     py = module_from_spec(spec)
     spec.loader.exec_module(py)
     return py
@@ -72,7 +70,7 @@ setup(
             "numpy",
             "pyyaml",
             "requests",
-            "sklearn",
+            "scikit-learn",
             "tokenizers>=0.10.1",
             "torchtext>=0.8.1",
             "torch",
