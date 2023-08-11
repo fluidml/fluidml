@@ -114,3 +114,11 @@ def test_generate_run_name():
 )
 def test_is_optional(type_annotation: Any, optional: bool):
     assert utils.is_optional(type_annotation) == optional
+
+
+@pytest.mark.parametrize(
+    "text, suffix, text_suffix_removed",
+    [("some_file_name.jsonl.gz", ".jsonl.gz", "some_file_name"), ("aabcdabcd", "abcd", "aabcd")],
+)
+def test_remove_suffix(text: str, suffix: str, text_suffix_removed: str):
+    assert utils.remove_suffix(text, suffix) == text_suffix_removed
