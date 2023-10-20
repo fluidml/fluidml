@@ -13,17 +13,11 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 from pydantic import BaseModel as BaseModel_
 
-JSON_ENCODERS = {
-    datetime.datetime: lambda x: str(x),
-    datetime.timedelta: lambda x: str(x),
-}
-
 
 class BaseModel(BaseModel_):
     class Config:
         arbitrary_types_allowed = True
         use_enum_values = True
-        json_encoders = JSON_ENCODERS
 
 
 def update_merge(d1: Dict, d2: Dict) -> Union[Dict, Tuple]:

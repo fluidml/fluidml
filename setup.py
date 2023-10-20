@@ -58,7 +58,7 @@ setup(
         "grandalf>=0.7",  # for console graph visualization
         "metadict>=0.1.3",  # enables attribute access for dicts (converted to MetaDict objects)
         "networkx>=2.5",  # creation of task graph
-        "pydantic>=1.0",  # for easy data model serialization and loading
+        "pydantic>=2.0",  # for easy data model serialization and loading
         "rich>=9.13.0",  # beautiful error traceback printing and logging
         "tblib>=1.7.0",  # enables sending tracebacks through multiprocessing queue
     ],
