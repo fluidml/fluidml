@@ -313,6 +313,11 @@ class TmuxManager:
         except subprocess.CalledProcessError as e:
             raise TmuxError(f"Please resolve the following tmux error: '{e.stderr.decode('utf-8').strip()}'.") from None
 
+    # TODO 1: Finalize tmux logging -> Call when Swarm exits context manager -> close pipes and delete tmp directories
+    #  make tmux_manager in Swarm a member attribute to call .finalize() during exit()
+    # def finalize
+    # TODO 2: Check queue putting and getting performance with new changes
+
 
 class LoggingListener(Thread):
     """Listens to and handles child process log messages
@@ -363,7 +368,6 @@ class LoggingListener(Thread):
             tmux_pipe.flush()
 
     def _work(self):
-
         with ExitStack() as stack:
             pipes, handlers = None, None
             if self.tmux_manager:
@@ -380,7 +384,7 @@ class LoggingListener(Thread):
                 # Using queue.get(block=False) is necessary for python 3.6. queue.get() sometimes
                 # leads to weird deadlocks when waiting for logging messages from child processes.
                 try:
-                    record = self._logging_queue.get(block=False, timeout=0.01)
+                    record = self._logging_queue.get(block=True, timeout=0.05)
                 except Empty:
                     continue
 

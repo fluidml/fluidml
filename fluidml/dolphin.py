@@ -115,7 +115,7 @@ class Dolphin(Whale):
 
     def _fetch_next_task(self) -> Union[str, None]:
         try:
-            task_counter = self.scheduled_queue.get(block=False, timeout=0.5)
+            task_counter = self.scheduled_queue.get(block=True, timeout=0.05)
         except Empty:
             task_counter = None
         return task_counter
@@ -190,8 +190,14 @@ class Dolphin(Whale):
 
         # save the fluidml info object as json
         task.state = self.task_states[task.unique_name]
+        # we use pydantics 2.x model_dump_json() fn, load the json str as dict and save it
+        try:
+            task_info_json = task.info.model_dump_json()
+        except AttributeError:
+            # Fallback to pydantic 1.x .json() function
+            task_info_json = task.info.json()
         task.results_store.save(
-            json.loads(task.info.json()),  # we use pydantics json() fn, load the json str as dict and save it
+            json.loads(task_info_json),
             Names.FLUIDML_INFO_FILE,
             type_="json",
             task_name=task.name,
@@ -200,7 +206,6 @@ class Dolphin(Whale):
         )
 
     def _execute_task(self, task: Task):
-
         # provide resource and lock
         task.resource = self.resource
         task.results_store.lock = self._lock
@@ -285,7 +290,6 @@ class Dolphin(Whale):
             self._schedule_successors(task)
 
     def _stop(self) -> bool:
-
         return self.exit_event.is_set() or all(
             True if t in [TaskState.FINISHED, TaskState.FAILED, TaskState.UPSTREAM_FAILED] else False
             for t in self.task_states.values()
@@ -298,7 +302,6 @@ class Dolphin(Whale):
 
             # continue when there is a valid task to run
             if task_unique_name is not None:
-
                 # get current task from task_unique_name
                 task = self.tasks[task_unique_name]
 

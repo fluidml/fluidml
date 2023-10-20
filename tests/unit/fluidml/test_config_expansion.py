@@ -15,6 +15,24 @@ cfg_2 = {
     "c": {"test": True, "funny": {"x": [[1, 2, 3, 4]], "y": False}},
 }
 
+cfg_2a = {
+    "a": {"a": {"b": [None, None, 4, None]}, "c": [1, 2, 3, 4]},
+    "b": {"c": [True, False, False, False], "d": ["hallo"], "e": {}},
+    "c": {"test": True, "funny": {"x": [[1, 2, 3, 4]], "y": [False]}},
+}
+
+cfg_2b = {
+    "a": {"a": {"b": [None, None, 4, None, "@x"]}, "c": [1, 2, 3, 4, "@x"]},
+    "b": {"c": [True, False, False, False, "@x"], "d": ["hallo"], "e": {}},
+    "c": {"test": True, "funny": {"x": [[1, 2, 3, 4]], "y": [False]}},
+}
+
+cfg_2c = {
+    "a": {"a": {"b": [{"a": 1}, {"a": 2}, {"a": 3}, {"a": 4}]}, "c": [{"a": 1}, {"a": 2}, {"a": 3}, {"a": 4}]},
+    "b": {"c": [{"a": 1}, {"a": 2}, {"a": 3}, {"a": 4}], "d": ["hallo"], "e": {}},
+    "c": {"test": True, "funny": {"x": [[1, 2, 3, 4]], "y": [False]}},
+}
+
 # correct: 8 (product)
 cfg_3 = {
     "param_1": [{"a": [1, 2, "@b"]}, {"a": [1, 2, "@b"]}, "@x"],
@@ -108,30 +126,48 @@ cfg_10 = {
     "a": [{"b": [{"d": [1, 2, "@x"]}, {"e": 3}, "@x"]}, {"c": 4}, "@x"],
 }
 
+cfg_11 = {
+    "a": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "b": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "c": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "d": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    "e": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+    # "f": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+}
+
 
 @pytest.mark.parametrize(
-    "config, expansion_method, num_expanded_cfgs",
+    "config, expansion_method, num_expanded_cfgs, group_prefix",
     [
-        (cfg_1, "product", 1),
-        (cfg_2, "product", 9),
-        (cfg_2, "zip", 2),
-        (cfg_3, "product", 8),
-        (cfg_4, "product", 4),
-        (cfg_5, "product", 72),
-        (cfg_5, "zip", 2),
-        (cfg_6, "product", 8),
-        (cfg_7, "product", 2),
-        (cfg_8, "product", 4),
-        (cfg_9, "product", 2),
-        (cfg_9, "zip", 2),
-        (cfg_10, "product", 2),
-        (cfg_10, "zip", 2),
-        (cfg_10, "undefined", 2),
+        (cfg_1, "product", 1, "@"),
+        (cfg_2, "product", 9, "@"),
+        (cfg_2, "zip", 2, None),
+        (cfg_2a, "zip", 4, None),
+        (cfg_2b, "product", 4, "@"),
+        (cfg_2c, "zip", 4, None),
+        (cfg_3, "product", 8, "@"),
+        (cfg_4, "product", 4, "@"),
+        (cfg_5, "product", 72, "@"),
+        (cfg_5, "zip", 2, "@"),
+        (cfg_6, "product", 8, "@"),
+        (cfg_7, "product", 2, "@"),
+        (cfg_8, "product", 4, "@"),
+        (cfg_9, "product", 2, "@"),
+        (cfg_9, "zip", 2, "@"),
+        (cfg_10, "product", 2, "@"),
+        (cfg_10, "zip", 2, "@"),
+        (cfg_10, "undefined", 2, "@"),
+        (cfg_11, "zip", 10, None),
     ],
 )
-def test_expand_config(config: Dict, expansion_method: str, num_expanded_cfgs: int):
+def test_expand_config(config: Dict, expansion_method: str, num_expanded_cfgs: int, group_prefix: str):
     if expansion_method not in ConfigExpansionRegistry.registered_ids():
         with pytest.raises(GridSearchExpansionError) as _:
-            assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs
+            assert (
+                len(expand_config(config=config, expand=expansion_method, group_prefix=group_prefix))
+                == num_expanded_cfgs
+            )
     else:
-        assert len(expand_config(config=config, expand=expansion_method, group_prefix="@")) == num_expanded_cfgs
+        assert (
+            len(expand_config(config=config, expand=expansion_method, group_prefix=group_prefix)) == num_expanded_cfgs
+        )
